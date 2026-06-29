@@ -562,11 +562,9 @@ function renderCapacidade(){
       </div>
     </div>
 
-    <div class="cap-chart-box">
+    <div class="cap-chart-box" style="max-width:100%;overflow:hidden">
       <div class="cap-chart-box-title">Capacidade × Pend. fabricação × Livre × Pend. expedição — por setor (t/mês)</div>
-      <div style="overflow-x:auto">
-        <canvas id="capChart" style="min-width:${ativos.length*120}px;height:300px"></canvas>
-      </div>
+      <div style="position:relative;width:100%;height:200px"><canvas id="capChart"></canvas></div>
       <div class="cap-legend">
         <span class="cap-leg"><span class="cap-leg-dot" style="background:var(--blue)"></span>Capacidade mensal</span>
         <span class="cap-leg"><span class="cap-leg-dot" style="background:var(--purple)"></span>Pend. fabricação</span>
@@ -647,7 +645,8 @@ function renderCapacidade(){
         ]
       },
       options:{
-        responsive:false,
+        responsive:true,
+        maintainAspectRatio:false,
         plugins:{
           legend:{display:false},
           tooltip:{
@@ -656,8 +655,24 @@ function renderCapacidade(){
           }
         },
         scales:{
-          x:{ticks:{font:{size:11},color:'#8b92b3'},grid:{color:'rgba(255,255,255,0.04)'}},
-          y:{ticks:{callback:v=>v+'t',font:{size:10},color:'#8b92b3'},grid:{color:'rgba(255,255,255,0.04)'}}
+          x:{
+            ticks:{
+              font:{size:12},
+              color:'#8b92b3',
+              maxRotation:0,
+              minRotation:0,
+              autoSkip:false
+            },
+            grid:{color:'rgba(255,255,255,0.04)'}
+          },
+          y:{
+            ticks:{
+              callback:v=>v.toLocaleString('pt-BR')+'t',
+              font:{size:11},
+              color:'#8b92b3'
+            },
+            grid:{color:'rgba(255,255,255,0.06)'}
+          }
         }
       }
     });
