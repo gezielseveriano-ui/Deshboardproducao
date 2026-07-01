@@ -485,18 +485,16 @@ window.addEventListener('DOMContentLoaded', carregarPlanilha);
 /* ── CAPACIDADE ── */
 function calcSetores(){
   const s={};
-  SETORES.forEach(k=>{s[k]={pesoTotal:0,fabricado:0,expedido:0,pendFab:0,pesoPendExp:0,cap:CAPACIDADE[k]||0}});
+  SETORES.forEach(k=>{s[k]={cargaProg:0,expedido:0,pesoPendExp:0,cap:CAPACIDADE[k]||0}});
   allPedidos.forEach(p=>{
     Object.values(DB[p]).forEach(tags=>{
       Object.entries(tags).forEach(([prod,itens])=>{
         const setor=prod.trim().toUpperCase();
         if(!s[setor]) return;
         itens.forEach(it=>{
-          s[setor].pesoTotal+=it.pesoTotal;
-          s[setor].fabricado+=it.fabricado;
-          s[setor].expedido+=it.expedido;
-          s[setor].pendFab+=Math.max(0,it.pendFab);
-          s[setor].pesoPendExp+=Math.max(0,it.pesoPendExp);
+          s[setor].cargaProg  += it.pesoTotal;               // col H — Carga Programada
+          s[setor].expedido   += it.expedido;                // col X — Peso Expedido
+          s[setor].pesoPendExp+= Math.max(0,it.pesoPendExp); // col Z — Pend. Exp. (sem negativos)
         });
       });
     });
@@ -507,14 +505,14 @@ function calcSetores(){
 function renderCapacidade(){
   const s=calcSetores();
   const ativos=SETORES.filter(k=>s[k].cap>0||s[k].pesoTotal>0);
-  let totCap=0,totProg=0,totPF=0,totNaEmp=0,totPE=0;
+  let totCap=0,totProg=0,totExp=0,totPE=0;
   ativos.forEach(k=>{
-    totCap+=s[k].cap; totProg+=s[k].pesoTotal;
-    totPF+=s[k].pendFab;
-    totNaEmp+=Math.max(0,s[k].fabricado-s[k].expedido);
-    totPE+=s[k].pesoPendExp;
+    totCap +=s[k].cap;
+    totProg+=s[k].cargaProg;
+    totExp +=s[k].expedido;
+    totPE  +=s[k].pesoPendExp;
   });
-  const totLivre=Math.max(0,totCap-totPF);
+  const totLivre=Math.max(0,totCap-totProg);
   const ft=kg=>(kg/1000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 
   const sec=document.getElementById('capacidadeSection');
@@ -538,27 +536,22 @@ function renderCapacidade(){
       <div class="cap-card c-amber">
         <div class="cap-card-label"><i class="ti ti-package"></i> Carga programada</div>
         <div class="cap-card-value" style="color:var(--amber)">${ft(totProg)} t</div>
-        <div class="cap-card-sub">em carteira · aba MICRO</div>
-      </div>
-      <div class="cap-card c-purple">
-        <div class="cap-card-label"><i class="ti ti-tools"></i> Pendente fabricação</div>
-        <div class="cap-card-value" style="color:var(--purple)">${ft(totPF)} t</div>
-        <div class="cap-card-sub">a fabricar</div>
-      </div>
-      <div class="cap-card c-teal">
-        <div class="cap-card-label"><i class="ti ti-building-warehouse"></i> Na empresa</div>
-        <div class="cap-card-value" style="color:var(--teal)">${ft(totNaEmp)} t</div>
-        <div class="cap-card-sub">fabricado · não expedido</div>
-      </div>
-      <div class="cap-card c-red">
-        <div class="cap-card-label"><i class="ti ti-clock-pause"></i> Pendente expedição</div>
-        <div class="cap-card-value" style="color:var(--red)">${ft(totPE)} t</div>
-        <div class="cap-card-sub">a expedir</div>
+        <div class="cap-card-sub">col H · aba MICRO</div>
       </div>
       <div class="cap-card c-green">
         <div class="cap-card-label"><i class="ti ti-circle-check"></i> Capacidade livre</div>
         <div class="cap-card-value" style="color:var(--green)">${ft(totLivre)} t</div>
-        <div class="cap-card-sub">disponível p/ novos pedidos</div>
+        <div class="cap-card-sub">cap. mensal − carga prog.</div>
+      </div>
+      <div class="cap-card c-teal">
+        <div class="cap-card-label"><i class="ti ti-truck"></i> Peso expedido</div>
+        <div class="cap-card-value" style="color:var(--teal)">${ft(totExp)} t</div>
+        <div class="cap-card-sub">col X · aba MICRO</div>
+      </div>
+      <div class="cap-card c-red">
+        <div class="cap-card-label"><i class="ti ti-clock-pause"></i> Pendente expedição</div>
+        <div class="cap-card-value" style="color:var(--red)">${ft(totPE)} t</div>
+        <div class="cap-card-sub">col Z · sem valores negativos</div>
       </div>
     </div>
 
@@ -566,10 +559,10 @@ function renderCapacidade(){
       <div class="cap-chart-box-title">Capacidade × Pend. fabricação × Livre × Pend. expedição — por setor (t/mês)</div>
       <div style="position:relative;width:100%;height:200px"><canvas id="capChart"></canvas></div>
       <div class="cap-legend">
-        <span class="cap-leg"><span class="cap-leg-dot" style="background:var(--blue)"></span>Capacidade mensal</span>
-        <span class="cap-leg"><span class="cap-leg-dot" style="background:var(--purple)"></span>Pend. fabricação</span>
-        <span class="cap-leg"><span class="cap-leg-dot" style="background:var(--green)"></span>Capacidade livre</span>
-        <span class="cap-leg"><span class="cap-leg-dot" style="background:var(--red)"></span>Pend. expedição</span>
+        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(79,142,247,0.85)"></span>Capacidade mensal</span>
+        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(245,166,35,0.85)"></span>Carga programada</span>
+        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(62,207,142,0.85)"></span>Capacidade livre</span>
+        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(242,92,92,0.85)"></span>Pend. expedição</span>
       </div>
     </div>
 
@@ -580,8 +573,6 @@ function renderCapacidade(){
           <th>Setor</th>
           <th class="r">Capacidade (t/mês)</th>
           <th class="r">Carga prog. (t)</th>
-          <th class="r">Pend. fab. (t)</th>
-          <th class="r">Na empresa (t)</th>
           <th class="r">Pend. exp. (t)</th>
           <th class="r">Cap. livre (t)</th>
           <th style="width:130px">Ocupação</th>
@@ -590,24 +581,21 @@ function renderCapacidade(){
         <tbody>
           ${ativos.map(k=>{
             const d=s[k];
-            const naEmp=Math.max(0,d.fabricado-d.expedido);
-            const livre=Math.max(0,d.cap-d.pendFab);
-            const util=d.cap>0?Math.min(150,d.pendFab/d.cap*100):0;
-            const barCol=util>100?'var(--red)':util>80?'var(--amber)':'var(--green)';
-            const badge=util>100?'sb-over':util>80?'sb-warn':'sb-ok';
-            const badgeTxt=util>100?'Acima cap.':util>80?'Quase cheio':'Disponível';
+            const livre=Math.max(0,d.cap-d.cargaProg);
+            const util=d.cap>0?(d.cargaProg/d.cap*100):0;
+            const barCol=util>100?'var(--red)':'var(--green)';
+            const badge=util>100?'sb-over':'sb-ok';
+            const badgeTxt=util>100?'Indisponível':'Disponível';
             return `<tr>
               <td><strong style="color:var(--text)">${k}</strong></td>
               <td class="r" style="color:var(--blue)">${ft(d.cap)}</td>
-              <td class="r">${ft(d.pesoTotal)}</td>
-              <td class="r" style="color:var(--purple)">${ft(d.pendFab)}</td>
-              <td class="r" style="color:var(--teal)">${ft(naEmp)}</td>
+              <td class="r" style="color:var(--amber)">${ft(d.cargaProg)}</td>
               <td class="r" style="color:var(--red)">${ft(d.pesoPendExp)}</td>
               <td class="r" style="color:${livre>0?'var(--green)':'var(--red)'};font-weight:700">${ft(livre)}</td>
               <td>
                 <div class="bar-row">
                   <div class="bar-bg"><div class="bar-fg" style="width:${Math.min(100,util).toFixed(1)}%;background:${barCol}"></div></div>
-                  <span style="font-size:10px;width:30px;text-align:right;color:var(--text2)">${util.toFixed(0)}%</span>
+                  <span style="font-size:10px;width:36px;text-align:right;color:var(--text2)">${util.toFixed(0)}%</span>
                 </div>
               </td>
               <td><span class="status-badge ${badge}">${badgeTxt}</span></td>
@@ -617,9 +605,7 @@ function renderCapacidade(){
         <tfoot><tr>
           <td>TOTAL</td>
           <td class="r" style="color:var(--blue)">${ft(totCap)}</td>
-          <td class="r">${ft(totProg)}</td>
-          <td class="r" style="color:var(--purple)">${ft(totPF)}</td>
-          <td class="r" style="color:var(--teal)">${ft(totNaEmp)}</td>
+          <td class="r" style="color:var(--amber)">${ft(totProg)}</td>
           <td class="r" style="color:var(--red)">${ft(totPE)}</td>
           <td class="r" style="color:var(--green)">${ft(totLivre)}</td>
           <td colspan="2"></td>
@@ -638,10 +624,10 @@ function renderCapacidade(){
       data:{
         labels:ativos,
         datasets:[
-          {label:'Capacidade mensal',data:ativos.map(k=>+(s[k].cap/1000).toFixed(2)),backgroundColor:'rgba(79,142,247,0.85)',borderRadius:5,borderSkipped:false},
-          {label:'Pend. fabricação', data:ativos.map(k=>+(s[k].pendFab/1000).toFixed(2)),backgroundColor:'rgba(167,139,250,0.85)',borderRadius:5,borderSkipped:false},
-          {label:'Capacidade livre', data:ativos.map(k=>+Math.max(0,(s[k].cap-s[k].pendFab)/1000).toFixed(2)),backgroundColor:'rgba(62,207,142,0.85)',borderRadius:5,borderSkipped:false},
-          {label:'Pend. expedição',  data:ativos.map(k=>+(s[k].pesoPendExp/1000).toFixed(2)),backgroundColor:'rgba(242,92,92,0.85)',borderRadius:5,borderSkipped:false},
+          {label:'Capacidade mensal',data:ativos.map(k=>+(s[k].cap/1000).toFixed(2)),        backgroundColor:'rgba(79,142,247,0.85)', borderRadius:5,borderSkipped:false},
+          {label:'Carga programada', data:ativos.map(k=>+(s[k].cargaProg/1000).toFixed(2)),  backgroundColor:'rgba(245,166,35,0.85)',  borderRadius:5,borderSkipped:false},
+          {label:'Capacidade livre', data:ativos.map(k=>+Math.max(0,(s[k].cap-s[k].cargaProg)/1000).toFixed(2)), backgroundColor:'rgba(62,207,142,0.85)', borderRadius:5,borderSkipped:false},
+          {label:'Pend. expedição',  data:ativos.map(k=>+(s[k].pesoPendExp/1000).toFixed(2)),backgroundColor:'rgba(242,92,92,0.85)',  borderRadius:5,borderSkipped:false},
         ]
       },
       options:{
