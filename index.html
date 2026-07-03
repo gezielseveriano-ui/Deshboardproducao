@@ -585,7 +585,7 @@ async function processarPlanilha(buf){
         if(typeof v==='number') return new Date(Math.round((v-25569)*86400000));
         return null;
       };
-      CLIENTES[num]={equip:r[1]?String(r[1]).trim():'',dataPrev:pd(r[2]),dataRepr:pd(r[3]),obs:r[4]?String(r[4]).trim():''};
+      CLIENTES[num]={equip:r[1]?String(r[1]).trim():'',dataPrev:pd(r[2]),dataRepr:pd(r[3]),obs:r[4]?String(r[4]).trim():'',cliente:r[5]?String(r[5]).trim():''};
     }
   }
 
@@ -950,7 +950,7 @@ function filtrarGeral(q){
     const late=c&&isLate(c.dataRepr||c.dataPrev);
     return `<div class="pedido-card" style="${late?'border-color:var(--red)':''}" onclick="abrirPedido('${esc(p)}')">
       <div class="pc-top">
-        <span class="pc-num">${p}</span>
+        <span class="pc-num">${p}${c&&c.cliente?' · '+c.cliente:''}</span>
         <span class="pc-tags-count">${s.nTags} TAG${s.nTags!==1?'s':''}</span>
       </div>
       <div class="pc-equip ${c&&c.equip?'':'no-info'}">
@@ -1015,7 +1015,7 @@ function renderPedido(){
         ${cli.obs?`<div class="cb-obs"><i class="ti ti-notes" style="font-size:12px;vertical-align:-1px"></i> ${cli.obs}</div>`:''}
       </div>
       <div class="cb-right">
-        <div class="cb-pedido-num">${state.pedido}</div>
+        <div class="cb-pedido-num">${state.pedido}${cli&&cli.cliente?' · '+cli.cliente:''}</div>
         <div class="cb-tags-count">${tk.length} TAGs</div>
       </div>
     </div>`;
