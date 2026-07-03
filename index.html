@@ -550,56 +550,18 @@ async function carregarPlanilha(){
   if(label) label.textContent = 'Carregando dados...';
   if(icon)  icon.style.animation = 'spin 1s linear infinite';
   setStatus('Buscando planilha no GitHub...');
+  let buf;
   try{
     const resp = await fetch(GITHUB_URL + '?t=' + Date.now());
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
-    const buf = await resp.arrayBuffer();
-    processarPlanilha(buf);
+    buf = await resp.arrayBuffer();
   } catch(err){
-    if(icon) icon.style.animation = '';
+    setStatus('Erro ao buscar planilha: ' + err.message + ' — verifique se o arquivo está no repositório.');
     if(label) label.textContent = 'Erro ao carregar';
-    setStatus('Erro: ' + err.message);
-    document.getElementById('capacidadeSection').style.display='none';
-    document.getElementById('mainContent').innerHTML=`
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px;text-align:center;padding:2rem">
-        <i class="ti ti-wifi-off" style="font-size:64px;color:var(--red);opacity:.7"></i>
-        <div style="font-size:20px;font-weight:700;color:var(--text)">Não foi possível carregar a planilha</div>
-        <div style="font-size:13px;color:var(--text2);max-width:420px">
-          Erro: <strong style="color:var(--red)">${err.message}</strong><br><br>
-          Verifique se o arquivo <strong style="color:var(--amber)">planejamento-controle-producao.xlsx</strong> está no repositório GitHub e tente novamente.
-        </div>
-        <button onclick="carregarPlanilha()" style="background:var(--blue);color:#fff;border:none;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:8px">
-          <i class="ti ti-refresh"></i> Tentar novamente
-        </button>
-      </div>`;
+    if(icon)  icon.style.animation = '';
+    return;
   }
-}
-
-function mostrarUploadLocal(){
-  const label = document.getElementById('updateLabel');
-  if(label) label.textContent = 'Carregar arquivo local';
-  document.getElementById('mainContent').innerHTML=`
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px;text-align:center">
-      <i class="ti ti-file-spreadsheet" style="font-size:64px;color:var(--blue);opacity:.7"></i>
-      <div style="font-size:20px;font-weight:700;color:var(--text)">Selecione a planilha para carregar</div>
-      <div style="font-size:13px;color:var(--text2);max-width:400px">Não foi possível buscar do GitHub. Selecione o arquivo <strong style="color:var(--amber)">planejamento-controle-producao.xlsx</strong> do seu computador.</div>
-      <label style="display:inline-flex;align-items:center;gap:10px;background:var(--blue);color:#fff;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;transition:.2s">
-        <i class="ti ti-upload"></i> Selecionar arquivo .xlsx
-        <input type="file" accept=".xlsx" style="display:none" onchange="carregarArquivoLocal(this)">
-      </label>
-    </div>`;
-  document.getElementById('capacidadeSection').style.display='none';
-}
-
-function carregarArquivoLocal(input){
-  const file = input.files[0];
-  if(!file) return;
-  const label = document.getElementById('updateLabel');
-  if(label) label.textContent = 'Carregando...';
-  setStatus('Lendo arquivo local...');
-  const reader = new FileReader();
-  reader.onload = e => processarPlanilha(e.target.result);
-  reader.readAsArrayBuffer(file);
+  processarPlanilha(buf);
 }
 
 async function processarPlanilha(buf){
@@ -687,49 +649,50 @@ window.addEventListener('DOMContentLoaded', carregarPlanilha);
 /* ── CAPACIDADE ── */
 function calcSetores(){
   const s={};
-  SETORES.forEach(k=>{s[k]={cargaProg:0,expedido:0,pesoPendExp:0,cap:CAPACIDADE[k]||0,pesoTotal:0}});
+  SETORES.forEach(k=>{s[k]={cargaProg:0,expedido:0,pesoPendExp:0,cap:CAPACIDADE[k]||0}});
   allPedidos.forEach(p=>{
-    Object.values(DB[p]).forEach(tagObj=>{
-      Object.entries(tagObj).forEach(([setor,itens])=>{
-        const k=setor.trim().toUpperCase();
-        if(!s[k]) s[k]={cargaProg:0,expedido:0,pesoPendExp:0,cap:CAPACIDADE[k]||0,pesoTotal:0};
+    Object.values(DB[p]).forEach(tags=>{
+      Object.entries(tags).forEach(([prod,itens])=>{
+        const setor=prod.trim().toUpperCase();
+        if(!s[setor]) return;
         itens.forEach(it=>{
-          s[k].cargaProg   += it.pesoTotal;
-          s[k].pesoTotal   += it.pesoTotal;
-          s[k].expedido    += it.expedido;
-          s[k].pesoPendExp += Math.max(0, it.pesoPendExp);
+          s[setor].cargaProg  += it.pesoTotal;               // col H — Peso Total programado
+          s[setor].expedido   += it.expedido;                // col X — Peso Expedido
+          s[setor].pesoPendExp+= Math.max(0,it.pesoPendExp); // col Z — Pend. Exp. (sem negativos)
         });
       });
     });
   });
-  SETORES.forEach(k=>{ s[k].cargaLiquida=Math.max(0,s[k].cargaProg-s[k].expedido); });
-  Object.keys(s).forEach(k=>{ if(!s[k].cargaLiquida) s[k].cargaLiquida=Math.max(0,s[k].cargaProg-s[k].expedido); });
+  // Carga Líquida = Carga Programada - Expedido (o que ainda ocupa capacidade)
+  SETORES.forEach(k=>{
+    s[k].cargaLiquida = Math.max(0, s[k].cargaProg - s[k].expedido);
+  });
   return s;
 }
 
 function renderCapacidade(){
   const s=calcSetores();
   const ativos=SETORES.filter(k=>s[k].cap>0||s[k].pesoTotal>0);
-  let totCap=0;
-  ativos.forEach(k=>{ totCap+=s[k].cap; });
+  let totCap=0,totProg=0,totExp=0,totPE=0,totLiquida=0;
+  ativos.forEach(k=>{
+    totCap    +=s[k].cap;
+    totLiquida+=s[k].cargaLiquida;
+  });
 
-  // Totais calculados direto de TODOS os registros da MICRO (independente de setor)
-  let totProgramado=0, totExp=0, totPE=0;
+  // Totais direto de TODOS os registros da MICRO
   allPedidos.forEach(p=>{
     Object.values(DB[p]).forEach(tagObj=>{
-      Object.values(tagObj).forEach(setObj=>{
-        Object.values(setObj).forEach(itens=>{
-          itens.forEach(it=>{
-            totProgramado += it.pesoTotal;                    // col H — tudo programado
-            totExp        += it.expedido;                     // col X — expedido
-            totPE         += Math.max(0, it.pesoPendExp);     // col Z — só positivos
-          });
+      Object.entries(tagObj).forEach(([setor,itens])=>{
+        itens.forEach(it=>{
+          totProg += it.pesoTotal;
+          totExp  += it.expedido;
+          totPE   += Math.max(0, it.pesoPendExp);
         });
       });
     });
   });
 
-  const totLivre=Math.max(0, totCap - (totProgramado - totExp));
+  const totLivre=Math.max(0,totCap-(totProg-totExp));
   const ft=kg=>(kg/1000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 
   const sec=document.getElementById('capacidadeSection');
@@ -750,10 +713,10 @@ function renderCapacidade(){
         <div class="cap-card-value" style="color:var(--blue)">${ft(totCap)} t</div>
         <div class="cap-card-sub">${ativos.length} setores ativos</div>
       </div>
-      <div class="cap-card c-purple">
+      <div class="cap-card c-amber">
         <div class="cap-card-label"><i class="ti ti-clipboard-list"></i> Programado</div>
-        <div class="cap-card-value" style="color:var(--purple)">${ft(totProgramado)} t</div>
-        <div class="cap-card-sub">total liberado pela engenharia</div>
+        <div class="cap-card-value" style="color:var(--amber)">${ft(totProg)} t</div>
+        <div class="cap-card-sub">total col H — todos os pedidos</div>
       </div>
       <div class="cap-card c-teal">
         <div class="cap-card-label"><i class="ti ti-truck"></i> Expedido</div>
@@ -768,7 +731,7 @@ function renderCapacidade(){
       <div class="cap-card c-red">
         <div class="cap-card-label"><i class="ti ti-clock-pause"></i> Total em carteira</div>
         <div class="cap-card-value" style="color:var(--red)">${ft(totPE)} t</div>
-        <div class="cap-card-sub">pendente de expedição (col Z)</div>
+        <div class="cap-card-sub">pendente expedição — col Z positivos</div>
       </div>
     </div>
 
@@ -959,6 +922,12 @@ function renderGeral(){
   const pF=gP>0?Math.min(100,gF/gP*100):0, pE=gP>0?Math.min(100,gE/gP*100):0;
 
   document.getElementById('mainContent').innerHTML=`
+  <div class="global-metrics">
+    <div class="gm"><div class="gm-label"><i class="ti ti-weight" style="font-size:12px;vertical-align:-1px"></i> Total em carteira</div><div class="gm-value">${fmt_t(gP)}</div><div class="gm-sub">${allPedidos.length} pedidos</div></div>
+    <div class="gm"><div class="gm-label"><i class="ti ti-tools" style="font-size:12px;vertical-align:-1px"></i> Fabricado</div><div class="gm-value" style="color:var(--green)">${fmt_t(gF)}</div><div class="gm-sub">${pF.toFixed(1)}% do total</div></div>
+    <div class="gm"><div class="gm-label"><i class="ti ti-truck" style="font-size:12px;vertical-align:-1px"></i> Expedido</div><div class="gm-value" style="color:var(--amber)">${fmt_t(gE)}</div><div class="gm-sub">${pE.toFixed(1)}% do total</div></div>
+    <div class="gm"><div class="gm-label"><i class="ti ti-clock-pause" style="font-size:12px;vertical-align:-1px"></i> Pend. expedição</div><div class="gm-value" style="color:var(--red)">${fmt_t(gPE)}</div><div class="gm-sub">a expedir</div></div>
+  </div>
   <div class="pedidos-grid" id="pedidosGrid"></div>`;
   filtrarGeral('');
   setStatus(`${allPedidos.length} pedidos · ${fmt_t(gP)} total`);
@@ -1061,8 +1030,10 @@ function renderPedido(){
 
   h+=mHTML([
     {label:'Peso total',       val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
+    {label:'Na empresa',       val:fmt_t(naE), sub:fmt_kg(naE)+' kg',color:'var(--teal)'},
     {label:'Fabricado',        val:fmt_t(tF),  sub:pF.toFixed(1)+'%',color:'var(--green)'},
     {label:'Expedido',         val:fmt_t(tE),  sub:pE.toFixed(1)+'%',color:'var(--amber)'},
+    {label:'Pend. fabricação', val:fmt_t(tPF), sub:'a fabricar',color:'var(--purple)'},
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:nDP+' desenhos',color:'var(--red)'},
     {label:'Avanço',           val:avancoPedido!==null?avancoPedido.toFixed(0)+'%':'—', sub:'média do pedido',color:'var(--amber)'},
     {label:'TAGs',             val:tk.length,  sub:'no pedido'},
@@ -1169,8 +1140,10 @@ function renderTag(){
   const avancoTag=calcAvanco(itensFlat(prods));
   let h=mHTML([
     {label:'Peso total TAG',   val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
+    {label:'Na empresa',       val:fmt_t(naE), sub:fmt_kg(naE)+' kg',color:'var(--teal)'},
     {label:'Fabricado',        val:fmt_t(tF),  sub:pF.toFixed(1)+'%',color:'var(--green)'},
     {label:'Expedido',         val:fmt_t(tE),  sub:pE.toFixed(1)+'%',color:'var(--amber)'},
+    {label:'Pend. fabricação', val:fmt_t(tPF), sub:'a fabricar',color:'var(--purple)'},
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:'a expedir',color:'var(--red)'},
     {label:'Avanço',           val:avancoTag!==null?avancoTag.toFixed(0)+'%':'—', sub:'média da TAG',color:'var(--amber)'},
     {label:'Setores',          val:pk.length,  sub:'clique para detalhar'},
@@ -1194,8 +1167,10 @@ function renderProduto(){
   const ehSetorQtd=SETORES_QTD.includes(String(state.produto).trim().toUpperCase());
   let h=mHTML([
     {label:'Carga programada', val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
+    {label:'Na empresa',       val:fmt_t(naE), sub:fmt_kg(naE)+' kg',color:'var(--teal)'},
     {label:'Fabricado',        val:fmt_t(tF),  sub:pF.toFixed(1)+'%',color:'var(--green)'},
     {label:'Expedido',         val:fmt_t(tE),  sub:pE.toFixed(1)+'%',color:'var(--amber)'},
+    {label:'Pend. fabricação', val:fmt_t(tPF), sub:'a fabricar',color:'var(--purple)'},
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:ip.length+' desenhos',color:'var(--red)'},
     {label:'Avanço',           val:avancoSetor!==null?avancoSetor.toFixed(0)+'%':'—', sub:'média do setor',color:'var(--amber)'},
     {label:'Itens',            val:itens.length,sub:'neste setor'},
@@ -1230,10 +1205,11 @@ function renderProduto(){
       ${ehSetorQtd?'<th class="r">Qtde exp.</th><th class="r">Qtde na empresa</th>':''}
       <th class="r">Peso unit.</th><th class="r">Peso total</th>
       <th class="r">Fabricado</th><th class="r">Expedido</th>
-      <th class="r">Pend.exp.</th>
+      <th class="r">Na empresa</th><th class="r">Pend.fab.</th><th class="r">Pend.exp.</th>
     </tr></thead>
     <tbody>${itens.map(it=>{
-      const pe=Math.max(0,it.pesoPendExp);
+      const naEmp=Math.max(0,it.fabricado-it.expedido);
+      const pf=Math.max(0,it.pendFab),pe=Math.max(0,it.pesoPendExp);
       const qtdNaEmp=Math.max(0,it.qte-it.qtdExpedida);
       return `<tr>
         <td style="white-space:nowrap;font-weight:${pe>0?'700':'400'};color:${pe>0?'var(--text)':'var(--text2)'}">${it.desenho}</td>
@@ -1244,6 +1220,8 @@ function renderProduto(){
         <td class="r">${it.pesoTotal.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
         <td class="r" style="color:var(--green)">${it.fabricado.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
         <td class="r" style="color:var(--amber)">${it.expedido.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
+        <td class="r" style="font-weight:700;color:${naEmp>0?'var(--teal)':'var(--text3)'}">${naEmp.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
+        <td class="r" style="color:${pf>0?'var(--purple)':'var(--text3)'}">${pf.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
         <td class="r">${pe>0?`<span class="pend-badge">${pe.toLocaleString('pt-BR',{maximumFractionDigits:1})} kg</span>`:'-'}</td>
       </tr>`;
     }).join('')}</tbody>
