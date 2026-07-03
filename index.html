@@ -551,25 +551,21 @@ async function carregarPlanilha(){
   if(icon)  icon.style.animation = 'spin 1s linear infinite';
   setStatus('Buscando planilha no GitHub...');
   try{
-    const controller = new AbortController();
-    const timeout = setTimeout(()=>controller.abort(), 20000);
-    const resp = await fetch(GITHUB_URL + '?t=' + Date.now(), {signal: controller.signal});
-    clearTimeout(timeout);
+    const resp = await fetch(GITHUB_URL + '?t=' + Date.now());
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     const buf = await resp.arrayBuffer();
     processarPlanilha(buf);
   } catch(err){
     if(icon) icon.style.animation = '';
     if(label) label.textContent = 'Erro ao carregar';
-    const msg = err.name === 'AbortError' ? 'Tempo esgotado — tente novamente' : err.message;
-    setStatus('Erro: ' + msg);
+    setStatus('Erro: ' + err.message);
     document.getElementById('capacidadeSection').style.display='none';
     document.getElementById('mainContent').innerHTML=`
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px;text-align:center;padding:2rem">
         <i class="ti ti-wifi-off" style="font-size:64px;color:var(--red);opacity:.7"></i>
         <div style="font-size:20px;font-weight:700;color:var(--text)">Não foi possível carregar a planilha</div>
         <div style="font-size:13px;color:var(--text2);max-width:420px">
-          Erro: <strong style="color:var(--red)">${msg}</strong><br><br>
+          Erro: <strong style="color:var(--red)">${err.message}</strong><br><br>
           Verifique se o arquivo <strong style="color:var(--amber)">planejamento-controle-producao.xlsx</strong> está no repositório GitHub e tente novamente.
         </div>
         <button onclick="carregarPlanilha()" style="background:var(--blue);color:#fff;border:none;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:8px">
