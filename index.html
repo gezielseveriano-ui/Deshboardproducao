@@ -378,6 +378,167 @@ let state={tela:'geral',pedido:null,tag:null,produto:null};
 const hoje=new Date(); hoje.setHours(0,0,0,0);
 let capChart=null;
 const SETORES=['ESTRUTURA','USINAGEM','TAMBOR','ROLOS','BASES ROLETES','REVESTIMENTO','RMF','TECMETAL','CSM'];
+// Colunas de Avanço (índices 0-based na linha da aba MICRO): AA..AI
+const AVANCO_COLS=[26,27,28,29,30,31,32,33,34];
+/* Converte valor de célula de etapa em percentual 0-100, ou null se vazio/indefinido */
+function parsePct(v){
+  if(v===null||v===undefined) return null;
+  if(typeof v==='number'){ if(isNaN(v)) return null; return v<=1?v*100:v; }
+  if(typeof v==='string'){
+    const s=v.trim().toLowerCase();
+    if(s==='') return null;
+    if(s==='ok') return 100;
+    const cleaned=s.replace('%','').replace(',','.');
+    const f=parseFloat(cleaned);
+    if(isNaN(f)) return null;
+    return f<=1?f*100:f;
+  }
+  return null;
+}
+/* Percentual médio de avanço, calculado sobre TODOS os valores de etapa presentes num conjunto de itens */
+function calcAvanco(items){
+  let vals=[];
+  items.forEach(it=>{ if(it.stages) it.stages.forEach(v=>{ if(v!==null&&v!==undefined) vals.push(v); }); });
+  if(!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+/* Agrega Carga Programada / Expedido / Pend. Expedição / Avanço para um conjunto de itens de um setor */
+function setorAgg(items){
+  let cargaProg=0,expedido=0,pendExp=0;
+  items.forEach(it=>{cargaProg+=it.pesoTotal;expedido+=it.expedido;pendExp+=Math.max(0,it.pesoPendExp);});
+  return {cargaProg,expedido,pendExp,avanco:calcAvanco(items),n:items.length};
+}
+/* Mapa {setor: [itens...]} agregando todas as TAGs de um pedido */
+function setoresDoPedido(pedido){
+  const tags=DB[pedido]||{}; const map={};
+  Object.values(tags).forEach(setObj=>{
+    Object.entries(setObj).forEach(([setor,itens])=>{
+      if(!map[setor]) map[setor]=[];
+      map[setor]=map[setor].concat(itens);
+    });
+  });
+  return map;
+}
+/* Cards de setor — usados na tela de Pedido e na tela de TAG */
+function setorCardsHTML(map,onClickFn){
+  const setores=Object.keys(map).sort();
+  const maxCarga=Math.max(...setores.map(s=>setorAgg(map[s]).cargaProg),1);
+  return setores.map(setor=>{
+    const a=setorAgg(map[setor]);
+    const barW=maxCarga>0?(a.cargaProg/maxCarga*100).toFixed(1):0;
+    const av=a.avanco;
+    const avPct=av!==null?Math.min(100,Math.max(0,av)):0;
+    return `<div class="card"${onClickFn?` onclick="${onClickFn}('${esc(setor)}')"`:' style="cursor:default"'}>
+      <div class="card-icon"><i class="ti ti-building-factory-2"></i></div>
+      <div class="card-name">${setor}</div>
+      <div class="card-sub">${a.n} item${a.n!==1?'s':''}</div>
+      <div class="card-ton">${fmt_t(a.cargaProg)}</div>
+      <div class="card-kg">Carga programada</div>
+      <div class="card-bar-bg"><div class="card-bar-fill" style="width:${barW}%"></div></div>
+      <div class="pc-pills" style="margin-top:6px">
+        <span class="pill pill-green"><i class="ti ti-truck"></i>${fmt_t(a.expedido)} exp.</span>
+        ${a.pendExp>0?`<span class="pill pill-red"><i class="ti ti-clock-pause"></i>${fmt_t(a.pendExp)} pend.</span>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:9px">
+        <span style="font-size:10px;color:var(--text2);width:44px;flex-shrink:0">Avanço</span>
+        <div style="flex:1;height:5px;background:var(--bg4);border-radius:3px;overflow:hidden"><div style="height:100%;width:${avPct.toFixed(1)}%;background:linear-gradient(90deg,var(--amber),var(--green));border-radius:3px"></div></div>
+        <span style="font-size:11px;font-weight:700;color:var(--amber);width:34px;text-align:right;flex-shrink:0">${av!==null?av.toFixed(0)+'%':'—'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+/* Tabela de setor — Carga programada / Expedido / Pend. exp. / Avanço, no mesmo estilo da tabela de Capacidade */
+function setorTableHTML(map,onClickFn){
+  const setores=Object.keys(map).sort();
+  const ft=kg=>(kg/1000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  let totCarga=0,totExp=0,totPend=0;
+  const rows=setores.map(setor=>{
+    const a=setorAgg(map[setor]);
+    totCarga+=a.cargaProg; totExp+=a.expedido; totPend+=a.pendExp;
+    const av=a.avanco;
+    const avPct=av!==null?Math.min(100,Math.max(0,av)):0;
+    const barCol=avPct>=100?'var(--green)':(avPct>=50?'var(--amber)':'var(--red)');
+    return `<tr${onClickFn?` style="cursor:pointer" onclick="${onClickFn}('${esc(setor)}')"`:''}>
+      <td><strong style="color:var(--text)">${setor}</strong></td>
+      <td class="r" style="color:var(--amber)">${ft(a.cargaProg)}</td>
+      <td class="r" style="color:var(--teal)">${ft(a.expedido)}</td>
+      <td class="r" style="color:var(--red)">${ft(a.pendExp)}</td>
+      <td>
+        <div class="bar-row">
+          <div class="bar-bg"><div class="bar-fg" style="width:${avPct.toFixed(1)}%;background:${barCol}"></div></div>
+          <span style="font-size:10px;width:36px;text-align:right;color:var(--text2)">${av!==null?av.toFixed(0)+'%':'—'}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div class="cap-table-box">
+    <div style="overflow-x:auto">
+    <table class="ctbl">
+      <thead><tr>
+        <th>Setor</th>
+        <th class="r">Carga programada (t)</th>
+        <th class="r">Expedido (t)</th>
+        <th class="r">Pend. exp. (t)</th>
+        <th style="width:150px">Avanço</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td>TOTAL</td>
+        <td class="r" style="color:var(--amber)">${ft(totCarga)}</td>
+        <td class="r" style="color:var(--teal)">${ft(totExp)}</td>
+        <td class="r" style="color:var(--red)">${ft(totPend)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+    </div>
+  </div>`;
+}
+
+/* ── CONTROLE DE QUANTIDADE (Bases Roletes / Rolos / Tambor) ── */
+// Setores em que, além do peso, o controle por QUANTIDADE de peças é necessário
+const SETORES_QTD=['BASES ROLETES','ROLOS','TAMBOR'];
+function qtdAgg(items){
+  let qtdProd=0,qtdExp=0;
+  items.forEach(it=>{qtdProd+=it.qte;qtdExp+=it.qtdExpedida;});
+  return {qtdProd,qtdExp,qtdNaEmpresa:Math.max(0,qtdProd-qtdExp)};
+}
+function setorQtdTableHTML(map){
+  const setores=Object.keys(map).filter(s=>SETORES_QTD.includes(s.trim().toUpperCase())).sort();
+  if(!setores.length) return '';
+  let totProd=0,totExp=0,totNaEmp=0;
+  const rows=setores.map(setor=>{
+    const q=qtdAgg(map[setor]);
+    totProd+=q.qtdProd; totExp+=q.qtdExp; totNaEmp+=q.qtdNaEmpresa;
+    return `<tr>
+      <td><strong style="color:var(--text)">${setor}</strong></td>
+      <td class="r" style="color:var(--blue)">${q.qtdProd.toLocaleString('pt-BR')}</td>
+      <td class="r" style="color:var(--teal)">${q.qtdExp.toLocaleString('pt-BR')}</td>
+      <td class="r" style="color:${q.qtdNaEmpresa>0?'var(--amber)':'var(--text3)'};font-weight:700">${q.qtdNaEmpresa.toLocaleString('pt-BR')}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="section">
+    <div class="section-title"><i class="ti ti-list-numbers" style="font-size:12px;vertical-align:-1px"></i> Controle de quantidade — peças (un.)</div>
+    <div class="cap-table-box">
+      <div style="overflow-x:auto">
+      <table class="ctbl">
+        <thead><tr>
+          <th>Setor</th>
+          <th class="r">Qtde produção (un.)</th>
+          <th class="r">Qtde expedida (un.)</th>
+          <th class="r">Qtde na empresa (un.)</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr>
+          <td>TOTAL</td>
+          <td class="r" style="color:var(--blue)">${totProd.toLocaleString('pt-BR')}</td>
+          <td class="r" style="color:var(--teal)">${totExp.toLocaleString('pt-BR')}</td>
+          <td class="r" style="color:var(--amber)">${totNaEmp.toLocaleString('pt-BR')}</td>
+        </tr></tfoot>
+      </table>
+      </div>
+    </div>
+  </div>`;
+}
 
 /* ── CONFIG GITHUB ── */
 const GITHUB_URL = 'https://raw.githubusercontent.com/gezielseveriano-ui/Deshboardproducao/main/planejamento-controle-producao.xlsx';
@@ -394,13 +555,38 @@ async function carregarPlanilha(){
     const resp = await fetch(GITHUB_URL + '?t=' + Date.now());
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     buf = await resp.arrayBuffer();
+    processarPlanilha(buf);
   } catch(err){
-    setStatus('Erro ao buscar planilha: ' + err.message + ' — verifique se o arquivo está no repositório.');
-    if(label) label.textContent = 'Erro ao carregar';
-    if(icon)  icon.style.animation = '';
-    return;
+    if(icon) icon.style.animation = '';
+    mostrarUploadLocal();
   }
-  processarPlanilha(buf);
+}
+
+function mostrarUploadLocal(){
+  const label = document.getElementById('updateLabel');
+  if(label) label.textContent = 'Carregar arquivo local';
+  document.getElementById('mainContent').innerHTML=`
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px;text-align:center">
+      <i class="ti ti-file-spreadsheet" style="font-size:64px;color:var(--blue);opacity:.7"></i>
+      <div style="font-size:20px;font-weight:700;color:var(--text)">Selecione a planilha para carregar</div>
+      <div style="font-size:13px;color:var(--text2);max-width:400px">Não foi possível buscar do GitHub. Selecione o arquivo <strong style="color:var(--amber)">planejamento-controle-producao.xlsx</strong> do seu computador.</div>
+      <label style="display:inline-flex;align-items:center;gap:10px;background:var(--blue);color:#fff;padding:12px 28px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;transition:.2s">
+        <i class="ti ti-upload"></i> Selecionar arquivo .xlsx
+        <input type="file" accept=".xlsx" style="display:none" onchange="carregarArquivoLocal(this)">
+      </label>
+    </div>`;
+  document.getElementById('capacidadeSection').style.display='none';
+}
+
+function carregarArquivoLocal(input){
+  const file = input.files[0];
+  if(!file) return;
+  const label = document.getElementById('updateLabel');
+  if(label) label.textContent = 'Carregando...';
+  setStatus('Lendo arquivo local...');
+  const reader = new FileReader();
+  reader.onload = e => processarPlanilha(e.target.result);
+  reader.readAsArrayBuffer(file);
 }
 
 async function processarPlanilha(buf){
@@ -455,11 +641,15 @@ async function processarPlanilha(buf){
     const tag=r[9]?String(r[9]).trim():'SEM TAG';
     const produto=r[10]?String(r[10]).trim():'SEM PRODUTO';
     const n=v=>typeof v==='number'?v:(parseFloat(v)||0);
+    const stages=AVANCO_COLS.map(idx=>parsePct(r[idx]));
+    const stVals=stages.filter(v=>v!==null&&v!==undefined);
     const item={
       desenho:r[0]?String(r[0]).trim():'', desc:r[3]?String(r[3]).trim():'',
       qte:n(r[2]),pesoUnit:n(r[6]),pesoTotal:n(r[7]),
       fabricado:n(r[18]),expedido:n(r[23]),
       pendFab:n(r[19]),qtdPendExp:n(r[24]),pesoPendExp:n(r[25]),
+      qtdExpedida:n(r[20]),
+      stages, avanco:stVals.length?stVals.reduce((a,b)=>a+b,0)/stVals.length:null,
       produto,
     };
     if(!DB[pedido]) DB[pedido]={};
@@ -471,7 +661,6 @@ async function processarPlanilha(buf){
   allPedidos=Object.keys(DB).sort();
   state={tela:'geral',pedido:null,tag:null,produto:null};
   renderCapacidade();
-  document.getElementById('capacidadeSection').style.display='block';
   renderTela();
   setStatus(`Atualizado: ${nL.toLocaleString('pt-BR')} linhas · ${allPedidos.length} pedidos · ${Object.keys(CLIENTES).length} clientes`);
   const agora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
@@ -509,15 +698,26 @@ function calcSetores(){
 function renderCapacidade(){
   const s=calcSetores();
   const ativos=SETORES.filter(k=>s[k].cap>0||s[k].pesoTotal>0);
-  let totCap=0,totProg=0,totExp=0,totPE=0,totLiquida=0;
-  ativos.forEach(k=>{
-    totCap    +=s[k].cap;
-    totProg   +=s[k].cargaProg;
-    totExp    +=s[k].expedido;
-    totPE     +=s[k].pesoPendExp;
-    totLiquida+=s[k].cargaLiquida;
+  let totCap=0;
+  ativos.forEach(k=>{ totCap+=s[k].cap; });
+
+  // Totais calculados direto de TODOS os registros da MICRO (independente de setor)
+  let totProgramado=0, totExp=0, totPE=0;
+  allPedidos.forEach(p=>{
+    Object.values(DB[p]).forEach(tagObj=>{
+      Object.values(tagObj).forEach(setObj=>{
+        Object.values(setObj).forEach(itens=>{
+          itens.forEach(it=>{
+            totProgramado += it.pesoTotal;                    // col H — tudo programado
+            totExp        += it.expedido;                     // col X — expedido
+            totPE         += Math.max(0, it.pesoPendExp);     // col Z — só positivos
+          });
+        });
+      });
+    });
   });
-  const totLivre=Math.max(0,totCap-totLiquida);
+
+  const totLivre=Math.max(0, totCap - (totProgramado - totExp));
   const ft=kg=>(kg/1000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 
   const sec=document.getElementById('capacidadeSection');
@@ -538,9 +738,9 @@ function renderCapacidade(){
         <div class="cap-card-value" style="color:var(--blue)">${ft(totCap)} t</div>
         <div class="cap-card-sub">${ativos.length} setores ativos</div>
       </div>
-      <div class="cap-card c-amber">
-        <div class="cap-card-label"><i class="ti ti-package"></i> Carga programada</div>
-        <div class="cap-card-value" style="color:var(--amber)">${ft(totProg)} t</div>
+      <div class="cap-card c-purple">
+        <div class="cap-card-label"><i class="ti ti-clipboard-list"></i> Programado</div>
+        <div class="cap-card-value" style="color:var(--purple)">${ft(totProgramado)} t</div>
         <div class="cap-card-sub">total liberado pela engenharia</div>
       </div>
       <div class="cap-card c-teal">
@@ -548,20 +748,15 @@ function renderCapacidade(){
         <div class="cap-card-value" style="color:var(--teal)">${ft(totExp)} t</div>
         <div class="cap-card-sub">já saiu da empresa</div>
       </div>
-      <div class="cap-card c-purple">
-        <div class="cap-card-label"><i class="ti ti-building-warehouse"></i> Carga líquida</div>
-        <div class="cap-card-value" style="color:var(--purple)">${ft(totLiquida)} t</div>
-        <div class="cap-card-sub">programada − expedido</div>
-      </div>
       <div class="cap-card c-green">
         <div class="cap-card-label"><i class="ti ti-circle-check"></i> Capacidade livre</div>
         <div class="cap-card-value" style="color:var(--green)">${ft(totLivre)} t</div>
-        <div class="cap-card-sub">cap. mensal − carga líquida</div>
+        <div class="cap-card-sub">cap. mensal − (programado − expedido)</div>
       </div>
       <div class="cap-card c-red">
-        <div class="cap-card-label"><i class="ti ti-clock-pause"></i> Pendente expedição</div>
+        <div class="cap-card-label"><i class="ti ti-clock-pause"></i> Total em carteira</div>
         <div class="cap-card-value" style="color:var(--red)">${ft(totPE)} t</div>
-        <div class="cap-card-sub">col Z · sem valores negativos</div>
+        <div class="cap-card-sub">pendente de expedição (col Z)</div>
       </div>
     </div>
 
@@ -707,6 +902,8 @@ function isLate(d){if(!d)return false;const dt=new Date(d);dt.setHours(0,0,0,0);
 /* ── ROTEADOR ── */
 function renderTela(){
   const map={geral:renderGeral,pedido:renderPedido,pendencias:renderPendencias,tag:renderTag,produto:renderProduto};
+  const capSec=document.getElementById('capacidadeSection');
+  if(capSec) capSec.style.display=(state.tela==='geral')?'block':'none';
   (map[state.tela]||renderGeral)();
   renderNav();
 }
@@ -750,12 +947,6 @@ function renderGeral(){
   const pF=gP>0?Math.min(100,gF/gP*100):0, pE=gP>0?Math.min(100,gE/gP*100):0;
 
   document.getElementById('mainContent').innerHTML=`
-  <div class="global-metrics">
-    <div class="gm"><div class="gm-label"><i class="ti ti-weight" style="font-size:12px;vertical-align:-1px"></i> Total em carteira</div><div class="gm-value">${fmt_t(gP)}</div><div class="gm-sub">${allPedidos.length} pedidos</div></div>
-    <div class="gm"><div class="gm-label"><i class="ti ti-tools" style="font-size:12px;vertical-align:-1px"></i> Fabricado</div><div class="gm-value" style="color:var(--green)">${fmt_t(gF)}</div><div class="gm-sub">${pF.toFixed(1)}% do total</div></div>
-    <div class="gm"><div class="gm-label"><i class="ti ti-truck" style="font-size:12px;vertical-align:-1px"></i> Expedido</div><div class="gm-value" style="color:var(--amber)">${fmt_t(gE)}</div><div class="gm-sub">${pE.toFixed(1)}% do total</div></div>
-    <div class="gm"><div class="gm-label"><i class="ti ti-clock-pause" style="font-size:12px;vertical-align:-1px"></i> Pend. expedição</div><div class="gm-value" style="color:var(--red)">${fmt_t(gPE)}</div><div class="gm-sub">a expedir</div></div>
-  </div>
   <div class="pedidos-grid" id="pedidosGrid"></div>`;
   filtrarGeral('');
   setStatus(`${allPedidos.length} pedidos · ${fmt_t(gP)} total`);
@@ -853,13 +1044,15 @@ function renderPedido(){
     </div>`;
   }
 
+  const mapaSetoresPedido=setoresDoPedido(state.pedido);
+  const avancoPedido=calcAvanco(itensFlat(mapaSetoresPedido));
+
   h+=mHTML([
     {label:'Peso total',       val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
-    {label:'Na empresa',       val:fmt_t(naE), sub:fmt_kg(naE)+' kg',color:'var(--teal)'},
     {label:'Fabricado',        val:fmt_t(tF),  sub:pF.toFixed(1)+'%',color:'var(--green)'},
     {label:'Expedido',         val:fmt_t(tE),  sub:pE.toFixed(1)+'%',color:'var(--amber)'},
-    {label:'Pend. fabricação', val:fmt_t(tPF), sub:'a fabricar',color:'var(--purple)'},
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:nDP+' desenhos',color:'var(--red)'},
+    {label:'Avanço',           val:avancoPedido!==null?avancoPedido.toFixed(0)+'%':'—', sub:'média do pedido',color:'var(--amber)'},
     {label:'TAGs',             val:tk.length,  sub:'no pedido'},
   ]);
   h+=prHTML(pF,pE);
@@ -874,7 +1067,12 @@ function renderPedido(){
     </button>
   </div>
   <div class="section" style="padding-top:1.25rem">
-    <div class="section-title">TAGs do pedido — clique para ver os produtos</div>
+    <div class="section-title">Setores do pedido ${state.pedido} — carga programada, expedido, pendente e avanço</div>
+    ${setorTableHTML(mapaSetoresPedido,null)}
+  </div>
+  ${setorQtdTableHTML(mapaSetoresPedido)}
+  <div class="section">
+    <div class="section-title">TAGs do pedido — clique para ver os setores da TAG</div>
     <div class="cards-grid">`;
 
   tk.sort().forEach(tag=>{
@@ -956,39 +1154,20 @@ function renderTag(){
   let tP=0,tF=0,tE=0,tPF=0,tPE=0;
   pk.forEach(p=>prods[p].forEach(it=>{tP+=it.pesoTotal;tF+=it.fabricado;tE+=it.expedido;tPF+=Math.max(0,it.pendFab);tPE+=Math.max(0,it.pesoPendExp);}));
   const naE=Math.max(0,tF-tE),pF=tP>0?Math.min(100,tF/tP*100):0,pE=tP>0?Math.min(100,tE/tP*100):0;
-  const maxP=Math.max(...pk.map(p=>sI(prods[p],'pesoTotal')),1);
+  const avancoTag=calcAvanco(itensFlat(prods));
   let h=mHTML([
     {label:'Peso total TAG',   val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
-    {label:'Na empresa',       val:fmt_t(naE), sub:fmt_kg(naE)+' kg',color:'var(--teal)'},
     {label:'Fabricado',        val:fmt_t(tF),  sub:pF.toFixed(1)+'%',color:'var(--green)'},
     {label:'Expedido',         val:fmt_t(tE),  sub:pE.toFixed(1)+'%',color:'var(--amber)'},
-    {label:'Pend. fabricação', val:fmt_t(tPF), sub:'a fabricar',color:'var(--purple)'},
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:'a expedir',color:'var(--red)'},
-    {label:'Produtos',         val:pk.length,  sub:'clique para detalhar'},
+    {label:'Avanço',           val:avancoTag!==null?avancoTag.toFixed(0)+'%':'—', sub:'média da TAG',color:'var(--amber)'},
+    {label:'Setores',          val:pk.length,  sub:'clique para detalhar'},
   ]);
   h+=prHTML(pF,pE);
-  h+=`<div class="section"><div class="section-title">Produtos do TAG ${state.tag} — clique para ver os itens</div><div class="cards-grid">`;
-  pk.sort().forEach(prod=>{
-    const pP=sI(prods[prod],'pesoTotal'),pF2=sI(prods[prod],'fabricado'),pE2=sI(prods[prod],'expedido');
-    const pPF=Math.max(0,sI(prods[prod],'pendFab')),pPE=Math.max(0,sI(prods[prod],'pesoPendExp'));
-    const naEmp=Math.max(0,pF2-pE2),barW=pP>0?(pP/maxP*100).toFixed(1):0;
-    h+=`<div class="card" onclick="abrirProduto('${esc(prod)}')">
-      <div class="card-icon"><i class="ti ti-package"></i></div>
-      <div class="card-name">${prod}</div>
-      <div class="card-sub">${prods[prod].length} item${prods[prod].length!==1?'s':''}</div>
-      <div class="card-ton">${fmt_t(pP)}</div><div class="card-kg">${fmt_kg(pP)} kg</div>
-      <div class="card-bar-bg"><div class="card-bar-fill" style="width:${barW}%"></div></div>
-      <div class="pc-pills" style="margin-top:6px">
-        ${naEmp>0?`<span class="pill pill-blue"><i class="ti ti-building-warehouse"></i>${fmt_t(naEmp)}</span>`:''}
-        ${pPE>0?`<span class="pill pill-red"><i class="ti ti-clock-pause"></i>${fmt_t(pPE)}</span>`:''}
-        ${pPF>0?`<span class="pill pill-purple"><i class="ti ti-clock"></i>${fmt_t(pPF)}</span>`:''}
-        ${naEmp===0&&pPE===0&&pPF===0?`<span class="pill pill-green"><i class="ti ti-check"></i>ok</span>`:''}
-      </div>
-    </div>`;
-  });
-  h+=`</div></div>`;
+  h+=`<div class="section"><div class="section-title">Setores da TAG ${state.tag} — carga programada, expedido, pendente e avanço</div>${setorTableHTML(prods,'abrirProduto')}</div>`;
+  h+=setorQtdTableHTML(prods);
   document.getElementById('mainContent').innerHTML=h;
-  setStatus(`${state.pedido} › ${state.tag} · ${pk.length} produtos`);
+  setStatus(`${state.pedido} › ${state.tag} · ${pk.length} setores`);
 }
 
 /* ── PRODUTO ── */
@@ -999,16 +1178,25 @@ function renderProduto(){
   itens.forEach(it=>{tP+=it.pesoTotal;tF+=it.fabricado;tE+=it.expedido;tPF+=Math.max(0,it.pendFab);tPE+=Math.max(0,it.pesoPendExp);});
   const naE=Math.max(0,tF-tE),pF=tP>0?Math.min(100,tF/tP*100):0,pE=tP>0?Math.min(100,tE/tP*100):0;
   const ip=itens.filter(it=>it.pesoPendExp>0);
+  const avancoSetor=calcAvanco(itens);
+  const ehSetorQtd=SETORES_QTD.includes(String(state.produto).trim().toUpperCase());
   let h=mHTML([
-    {label:'Peso total',       val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
-    {label:'Na empresa',       val:fmt_t(naE), sub:fmt_kg(naE)+' kg',color:'var(--teal)'},
+    {label:'Carga programada', val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
     {label:'Fabricado',        val:fmt_t(tF),  sub:pF.toFixed(1)+'%',color:'var(--green)'},
     {label:'Expedido',         val:fmt_t(tE),  sub:pE.toFixed(1)+'%',color:'var(--amber)'},
-    {label:'Pend. fabricação', val:fmt_t(tPF), sub:'a fabricar',color:'var(--purple)'},
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:ip.length+' desenhos',color:'var(--red)'},
-    {label:'Itens',            val:itens.length,sub:'neste produto'},
+    {label:'Avanço',           val:avancoSetor!==null?avancoSetor.toFixed(0)+'%':'—', sub:'média do setor',color:'var(--amber)'},
+    {label:'Itens',            val:itens.length,sub:'neste setor'},
   ]);
   h+=prHTML(pF,pE);
+  if(ehSetorQtd){
+    const q=qtdAgg(itens);
+    h+=mHTML([
+      {label:'Qtde produção',   val:q.qtdProd.toLocaleString('pt-BR')+' un.',   sub:'coluna C',color:'var(--blue)'},
+      {label:'Qtde expedida',   val:q.qtdExp.toLocaleString('pt-BR')+' un.',    sub:'coluna U',color:'var(--teal)'},
+      {label:'Qtde na empresa', val:q.qtdNaEmpresa.toLocaleString('pt-BR')+' un.', sub:'produção − expedida',color:'var(--amber)'},
+    ]);
+  }
   if(ip.length>0){
     h+=`<div class="section">
       <div class="section-title" style="color:var(--red)"><i class="ti ti-alert-circle" style="font-size:12px;vertical-align:-1px"></i> Pendentes de expedição</div>
@@ -1023,33 +1211,33 @@ function renderProduto(){
       </table></div>
     </div>`;
   }
-  h+=`<div class="section"><div class="section-title">Todos os itens — ${state.produto}</div>
+  h+=`<div class="section"><div class="section-title">Todos os itens — Setor ${state.produto}</div>
   <div class="tbl-wrap"><table class="dtbl">
     <thead><tr>
       <th>Desenho MDE</th><th>Descrição</th><th class="r">Qtde</th>
+      ${ehSetorQtd?'<th class="r">Qtde exp.</th><th class="r">Qtde na empresa</th>':''}
       <th class="r">Peso unit.</th><th class="r">Peso total</th>
       <th class="r">Fabricado</th><th class="r">Expedido</th>
-      <th class="r">Na empresa</th><th class="r">Pend.fab.</th><th class="r">Pend.exp.</th>
+      <th class="r">Pend.exp.</th>
     </tr></thead>
     <tbody>${itens.map(it=>{
-      const naEmp=Math.max(0,it.fabricado-it.expedido);
-      const pf=Math.max(0,it.pendFab),pe=Math.max(0,it.pesoPendExp);
+      const pe=Math.max(0,it.pesoPendExp);
+      const qtdNaEmp=Math.max(0,it.qte-it.qtdExpedida);
       return `<tr>
         <td style="white-space:nowrap;font-weight:${pe>0?'700':'400'};color:${pe>0?'var(--text)':'var(--text2)'}">${it.desenho}</td>
         <td style="color:var(--text2)">${it.desc}</td>
         <td class="r">${it.qte}</td>
+        ${ehSetorQtd?`<td class="r" style="color:var(--teal)">${it.qtdExpedida.toLocaleString('pt-BR')}</td><td class="r" style="font-weight:700;color:${qtdNaEmp>0?'var(--amber)':'var(--text3)'}">${qtdNaEmp.toLocaleString('pt-BR')}</td>`:''}
         <td class="r">${it.pesoUnit.toLocaleString('pt-BR',{maximumFractionDigits:2})}</td>
         <td class="r">${it.pesoTotal.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
         <td class="r" style="color:var(--green)">${it.fabricado.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
         <td class="r" style="color:var(--amber)">${it.expedido.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
-        <td class="r" style="font-weight:700;color:${naEmp>0?'var(--teal)':'var(--text3)'}">${naEmp.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
-        <td class="r" style="color:${pf>0?'var(--purple)':'var(--text3)'}">${pf.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
         <td class="r">${pe>0?`<span class="pend-badge">${pe.toLocaleString('pt-BR',{maximumFractionDigits:1})} kg</span>`:'-'}</td>
       </tr>`;
     }).join('')}</tbody>
   </table></div></div>`;
   document.getElementById('mainContent').innerHTML=h;
-  setStatus(`${state.pedido} › ${state.tag} › ${state.produto} · ${itens.length} itens`);
+  setStatus(`${state.pedido} › ${state.tag} › Setor ${state.produto} · ${itens.length} itens`);
 }
 
 /* ── UTILS ── */
@@ -1080,6 +1268,7 @@ function resP(p){
 function sumTag(o,c){return Object.values(o).reduce((s,i)=>s+sI(i,c),0);}
 function sumTagF(o,c){return Object.values(o).reduce((s,i)=>s+i.reduce((a,it)=>a+Math.max(0,it[c]),0),0);}
 function sI(i,c){return i.reduce((s,it)=>s+(it[c]||0),0);}
+function itensFlat(map){return Object.values(map).reduce((a,itens)=>a.concat(itens),[]);}
 function fmt_t(kg){return (kg/1000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' t';}
 function fmt_kg(kg){return kg.toLocaleString('pt-BR',{maximumFractionDigits:0});}
 function esc(s){return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
