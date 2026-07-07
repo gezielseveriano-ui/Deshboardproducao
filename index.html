@@ -373,7 +373,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 <div class="status-bar" id="statusBar">Buscando planilha no GitHub...</div>
 
 <script>
-let DB={}, CLIENTES={}, CAPACIDADE={}, allPedidos=[];
+let DB={}, CLIENTES={}, CAPACIDADE={}, allPedidos=[], LISTA_EMBARQUE=[];
 let state={tela:'geral',pedido:null,tag:null,produto:null};
 const hoje=new Date(); hoje.setHours(0,0,0,0);
 let capChart=null;
@@ -589,6 +589,29 @@ async function processarPlanilha(buf){
     }
   }
 
+
+  // LISTA DE EMBARQUE
+  LISTA_EMBARQUE=[];
+  const lesn=wb.SheetNames.find(n=>n.trim().toUpperCase()==='LISTA DE EMBARQUE');
+  if(lesn){
+    const leR=XLSX.utils.sheet_to_json(wb.Sheets[lesn],{header:1,defval:null});
+    for(let i=1;i<leR.length;i++){
+      const r=leR[i]; if(!r[0]) continue;
+      const ped=r[13]?String(r[13]).trim():'';
+      if(!ped||ped==='#N/A') continue;
+      const dt=r[12];
+      let dtStr='';
+      if(dt instanceof Date) dtStr=dt.toLocaleDateString('pt-BR');
+      else if(typeof dt==='string') dtStr=dt;
+      LISTA_EMBARQUE.push({
+        item:r[0]??'', cod:r[1]??'', desenhoMDE:r[2]?String(r[2]).trim():'',
+        desenhoCli:r[3]?String(r[3]).trim():'', pos:r[4]?String(r[4]).trim():'',
+        descricao:r[5]?String(r[5]).trim():'', qtd:r[6]??'', unid:r[7]?String(r[7]).trim():'',
+        tag:r[8]?String(r[8]).trim():'', pesoUnit:r[9]??'', pesoTotal:r[10]??'',
+        le:r[11]??'', data:dtStr, pedido:ped
+      });
+    }
+  }
   // CAPACIDADE — apenas linha 9 (idx 8)
   CAPACIDADE={};
   const capn=wb.SheetNames.find(n=>n.trim().toUpperCase()==='CAPACIDADE');
@@ -872,7 +895,7 @@ function isLate(d){if(!d)return false;const dt=new Date(d);dt.setHours(0,0,0,0);
 
 /* ── ROTEADOR ── */
 function renderTela(){
-  const map={geral:renderGeral,pedido:renderPedido,pendencias:renderPendencias,tag:renderTag,produto:renderProduto};
+  const map={geral:renderGeral,pedido:renderPedido,pendencias:renderPendencias,tag:renderTag,produto:renderProduto,embarque:renderEmbarque};
   const capSec=document.getElementById('capacidadeSection');
   if(capSec) capSec.style.display=(state.tela==='geral')?'block':'none';
   (map[state.tela]||renderGeral)();
@@ -889,6 +912,7 @@ function renderNav(){
     h+=`<span class="nav-sep">›</span><span class="nav-crumb ${state.tela==='pedido'?'active':''}" onclick="irPedido()">${label}</span>`;
   }
   if(state.tela==='pendencias') h+=`<span class="nav-sep">›</span><span class="nav-crumb active">Pendências de expedição</span>`;
+  if(state.tela==='embarque') h+=`<span class="nav-sep">›</span><span class="nav-crumb active">Lista de Embarque</span>`;
   if(state.tag) h+=`<span class="nav-sep">›</span><span class="nav-crumb ${state.tela==='tag'?'active':''}" onclick="irTag()">${state.tag}</span>`;
   if(state.produto) h+=`<span class="nav-sep">›</span><span class="nav-crumb active">${state.produto}</span>`;
   nb.innerHTML=h;
@@ -918,12 +942,7 @@ function renderGeral(){
   const pF=gP>0?Math.min(100,gF/gP*100):0, pE=gP>0?Math.min(100,gE/gP*100):0;
 
   document.getElementById('mainContent').innerHTML=`
-  <div class="global-metrics">
-    <div class="gm"><div class="gm-label"><i class="ti ti-weight" style="font-size:12px;vertical-align:-1px"></i> Total em carteira</div><div class="gm-value">${fmt_t(gP)}</div><div class="gm-sub">${allPedidos.length} pedidos</div></div>
-    <div class="gm"><div class="gm-label"><i class="ti ti-tools" style="font-size:12px;vertical-align:-1px"></i> Fabricado</div><div class="gm-value" style="color:var(--green)">${fmt_t(gF)}</div><div class="gm-sub">${pF.toFixed(1)}% do total</div></div>
-    <div class="gm"><div class="gm-label"><i class="ti ti-truck" style="font-size:12px;vertical-align:-1px"></i> Expedido</div><div class="gm-value" style="color:var(--amber)">${fmt_t(gE)}</div><div class="gm-sub">${pE.toFixed(1)}% do total</div></div>
-    <div class="gm"><div class="gm-label"><i class="ti ti-clock-pause" style="font-size:12px;vertical-align:-1px"></i> Pend. expedição</div><div class="gm-value" style="color:var(--red)">${fmt_t(gPE)}</div><div class="gm-sub">a expedir</div></div>
-  </div>
+
   <div class="pedidos-grid" id="pedidosGrid"></div>`;
   filtrarGeral('');
   setStatus(`${allPedidos.length} pedidos · ${fmt_t(gP)} total`);
@@ -1044,6 +1063,9 @@ function renderPedido(){
     <button class="pend-btn" onclick="state.tela='pendencias';renderTela()">
       <i class="ti ti-clipboard-list"></i> Ver relatório completo
     </button>
+    <button class="pend-btn" style="background:var(--blue);margin-left:8px" onclick="state.tela='embarque';renderTela()">
+      <i class="ti ti-truck-delivery"></i> Lista de Embarque
+    </button>
   </div>
   <div class="section" style="padding-top:1.25rem">
     <div class="section-title">Setores do pedido ${state.pedido} — carga programada, expedido, pendente e avanço</div>
@@ -1076,6 +1098,90 @@ function renderPedido(){
   h+=`</div></div>`;
   document.getElementById('mainContent').innerHTML=h;
   setStatus(`${state.pedido}${cli&&cli.equip?' — '+cli.equip:''} · ${tk.length} TAGs · ${fmt_kg(tP)} kg`);
+}
+
+
+/* ── EMBARQUE ── */
+function renderEmbarque(){
+  const ped=state.pedido;
+  const dados=LISTA_EMBARQUE.filter(r=>r.pedido===ped);
+  const mc=document.getElementById('mainContent');
+  mc.innerHTML=`
+  <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px">
+    <input id="leSearch" type="text" placeholder="Buscar por desenho ou nº LE..." 
+      style="flex:1;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"
+      oninput="filtrarEmbarque()">
+    <span style="font-size:12px;color:var(--text2)" id="leBadge">${dados.length} itens</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table id="leTable" style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:var(--surface2);color:var(--text2);text-align:left">
+          <th style="padding:8px 6px;white-space:nowrap">ITEM</th>
+          <th style="padding:8px 6px;white-space:nowrap">COD.MDE</th>
+          <th style="padding:8px 6px;white-space:nowrap">DESENHO MDE</th>
+          <th style="padding:8px 6px;white-space:nowrap">DESENHO CLIENTE</th>
+          <th style="padding:8px 6px;white-space:nowrap">POS</th>
+          <th style="padding:8px 6px;min-width:220px">DESCRIÇÃO DOS PRODUTOS</th>
+          <th style="padding:8px 6px;white-space:nowrap">QTD</th>
+          <th style="padding:8px 6px;white-space:nowrap">UNID</th>
+          <th style="padding:8px 6px;white-space:nowrap">TAG</th>
+          <th style="padding:8px 6px;white-space:nowrap">PESO UNIT</th>
+          <th style="padding:8px 6px;white-space:nowrap">PESO TOTAL</th>
+          <th style="padding:8px 6px;white-space:nowrap">LE</th>
+          <th style="padding:8px 6px;white-space:nowrap">DATA</th>
+          <th style="padding:8px 6px;white-space:nowrap">PEDIDO</th>
+        </tr>
+      </thead>
+      <tbody id="leBody">
+        ${leRows(dados)}
+      </tbody>
+    </table>
+  </div>`;
+}
+function leRows(dados){
+  if(!dados.length) return '<tr><td colspan="14" style="padding:20px;text-align:center;color:var(--text3)">Nenhum item encontrado</td></tr>';
+  return dados.map((r,i)=>`
+    <tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'rgba(255,255,255,0.02)'}">
+      <td style="padding:7px 6px;color:var(--text2)">${r.item}</td>
+      <td style="padding:7px 6px;color:var(--text2)">${r.cod}</td>
+      <td style="padding:7px 6px;color:var(--blue)">${r.desenhoMDE}</td>
+      <td style="padding:7px 6px;color:var(--text2)">${r.desenhoCli}</td>
+      <td style="padding:7px 6px;color:var(--text2)">${r.pos}</td>
+      <td style="padding:7px 6px;color:var(--text)">${r.descricao}</td>
+      <td style="padding:7px 6px;color:var(--text2);text-align:right">${r.qtd}</td>
+      <td style="padding:7px 6px;color:var(--text2)">${r.unid}</td>
+      <td style="padding:7px 6px;color:var(--amber)">${r.tag}</td>
+      <td style="padding:7px 6px;color:var(--text2);text-align:right">${r.pesoUnit}</td>
+      <td style="padding:7px 6px;color:var(--text2);text-align:right">${r.pesoTotal}</td>
+      <td style="padding:7px 6px;color:var(--green);font-weight:600">LE-${r.le}</td>
+      <td style="padding:7px 6px;color:var(--text2);white-space:nowrap">${r.data}</td>
+      <td style="padding:7px 6px;color:var(--text2)">${r.pedido}</td>
+    </tr>`).join('');
+}
+function filtrarEmbarque(){
+  const ped=state.pedido;
+  const q=(document.getElementById('leSearch')?.value||'').toLowerCase().trim();
+  let dados=LISTA_EMBARQUE.filter(r=>r.pedido===ped);
+  if(q){
+    dados=dados.filter(r=>
+      String(r.item).toLowerCase().includes(q)||
+      String(r.cod).toLowerCase().includes(q)||
+      (r.desenhoMDE&&r.desenhoMDE.toLowerCase().includes(q))||
+      (r.desenhoCli&&r.desenhoCli.toLowerCase().includes(q))||
+      (r.pos&&r.pos.toLowerCase().includes(q))||
+      (r.descricao&&r.descricao.toLowerCase().includes(q))||
+      (r.tag&&r.tag.toLowerCase().includes(q))||
+      String(r.le).toLowerCase().includes(q)||
+      ('le-'+String(r.le)).toLowerCase().includes(q)||
+      (r.data&&r.data.toLowerCase().includes(q))||
+      (r.pedido&&r.pedido.toLowerCase().includes(q))
+    );
+  }
+  const body=document.getElementById('leBody');
+  const badge=document.getElementById('leBadge');
+  if(body) body.innerHTML=leRows(dados);
+  if(badge) badge.textContent=dados.length+' itens';
 }
 
 /* ── PENDÊNCIAS ── */
