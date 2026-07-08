@@ -641,11 +641,13 @@ async function processarPlanilha(buf){
     const n=v=>typeof v==='number'?v:(parseFloat(v)||0);
     const stages=AVANCO_COLS.map(idx=>parsePct(r[idx]));
     const stVals=stages.filter(v=>v!==null&&v!==undefined);
+    const yRaw=n(r[24]); // coluna Y — valores negativos = pendência, positivos = excedente (não é pendência)
     const item={
       desenho:r[0]?String(r[0]).trim():'', desc:r[3]?String(r[3]).trim():'',
+      codMDE:r[4]?String(r[4]).trim():'', // coluna E — COD.MDE
       qte:n(r[2]),pesoUnit:n(r[6]),pesoTotal:n(r[7]),
       fabricado:n(r[18]),expedido:n(r[23]),
-      pendFab:n(r[19]),qtdPendExp:n(r[24]),pesoPendExp:n(r[25]),
+      pendFab:n(r[19]),qtdPendExp:(yRaw<0?Math.abs(yRaw):0),pesoPendExp:n(r[25]),
       qtdExpedida:n(r[20]),
       stages, avanco:stVals.length?stVals.reduce((a,b)=>a+b,0)/stVals.length:null,
       produto,
@@ -1008,11 +1010,6 @@ function renderPedido(){
   document.getElementById('headerArea').innerHTML=`
   <div class="search-area">
     <button class="back-btn" onclick="irGeral()"><i class="ti ti-arrow-left" style="font-size:13px"></i> Todos os pedidos</button>
-    <div class="sug-wrap">
-      <input class="pedido-input" id="pedidoInput" placeholder="Ir para outro pedido..." value="${state.pedido.replace(/^P-/i,'')}" oninput="onType(this.value)" onkeydown="if(event.key==='Enter')buscar()">
-      <div class="sug-list" id="sugList" style="display:none"></div>
-    </div>
-    <button class="search-btn" onclick="buscar()"><i class="ti ti-search" style="font-size:13px;vertical-align:-2px"></i> Buscar</button>
   </div>`;
 
   const cli=getCli(state.pedido), tags=DB[state.pedido], tk=Object.keys(tags);
@@ -1107,11 +1104,11 @@ function renderEmbarque(){
   const dados=LISTA_EMBARQUE.filter(r=>r.pedido===ped);
   const mc=document.getElementById('mainContent');
   mc.innerHTML=`
-  <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px">
-    <input id="leSearch" type="text" placeholder="Buscar por desenho ou nº LE..." 
-      style="flex:1;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"
-      oninput="filtrarEmbarque()">
-    <span style="font-size:12px;color:var(--text2)" id="leBadge">${dados.length} itens</span>
+  <div class="search-area" style="margin-bottom:16px">
+    <div class="sug-wrap" style="flex:1">
+      <input id="leSearch" type="text" class="pedido-input" placeholder="Buscar por desenho, descrição, TAG ou nº LE..." style="width:100%;box-sizing:border-box">
+    </div>
+    <span style="font-size:12px;color:var(--text2);white-space:nowrap;padding:0 8px" id="leBadge">${dados.length} itens</span>
   </div>
   <div style="overflow-x:auto">
     <table id="leTable" style="width:100%;border-collapse:collapse;font-size:12px">
@@ -1138,6 +1135,9 @@ function renderEmbarque(){
       </tbody>
     </table>
   </div>`;
+  // addEventListener após o innerHTML ser inserido no DOM
+  const inp = document.getElementById('leSearch');
+  if(inp) inp.addEventListener('input', filtrarEmbarque);
 }
 function leRows(dados){
   if(!dados.length) return '<tr><td colspan="14" style="padding:20px;text-align:center;color:var(--text3)">Nenhum item encontrado</td></tr>';
@@ -1187,14 +1187,15 @@ function filtrarEmbarque(){
 /* ── PENDÊNCIAS ── */
 function renderPendencias(){
   document.getElementById('headerArea').innerHTML='';
-  const tags=DB[state.pedido]; let totP=0,totI=0; const grupos=[];
+  const tags=DB[state.pedido]; let totP=0,totI=0,totQ=0; const grupos=[];
   Object.keys(tags).sort().forEach(tag=>{
     Object.keys(tags[tag]).sort().forEach(prod=>{
       const pend=tags[tag][prod].filter(it=>it.pesoPendExp>0);
       if(!pend.length) return;
       const pp=pend.reduce((s,it)=>s+it.pesoPendExp,0);
-      totP+=pp; totI+=pend.length;
-      grupos.push({tag,prod,itens:pend.sort((a,b)=>b.pesoPendExp-a.pesoPendExp),pp});
+      const pq=pend.reduce((s,it)=>s+(it.qtdPendExp||0),0);
+      totP+=pp; totI+=pend.length; totQ+=pq;
+      grupos.push({tag,prod,itens:pend.sort((a,b)=>b.pesoPendExp-a.pesoPendExp),pp,pq});
     });
   });
   if(!grupos.length){
@@ -1212,22 +1213,24 @@ function renderPendencias(){
     <div class="section-title" style="color:var(--red)"><i class="ti ti-alert-circle" style="font-size:12px;vertical-align:-1px"></i> Todos os desenhos pendentes — ${state.pedido}${cli&&cli.equip?' / '+cli.equip:''}</div>
     <div class="tbl-wrap">
       <table class="dtbl">
-        <thead><tr><th>TAG</th><th>Produto</th><th>Desenho MDE</th><th>Descrição</th><th class="r">Peso pend. exp. (kg)</th><th class="r">Peso pend. exp. (t)</th></tr></thead>
+        <thead><tr><th>COD.MDE</th><th>TAG</th><th>Produto</th><th>Desenho MDE</th><th>Descrição</th><th>Pedido</th><th class="r">Qtde pend. exp.</th><th class="r">Peso pend. exp. (kg)</th></tr></thead>
         <tbody>`;
   grupos.forEach(g=>{
     g.itens.forEach((it,idx)=>{
       h+=`<tr>
-        <td style="white-space:nowrap;font-weight:${idx===0?'600':'400'};color:${idx===0?'var(--text)':'var(--text2)'}">${idx===0?g.tag:''}</td>
-        <td style="color:var(--text2);white-space:nowrap">${idx===0?g.prod:''}</td>
+        <td style="color:var(--text2)">${it.codMDE||'-'}</td>
+        <td style="font-weight:600;color:var(--text)">${g.tag}</td>
+        <td style="color:var(--text2)">${g.prod}</td>
         <td style="font-weight:600;white-space:nowrap;color:var(--text)">${it.desenho}</td>
         <td style="color:var(--text2)">${it.desc}</td>
+        <td style="color:var(--text2);white-space:nowrap">${state.pedido}</td>
+        <td class="r" style="color:var(--purple);font-weight:700">${(it.qtdPendExp||0).toLocaleString('pt-BR')}</td>
         <td class="r" style="color:var(--red);font-weight:700">${it.pesoPendExp.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td>
-        <td class="r"><span class="pend-badge">${fmt_t(it.pesoPendExp)}</span></td>
       </tr>`;
     });
-    h+=`<tr style="background:var(--bg3)"><td colspan="4" style="text-align:right;font-size:11px;color:var(--text3);padding:4px 14px;font-style:italic">Subtotal ${g.tag} / ${g.prod}</td><td class="r" style="font-weight:700;padding:4px 14px">${g.pp.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td><td class="r" style="font-weight:700;padding:4px 14px">${fmt_t(g.pp)}</td></tr>`;
+    h+=`<tr style="background:var(--bg3)"><td colspan="6" style="text-align:right;font-size:11px;color:var(--text3);padding:4px 14px;font-style:italic">Subtotal ${g.tag} / ${g.prod}</td><td class="r" style="font-weight:700;padding:4px 14px">${(g.pq||0).toLocaleString('pt-BR')}</td><td class="r" style="font-weight:700;padding:4px 14px">${g.pp.toLocaleString('pt-BR',{maximumFractionDigits:1})}</td></tr>`;
   });
-  h+=`</tbody><tfoot><tr><td colspan="4" style="color:var(--text)">TOTAL GERAL — ${state.pedido}</td><td class="r" style="color:var(--red)">${fmt_kg(totP)} kg</td><td class="r" style="color:var(--red)">${fmt_t(totP)}</td></tr></tfoot></table></div></div>`;
+  h+=`</tbody><tfoot><tr><td colspan="6" style="color:var(--text)">TOTAL GERAL — ${state.pedido}</td><td class="r" style="color:var(--purple)">${totQ.toLocaleString('pt-BR')}</td><td class="r" style="color:var(--red)">${fmt_kg(totP)} kg</td></tr></tfoot></table></div></div>`;
   document.getElementById('mainContent').innerHTML=h;
   setStatus(`${state.pedido} · Pendências: ${totI} desenhos · ${fmt_t(totP)}`);
 }
