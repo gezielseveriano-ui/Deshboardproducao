@@ -382,25 +382,32 @@ const SETORES=['ESTRUTURA','USINAGEM','TAMBOR','ROLOS','BASES ROLETES','REVESTIM
 const AVANCO_COLS=[26,27,28,29,30,31,32,33,34];
 /* Converte valor de célula de etapa em percentual 0-100, ou null se vazio/indefinido */
 function parsePct(v){
-  if(v===null||v===undefined) return null;
-  if(typeof v==='number'){ if(isNaN(v)) return null; return v<=1?v*100:v; }
+  // Vazio/nulo = etapa NÃO iniciada = 0% (deve entrar no denominador)
+  if(v===null||v===undefined) return 0;
+  if(typeof v==='number'){ if(isNaN(v)) return 0; return Math.min(100,v<=1?v*100:v); }
   if(typeof v==='string'){
     const s=v.trim().toLowerCase();
-    if(s==='') return null;
+    if(s===''||s==='-') return 0;
     if(s==='ok') return 100;
     const cleaned=s.replace('%','').replace(',','.');
     const f=parseFloat(cleaned);
-    if(isNaN(f)) return null;
-    return f<=1?f*100:f;
+    if(isNaN(f)) return 0;
+    return Math.min(100,f<=1?f*100:f);
   }
-  return null;
+  return 0;
 }
 /* Percentual médio de avanço, calculado sobre TODOS os valores de etapa presentes num conjunto de itens */
 function calcAvanco(items){
-  let vals=[];
-  items.forEach(it=>{ if(it.stages) it.stages.forEach(v=>{ if(v!==null&&v!==undefined) vals.push(v); }); });
-  if(!vals.length) return null;
-  return vals.reduce((a,b)=>a+b,0)/vals.length;
+  // Sempre divide por 9 etapas × nº de itens. Vazio = 0% (não ignora).
+  const N=AVANCO_COLS.length; // 9
+  let soma=0,total=0;
+  items.forEach(it=>{
+    if(!it.stages||!it.stages.length) return;
+    it.stages.forEach(v=>{ soma+=(v||0); });
+    total+=N;
+  });
+  if(!total) return null;
+  return soma/total; // 0-100
 }
 /* Agrega Carga Programada / Expedido / Pend. Expedição / Avanço para um conjunto de itens de um setor */
 function setorAgg(items){
@@ -640,7 +647,7 @@ async function processarPlanilha(buf){
     const produto=r[10]?String(r[10]).trim():'SEM PRODUTO';
     const n=v=>typeof v==='number'?v:(parseFloat(v)||0);
     const stages=AVANCO_COLS.map(idx=>parsePct(r[idx]));
-    const stVals=stages.filter(v=>v!==null&&v!==undefined);
+
     const yRaw=n(r[24]); // coluna Y — valores negativos = pendência, positivos = excedente (não é pendência)
     const item={
       desenho:r[0]?String(r[0]).trim():'', desc:r[3]?String(r[3]).trim():'',
@@ -649,7 +656,7 @@ async function processarPlanilha(buf){
       fabricado:n(r[18]),expedido:n(r[23]),
       pendFab:n(r[19]),qtdPendExp:(yRaw<0?Math.abs(yRaw):0),pesoPendExp:n(r[25]),
       qtdExpedida:n(r[20]),
-      stages, avanco:stVals.length?stVals.reduce((a,b)=>a+b,0)/stVals.length:null,
+      stages,
       produto,
     };
     if(!DB[pedido]) DB[pedido]={};
@@ -1042,12 +1049,9 @@ function renderPedido(){
 
   h+=mHTML([
     {label:'Peso total',       val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
-    {label:'Na empresa',       val:fmt_t(naE), sub:fmt_kg(naE)+' kg',color:'var(--teal)'},
     {label:'Fabricado',        val:fmt_t(tF),  sub:pF.toFixed(1)+'%',color:'var(--green)'},
     {label:'Expedido',         val:fmt_t(tE),  sub:pE.toFixed(1)+'%',color:'var(--amber)'},
-    {label:'Pend. fabricação', val:fmt_t(tPF), sub:'a fabricar',color:'var(--purple)'},
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:nDP+' desenhos',color:'var(--red)'},
-    {label:'Avanço',           val:avancoPedido!==null?avancoPedido.toFixed(0)+'%':'—', sub:'média do pedido',color:'var(--amber)'},
     {label:'TAGs',             val:tk.length,  sub:'no pedido'},
   ]);
   h+=prHTML(pF,pE);
@@ -1245,12 +1249,9 @@ function renderTag(){
   const avancoTag=calcAvanco(itensFlat(prods));
   let h=mHTML([
     {label:'Peso total TAG',   val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
-    {label:'Na empresa',       val:fmt_t(naE), sub:fmt_kg(naE)+' kg',color:'var(--teal)'},
     {label:'Fabricado',        val:fmt_t(tF),  sub:pF.toFixed(1)+'%',color:'var(--green)'},
     {label:'Expedido',         val:fmt_t(tE),  sub:pE.toFixed(1)+'%',color:'var(--amber)'},
-    {label:'Pend. fabricação', val:fmt_t(tPF), sub:'a fabricar',color:'var(--purple)'},
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:'a expedir',color:'var(--red)'},
-    {label:'Avanço',           val:avancoTag!==null?avancoTag.toFixed(0)+'%':'—', sub:'média da TAG',color:'var(--amber)'},
     {label:'Setores',          val:pk.length,  sub:'clique para detalhar'},
   ]);
   h+=prHTML(pF,pE);
@@ -1272,12 +1273,9 @@ function renderProduto(){
   const ehSetorQtd=SETORES_QTD.includes(String(state.produto).trim().toUpperCase());
   let h=mHTML([
     {label:'Carga programada', val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
-    {label:'Na empresa',       val:fmt_t(naE), sub:fmt_kg(naE)+' kg',color:'var(--teal)'},
     {label:'Fabricado',        val:fmt_t(tF),  sub:pF.toFixed(1)+'%',color:'var(--green)'},
     {label:'Expedido',         val:fmt_t(tE),  sub:pE.toFixed(1)+'%',color:'var(--amber)'},
-    {label:'Pend. fabricação', val:fmt_t(tPF), sub:'a fabricar',color:'var(--purple)'},
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:ip.length+' desenhos',color:'var(--red)'},
-    {label:'Avanço',           val:avancoSetor!==null?avancoSetor.toFixed(0)+'%':'—', sub:'média do setor',color:'var(--amber)'},
     {label:'Itens',            val:itens.length,sub:'neste setor'},
   ]);
   h+=prHTML(pF,pE);
