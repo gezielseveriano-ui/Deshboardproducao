@@ -336,10 +336,81 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+
+/* ── BOTÕES PDF / IMPRIMIR ── */
+.btn-print{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 14px;border:1px solid var(--border);
+  border-radius:var(--radius-sm);font-size:13px;
+  cursor:pointer;font-weight:500;transition:all .15s;
+}
+.btn-print-pdf{background:var(--red);color:#fff;border-color:var(--red);}
+.btn-print-pdf:hover{opacity:.85}
+.btn-print-imp{background:var(--bg3);color:var(--text);}
+.btn-print-imp:hover{background:var(--bg4);border-color:var(--blue)}
+
+/* ── ESTILOS DE IMPRESSÃO ── */
+@media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body { background:#fff !important; color:#111 !important; }
+  .top-bar, .nav-bar, .toolbar, .status-bar,
+  .cap-section, #headerArea, #capacidadeSection { display:none !important; }
+  #mainContent { padding:0 !important; }
+  .pedidos-grid { grid-template-columns: repeat(3, 1fr) !important; gap:8px !important; padding:0 !important; }
+  .pedido-card { border:1px solid #ccc !important; background:#fff !important; color:#111 !important; page-break-inside:avoid; }
+  .pc-num { color:#1a1a2e !important; font-size:14px !important; }
+  .pc-equip { color:#1a4fa0 !important; }
+  .pc-peso { color:#1a4fa0 !important; }
+  .pc-prog-bar { background:#e0e0e0 !important; }
+  .date-chip { border:1px solid #ccc !important; }
+  .pill { border:1px solid #ccc !important; }
+  .pc-obs { background:#f5f5f5 !important; color:#444 !important; border-left:2px solid #1a4fa0 !important; }
+  .pc-tags-count { background:#eee !important; color:#444 !important; }
+  .pc-peso-sub, .pc-prog-label span:first-child { color:#666 !important; }
+  .dc-prev { background:#dbeafe !important; color:#1e40af !important; }
+  .dc-repr { background:#fef3c7 !important; color:#92400e !important; }
+  .dc-late { background:#fee2e2 !important; color:#991b1b !important; }
+  .pill-red { background:#fee2e2 !important; color:#991b1b !important; }
+  .pill-green { background:#dcfce7 !important; color:#166534 !important; }
+  #printHeader { display:block !important; }
+  #printFooter { display:block !important; }
+}
+
+#printHeader { display:none; }
+#printFooter { display:none; }
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
+
+<!-- CABEÇALHO DE IMPRESSÃO -->
+<div id="printHeader" style="display:none;padding:20px 24px 12px;border-bottom:2px solid #1a4fa0;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <div style="width:32px;height:32px;border-radius:6px;background:linear-gradient(135deg,#1a4fa0,#6d28d9);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px">🏭</div>
+        <div>
+          <div style="font-size:18px;font-weight:700;color:#1a1a2e">Controle de Produção</div>
+          <div style="font-size:11px;color:#666">Dashboard Industrial · Planejamento e Expedição</div>
+        </div>
+      </div>
+      <div style="font-size:20px;font-weight:600;color:#1a4fa0;margin-top:10px">Relatório Geral de Pedidos</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:11px;color:#666">Gerado em</div>
+      <div id="printDate" style="font-size:13px;font-weight:600;color:#1a1a2e"></div>
+    </div>
+  </div>
+  <!-- Métricas resumo -->
+  <div id="printMetrics" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px"></div>
+</div>
+
+<!-- RODAPÉ DE IMPRESSÃO -->
+<div id="printFooter" style="display:none;position:fixed;bottom:0;left:0;right:0;padding:8px 24px;border-top:1px solid #ccc;display:flex;justify-content:space-between;align-items:center;background:#fff;font-size:10px;color:#666">
+  <span>Controle de Produção · Relatório Geral de Pedidos</span>
+  <span id="printPage">Página 1</span>
+  <span id="printDateFooter"></span>
+</div>
 
 <div class="top-bar">
   <div class="top-bar-brand">
@@ -944,6 +1015,12 @@ function renderGeral(){
       <option value="data">Data prevista</option>
     </select>
     <span class="total-badge" id="totalBadge"></span>
+    <button class="btn-print btn-print-pdf" onclick="gerarPDF()">
+      <i class="ti ti-file-type-pdf"></i> Gerar PDF
+    </button>
+    <button class="btn-print btn-print-imp" onclick="imprimirRelatorio()">
+      <i class="ti ti-printer"></i> Imprimir
+    </button>
   </div>`;
 
   let gP=0,gF=0,gE=0,gPE=0;
@@ -1352,6 +1429,64 @@ function buscar(){
   if(found) abrirPedido(found); else setStatus(`Pedido "${val}" não encontrado.`);
 }
 document.addEventListener('click',e=>{const sl=document.getElementById('sugList');if(sl&&!e.target.closest('.sug-wrap'))sl.style.display='none';});
+
+/* ── PDF / IMPRESSÃO ── */
+function prepararImpressao(){
+  const agora = new Date();
+  const dtStr = agora.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'})
+    + ' às ' + agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+  // Preencher data
+  const el = document.getElementById('printDate');
+  if(el) el.textContent = dtStr;
+  const elF = document.getElementById('printDateFooter');
+  if(elF) elF.textContent = dtStr;
+
+  // Métricas de resumo
+  let gP=0,gF=0,gE=0,gPE=0;
+  allPedidos.forEach(p=>{const s=resP(p);gP+=s.peso;gF+=s.fab;gE+=s.exp;gPE+=s.pendExp;});
+  const pF=gP>0?Math.min(100,gF/gP*100):0, pE=gP>0?Math.min(100,gE/gP*100):0;
+
+  const pm = document.getElementById('printMetrics');
+  if(pm) pm.innerHTML = [
+    {label:'Total de Pedidos',    val:allPedidos.length,       sub:'em carteira',         color:'#1a4fa0'},
+    {label:'Peso Total',          val:fmt_t(gP),               sub:fmt_kg(gP)+' kg',      color:'#1a1a2e'},
+    {label:'Fabricação',          val:pF.toFixed(1)+'%',       sub:fmt_t(gF)+' fabricado',color:'#166534'},
+    {label:'Expedição',           val:pE.toFixed(1)+'%',       sub:fmt_t(gE)+' expedido', color:'#92400e'},
+    {label:'Pend. Expedição',     val:fmt_t(gPE),              sub:'a expedir',            color:'#991b1b'},
+    {label:'Pedidos Atrasados',   val:allPedidos.filter(p=>{const c=getCli(p);return c&&isLate(c.dataRepr||c.dataPrev);}).length, sub:'com data vencida', color:'#991b1b'},
+  ].map(m=>`
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;border-top:3px solid ${m.color}">
+      <div style="font-size:10px;color:#666;margin-bottom:4px">${m.label}</div>
+      <div style="font-size:18px;font-weight:700;color:${m.color}">${m.val}</div>
+      <div style="font-size:10px;color:#888;margin-top:2px">${m.sub}</div>
+    </div>`).join('');
+
+  // Mostrar header e footer
+  document.getElementById('printHeader').style.display='block';
+  document.getElementById('printFooter').style.display='flex';
+}
+
+function restaurarTela(){
+  document.getElementById('printHeader').style.display='none';
+  document.getElementById('printFooter').style.display='none';
+}
+
+function gerarPDF(){
+  prepararImpressao();
+  setTimeout(()=>{
+    window.print();
+    setTimeout(restaurarTela, 1000);
+  }, 300);
+}
+
+function imprimirRelatorio(){
+  prepararImpressao();
+  setTimeout(()=>{
+    window.print();
+    setTimeout(restaurarTela, 1000);
+  }, 300);
+}
 
 function resP(p){
   const tags=DB[p]; let peso=0,fab=0,exp=0,pF=0,pE=0,nTags=Object.keys(tags).length;
