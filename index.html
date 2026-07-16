@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
 :root {
   --bg: #0f1117;
@@ -933,6 +934,7 @@ function renderCapacidade(){
           },
         ]
       },
+      plugins:[ChartDataLabels],
       options:{
         responsive:true,
         maintainAspectRatio:false,
@@ -941,12 +943,23 @@ function renderCapacidade(){
           tooltip:{
             backgroundColor:'#22263a',borderColor:'rgba(255,255,255,0.1)',borderWidth:1,
             callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toLocaleString('pt-BR',{maximumFractionDigits:2})} t`}
+          },
+          datalabels:{
+            display: ctx => ctx.dataset.data[ctx.dataIndex] > 0,
+            anchor:'end',
+            align:'end',
+            color:'#e0e4f0',
+            font:{size:9,weight:'600'},
+            formatter:(val)=> val > 0 ? val.toLocaleString('pt-BR',{maximumFractionDigits:1})+'t' : '',
+            padding:{bottom:2},
+            clip:false,
           }
         },
+        layout:{padding:{top:20}},
         scales:{
           x:{
             ticks:{
-              font:{size:12},
+              font:{size:11},
               color:'#8b92b3',
               maxRotation:0,
               minRotation:0,
