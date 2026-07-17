@@ -620,7 +620,26 @@ function setorQtdTableHTML(map){
 }
 
 /* ── CONFIG GITHUB ── */
-const GITHUB_URL = 'https://cdn.jsdelivr.net/gh/gezielseveriano-ui/Deshboardproducao@main/planejamento-controle-producao.xlsx';
+const GITHUB_USER = 'gezielseveriano-ui';
+const GITHUB_REPO = 'Deshboardproducao';
+const GITHUB_FILE = 'planejamento-controle-producao.xlsx';
+// Fallback direto (usado se a API do GitHub falhar por algum motivo)
+const GITHUB_URL_FALLBACK = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${GITHUB_FILE}`;
+
+async function getLatestCommitSha(){
+  try{
+    const controller = new AbortController();
+    const t = setTimeout(()=>controller.abort(), 8000);
+    const resp = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/commits?path=${encodeURIComponent(GITHUB_FILE)}&per_page=1`, {signal: controller.signal});
+    clearTimeout(t);
+    if(!resp.ok) throw new Error('API HTTP '+resp.status);
+    const data = await resp.json();
+    if(data && data[0] && data[0].sha) return data[0].sha;
+    throw new Error('SHA não encontrado');
+  } catch(e){
+    return null; // sinaliza para usar fallback
+  }
+}
 
 /* ── CARREGAMENTO AUTOMÁTICO ── */
 async function carregarPlanilha(tentativa){
@@ -636,9 +655,15 @@ async function carregarPlanilha(tentativa){
 
   let buf;
   try{
+    // Busca o SHA do commit mais recente para montar uma URL única (evita cache permanente do jsDelivr)
+    const sha = await getLatestCommitSha();
+    const urlAlvo = sha
+      ? `https://cdn.jsdelivr.net/gh/${GITHUB_USER}/${GITHUB_REPO}@${sha}/${GITHUB_FILE}`
+      : GITHUB_URL_FALLBACK + '?t=' + Date.now(); // fallback: raw.githubusercontent sem cache do jsDelivr
+
     const controller = new AbortController();
     const timeoutId = setTimeout(()=>controller.abort(), TIMEOUT_MS);
-    const resp = await fetch(GITHUB_URL + '?t=' + Date.now(), {signal: controller.signal});
+    const resp = await fetch(urlAlvo, {signal: controller.signal});
     clearTimeout(timeoutId);
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     buf = await resp.arrayBuffer();
