@@ -620,62 +620,23 @@ function setorQtdTableHTML(map){
 }
 
 /* ── CONFIG GITHUB ── */
-const GITHUB_USER = 'gezielseveriano-ui';
-const GITHUB_REPO = 'Deshboardproducao';
-const GITHUB_FILE = 'planejamento-controle-producao.xlsx';
-// Fallback direto (usado se a API do GitHub falhar por algum motivo)
-const GITHUB_URL_FALLBACK = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${GITHUB_FILE}`;
-
-async function getLatestCommitSha(){
-  try{
-    const controller = new AbortController();
-    const t = setTimeout(()=>controller.abort(), 8000);
-    const resp = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/commits?path=${encodeURIComponent(GITHUB_FILE)}&per_page=1`, {signal: controller.signal});
-    clearTimeout(t);
-    if(!resp.ok) throw new Error('API HTTP '+resp.status);
-    const data = await resp.json();
-    if(data && data[0] && data[0].sha) return data[0].sha;
-    throw new Error('SHA não encontrado');
-  } catch(e){
-    return null; // sinaliza para usar fallback
-  }
-}
+const GITHUB_URL = 'https://raw.githubusercontent.com/gezielseveriano-ui/Deshboardproducao/main/planejamento-controle-producao.xlsx';
 
 /* ── CARREGAMENTO AUTOMÁTICO ── */
-async function carregarPlanilha(tentativa){
-  tentativa = tentativa || 1;
-  const MAX_TENTATIVAS = 3;
-  const TIMEOUT_MS = 20000; // 20s por tentativa
-
+async function carregarPlanilha(){
   const label = document.getElementById('updateLabel');
   const icon  = document.getElementById('refreshIcon');
-  if(label) label.textContent = tentativa===1 ? 'Carregando dados...' : `Tentando novamente (${tentativa}/${MAX_TENTATIVAS})...`;
+  if(label) label.textContent = 'Carregando dados...';
   if(icon)  icon.style.animation = 'spin 1s linear infinite';
-  setStatus(tentativa===1 ? 'Buscando planilha...' : `Nova tentativa ${tentativa} de ${MAX_TENTATIVAS}...`);
-
+  setStatus('Buscando planilha no GitHub...');
   let buf;
   try{
-    // Busca o SHA do commit mais recente para montar uma URL única (evita cache permanente do jsDelivr)
-    const sha = await getLatestCommitSha();
-    const urlAlvo = sha
-      ? `https://cdn.jsdelivr.net/gh/${GITHUB_USER}/${GITHUB_REPO}@${sha}/${GITHUB_FILE}`
-      : GITHUB_URL_FALLBACK + '?t=' + Date.now(); // fallback: raw.githubusercontent sem cache do jsDelivr
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(()=>controller.abort(), TIMEOUT_MS);
-    const resp = await fetch(urlAlvo, {signal: controller.signal});
-    clearTimeout(timeoutId);
+    const resp = await fetch(GITHUB_URL + '?t=' + Date.now());
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     buf = await resp.arrayBuffer();
   } catch(err){
-    const motivo = err.name==='AbortError' ? 'tempo de resposta excedido (conexão lenta)' : err.message;
-    if(tentativa < MAX_TENTATIVAS){
-      // Retry automático
-      setTimeout(()=>carregarPlanilha(tentativa+1), 1500);
-      return;
-    }
-    setStatus('Não foi possível carregar após ' + MAX_TENTATIVAS + ' tentativas (' + motivo + '). Verifique sua conexão e clique em Atualizar.');
-    if(label) label.textContent = 'Falha ao carregar';
+    setStatus('Erro ao buscar planilha: ' + err.message + ' — verifique se o arquivo está no repositório.');
+    if(label) label.textContent = 'Erro ao carregar';
     if(icon)  icon.style.animation = '';
     return;
   }
