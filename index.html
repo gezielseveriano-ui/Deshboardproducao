@@ -1113,7 +1113,8 @@ function filtrarGeral(q){
   document.getElementById('totalBadge').textContent=`${lista.length} pedido${lista.length!==1?'s':''}`;
   const grid=document.getElementById('pedidosGrid'); if(!grid) return;
   grid.innerHTML=lista.map(({p,s,c})=>{
-    const late=c&&isLate(c.dataRepr||c.dataPrev);
+    const temPendencia = s.pendExp>0 || s.pendFab>0;
+    const late = c && isLate(c.dataRepr||c.dataPrev) && temPendencia;
     return `<div class="pedido-card" style="${late?'border-color:var(--red)':''}" onclick="abrirPedido('${esc(p)}')">
       <div class="pc-top">
         <span class="pc-num">${p}${c&&c.cliente?' · '+c.cliente:''}</span>
@@ -1125,7 +1126,7 @@ function filtrarGeral(q){
       ${c?(()=>{
         let d='<div class="pc-dates">';
         if(c.dataPrev) d+=`<span class="date-chip dc-prev"><i class="ti ti-calendar"></i>Prev: ${fmtD(c.dataPrev)}</span>`;
-        if(c.dataRepr) d+=`<span class="date-chip ${isLate(c.dataRepr)?'dc-late':'dc-repr'}"><i class="ti ti-calendar-event"></i>Repr: ${fmtD(c.dataRepr)}</span>`;
+        if(c.dataRepr) d+=`<span class="date-chip ${(isLate(c.dataRepr)&&temPendencia)?'dc-late':'dc-repr'}"><i class="ti ti-calendar-event"></i>Repr: ${fmtD(c.dataRepr)}</span>`;
         return d+'</div>';
       })():''}
       ${c&&c.obs?`<div class="pc-obs"><i class="ti ti-notes" style="font-size:10px;vertical-align:-1px"></i> ${c.obs}</div>`:''}
@@ -1142,7 +1143,7 @@ function filtrarGeral(q){
       <div class="pc-pills">
         ${late?`<span class="pill pill-red"><i class="ti ti-alert-triangle"></i>Atrasada</span>`:''}
         ${s.pendExp>0?`<span class="pill pill-red"><i class="ti ti-clock-pause"></i>${fmt_t(s.pendExp)} pend.exp</span>`:''}
-        ${s.pendExp===0&&s.pendFab<=0?`<span class="pill pill-green"><i class="ti ti-check"></i>Em dia</span>`:''}
+        ${s.pendExp===0&&s.pendFab<=0?`<span class="pill pill-green"><i class="ti ti-check"></i>${(c&&isLate(c.dataRepr||c.dataPrev))?'Entregue':'Em dia'}</span>`:''}
       </div>
     </div>`;
   }).join('');
@@ -1165,7 +1166,7 @@ function renderPedido(){
 
   let h='';
   if(cli){
-    const late=isLate(cli.dataRepr||cli.dataPrev);
+    const late=isLate(cli.dataRepr||cli.dataPrev) && (tPE>0||tPF>0);
     h=`<div class="cliente-banner">
       <div>
         <div class="cb-equip"><i class="ti ti-crane" style="color:var(--blue)"></i>${cli.equip||'—'}</div>
@@ -1515,7 +1516,7 @@ function prepararImpressao(){
     {label:'Fabricação',          val:pF.toFixed(1)+'%',       sub:fmt_t(gF)+' fabricado',color:'#166534'},
     {label:'Expedição',           val:pE.toFixed(1)+'%',       sub:fmt_t(gE)+' expedido', color:'#92400e'},
     {label:'Pend. Expedição',     val:fmt_t(gPE),              sub:'a expedir',            color:'#991b1b'},
-    {label:'Pedidos Atrasados',   val:allPedidos.filter(p=>{const c=getCli(p);return c&&isLate(c.dataRepr||c.dataPrev);}).length, sub:'com data vencida', color:'#991b1b'},
+    {label:'Pedidos Atrasados',   val:allPedidos.filter(p=>{const c=getCli(p);const s=resP(p);return c&&isLate(c.dataRepr||c.dataPrev)&&(s.pendExp>0||s.pendFab>0);}).length, sub:'com pendência e data vencida', color:'#991b1b'},
   ].map(m=>`
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;border-top:3px solid ${m.color}">
       <div style="font-size:10px;color:#666;margin-bottom:4px">${m.label}</div>
