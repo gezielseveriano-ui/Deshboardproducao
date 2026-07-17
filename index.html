@@ -427,11 +427,19 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <button onclick="carregarPlanilha()" style="padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
       <i class="ti ti-refresh" style="font-size:12px;vertical-align:-1px"></i> Atualizar
     </button>
+    <button id="btnFullscreen" onclick="alternarTelaCheia()" title="Tela cheia" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
+      <i class="ti ti-maximize" id="iconFullscreen" style="font-size:14px;vertical-align:-1px"></i>
+    </button>
   </div>
 </div>
 
 <div class="nav-bar" id="navBar" style="display:none"></div>
 <div id="capacidadeSection" style="display:none"></div>
+
+<!-- Botão flutuante de sair da tela cheia -->
+<button id="btnSairFullscreen" onclick="alternarTelaCheia()" style="display:none;position:fixed;top:12px;right:12px;z-index:9999;padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);font-size:13px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.4);align-items:center;gap:6px">
+  <i class="ti ti-x" style="font-size:14px"></i> Sair da tela cheia
+</button>
 <div id="headerArea"></div>
 <div id="mainContent">
   <div class="empty">
@@ -750,6 +758,46 @@ async function processarPlanilha(buf){
 /* ── INICIAR AO CARREGAR ── */
 window.addEventListener('DOMContentLoaded', carregarPlanilha);
 
+/* ── TELA CHEIA ── */
+function alternarTelaCheia(){
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen().catch(err=>{
+      console.log('Erro ao entrar em tela cheia:', err.message);
+    });
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+document.addEventListener('fullscreenchange', ()=>{
+  const btnSair = document.getElementById('btnSairFullscreen');
+  const iconBtn = document.getElementById('iconFullscreen');
+  if(document.fullscreenElement){
+    if(btnSair){ btnSair.style.display='flex'; }
+    if(iconBtn){ iconBtn.className='ti ti-minimize'; }
+  } else {
+    if(btnSair){ btnSair.style.display='none'; }
+    if(iconBtn){ iconBtn.className='ti ti-maximize'; }
+  }
+});
+
+/* ── ATIVA TELA CHEIA NO PRIMEIRO TOQUE/CLIQUE (navegador exige interação do usuário) ── */
+let telaCheiaJaAtivada = false;
+function ativarTelaCheiaPrimeiroToque(){
+  if(telaCheiaJaAtivada) return;
+  if(document.fullscreenElement) { telaCheiaJaAtivada = true; return; }
+  telaCheiaJaAtivada = true; // marca antes, para não tentar de novo mesmo se falhar
+  document.documentElement.requestFullscreen().catch(err=>{
+    console.log('Tela cheia não pôde ser ativada automaticamente:', err.message);
+  });
+  document.removeEventListener('click', ativarTelaCheiaPrimeiroToque);
+  document.removeEventListener('touchend', ativarTelaCheiaPrimeiroToque);
+  document.removeEventListener('keydown', ativarTelaCheiaPrimeiroToque);
+}
+document.addEventListener('click', ativarTelaCheiaPrimeiroToque);
+document.addEventListener('touchend', ativarTelaCheiaPrimeiroToque);
+document.addEventListener('keydown', ativarTelaCheiaPrimeiroToque);
+
 /* ── CAPACIDADE ── */
 function calcSetores(){
   const s={};
@@ -1065,8 +1113,7 @@ function filtrarGeral(q){
   document.getElementById('totalBadge').textContent=`${lista.length} pedido${lista.length!==1?'s':''}`;
   const grid=document.getElementById('pedidosGrid'); if(!grid) return;
   grid.innerHTML=lista.map(({p,s,c})=>{
-    const temPendencia = s.pendExp>0 || s.pendFab>0;
-    const late = c && isLate(c.dataRepr||c.dataPrev) && temPendencia;
+    const late=c&&isLate(c.dataRepr||c.dataPrev);
     return `<div class="pedido-card" style="${late?'border-color:var(--red)':''}" onclick="abrirPedido('${esc(p)}')">
       <div class="pc-top">
         <span class="pc-num">${p}${c&&c.cliente?' · '+c.cliente:''}</span>
@@ -1078,7 +1125,7 @@ function filtrarGeral(q){
       ${c?(()=>{
         let d='<div class="pc-dates">';
         if(c.dataPrev) d+=`<span class="date-chip dc-prev"><i class="ti ti-calendar"></i>Prev: ${fmtD(c.dataPrev)}</span>`;
-        if(c.dataRepr) d+=`<span class="date-chip ${(isLate(c.dataRepr)&&temPendencia)?'dc-late':'dc-repr'}"><i class="ti ti-calendar-event"></i>Repr: ${fmtD(c.dataRepr)}</span>`;
+        if(c.dataRepr) d+=`<span class="date-chip ${isLate(c.dataRepr)?'dc-late':'dc-repr'}"><i class="ti ti-calendar-event"></i>Repr: ${fmtD(c.dataRepr)}</span>`;
         return d+'</div>';
       })():''}
       ${c&&c.obs?`<div class="pc-obs"><i class="ti ti-notes" style="font-size:10px;vertical-align:-1px"></i> ${c.obs}</div>`:''}
@@ -1093,9 +1140,9 @@ function filtrarGeral(q){
         <div class="pc-prog-bar"><div class="pc-prog-fill" style="width:${s.pctExp.toFixed(1)}%;background:linear-gradient(90deg,var(--green),var(--teal))"></div></div>
       </div>
       <div class="pc-pills">
-        ${(late && (s.pendExp>0||s.pendFab>0))?`<span class="pill pill-red"><i class="ti ti-alert-triangle"></i>Atrasada</span>`:''}
+        ${late?`<span class="pill pill-red"><i class="ti ti-alert-triangle"></i>Atrasada</span>`:''}
         ${s.pendExp>0?`<span class="pill pill-red"><i class="ti ti-clock-pause"></i>${fmt_t(s.pendExp)} pend.exp</span>`:''}
-        ${s.pendExp===0&&s.pendFab<=0?`<span class="pill pill-green"><i class="ti ti-check"></i>${late?'Entregue':'Em dia'}</span>`:''}
+        ${s.pendExp===0&&s.pendFab<=0?`<span class="pill pill-green"><i class="ti ti-check"></i>Em dia</span>`:''}
       </div>
     </div>`;
   }).join('');
@@ -1118,7 +1165,7 @@ function renderPedido(){
 
   let h='';
   if(cli){
-    const late=isLate(cli.dataRepr||cli.dataPrev) && (tPE>0||tPF>0);
+    const late=isLate(cli.dataRepr||cli.dataPrev);
     h=`<div class="cliente-banner">
       <div>
         <div class="cb-equip"><i class="ti ti-crane" style="color:var(--blue)"></i>${cli.equip||'—'}</div>
@@ -1468,7 +1515,7 @@ function prepararImpressao(){
     {label:'Fabricação',          val:pF.toFixed(1)+'%',       sub:fmt_t(gF)+' fabricado',color:'#166534'},
     {label:'Expedição',           val:pE.toFixed(1)+'%',       sub:fmt_t(gE)+' expedido', color:'#92400e'},
     {label:'Pend. Expedição',     val:fmt_t(gPE),              sub:'a expedir',            color:'#991b1b'},
-    {label:'Pedidos Atrasados',   val:allPedidos.filter(p=>{const c=getCli(p);const s=resP(p);return c&&isLate(c.dataRepr||c.dataPrev)&&(s.pendExp>0||s.pendFab>0);}).length, sub:'com pendência e data vencida', color:'#991b1b'},
+    {label:'Pedidos Atrasados',   val:allPedidos.filter(p=>{const c=getCli(p);return c&&isLate(c.dataRepr||c.dataPrev);}).length, sub:'com data vencida', color:'#991b1b'},
   ].map(m=>`
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;border-top:3px solid ${m.color}">
       <div style="font-size:10px;color:#666;margin-bottom:4px">${m.label}</div>
