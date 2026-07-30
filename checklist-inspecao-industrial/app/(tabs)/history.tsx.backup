@@ -1,0 +1,571 @@
+import { ScreenContainer } from "@/components/screen-container";
+import { useColors } from "@/hooks/use-colors";
+import { useReports } from "@/lib/reports-context";
+import { useState, useMemo } from "react";
+import {
+  ScrollView,
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
+  FlatList,
+  Alert,
+  ActivityIndicator,
+  Modal,
+} from "react-native";
+import * as Sharing from "expo-sharing";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { CompletedChecklistRecord } from "@/lib/reports-types";
+import JSZip from "jszip";
+import * as FileSystem from "expo-file-system";
+
+export default function HistoryScreen() {
+  const colors = useColors();
+  const { completedChecklists } = useReports();
+  const [searchText, setSearchText] = useState("");
+  const [filterModelo, setFilterModelo] = useState<string | null>(null);
+  const [filterExecutante, setFilterExecutante] = useState<string | null>(null);
+  const [filterDate, setFilterDate] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [isLoadingPDF, setIsLoadingPDF] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [dateRangeStart, setDateRangeStart] = useState<Date | null>(null);
+  const [dateRangeEnd, setDateRangeEnd] = useState<Date | null>(null);
+  const [isLoadingZip, setIsLoadingZip] = useState(false);
+
+  // Obter lista única de modelos e executantes para filtros
+  const uniqueModelos = useMemo(() => {
+    const modelos = new Set(completedChecklists.map((c) => c.modelo));
+    return Array.from(modelos).sort();
+  }, [completedChecklists]);
+
+  const uniqueExecutantes = useMemo(() => {
+    const executantes = new Set(completedChecklists.map((c) => c.executanteName));
+    return Array.from(executantes).sort();
+  }, [completedChecklists]);
+
+  // Filtrar checklists
+  const filteredChecklists = useMemo(() => {
+    let filtered = [...completedChecklists];
+
+    // Filtro por busca
+    if (searchText.trim()) {
+      const search = searchText.toLowerCase();
+      filtered = filtered.filter(
+        (c) =>
+          c.checklistCode.toLowerCase().includes(search) ||
+          c.checklistName.toLowerCase().includes(search) ||
+          c.modelo.toLowerCase().includes(search) ||
+          c.executanteName.toLowerCase().includes(search)
+      );
+    }
+
+    // Filtro por modelo
+    if (filterModelo) {
+      filtered = filtered.filter((c) => c.modelo === filterModelo);
+    }
+
+    // Filtro por executante
+    if (filterExecutante) {
+      filtered = filtered.filter((c) => c.executanteName === filterExecutante);
+    }
+
+    // Filtro por data
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (filterDate !== "all") {
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay());
+
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      filtered = filtered.filter((c) => {
+        const checklistDate = new Date(c.timestamp);
+        checklistDate.setHours(0, 0, 0, 0);
+
+        switch (filterDate) {
+          case "today":
+            return checklistDate.getTime() === today.getTime();
+          case "week":
+            return checklistDate >= startOfWeek;
+          case "month":
+            return checklistDate >= startOfMonth;
+          case "custom":
+            if (dateRangeStart && dateRangeEnd) {
+              const start = new Date(dateRangeStart);
+              const end = new Date(dateRangeEnd);
+              start.setHours(0, 0, 0, 0);
+              end.setHours(23, 59, 59, 999);
+              return checklistDate >= start && checklistDate <= end;
+            }
+            return true;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Ordenar por data decrescente (mais recentes primeiro)
+    return filtered.sort((a, b) => b.timestamp - a.timestamp);
+  }, [completedChecklists, searchText, filterModelo, filterExecutante, filterDate, dateRangeStart, dateRangeEnd]);
+
+  // Função para obter cor do status
+  const getStatusColor = (resultado: string) => {
+    switch (resultado) {
+      case "OK":
+        return "#22C55E"; // verde
+      case "NÃO OK":
+        return "#EF4444"; // vermelho
+      case "NÃO APLICÁVEL":
+        return "#F59E0B"; // laranja
+      default:
+        return colors.muted;
+    }
+  };
+
+  // Função para formatar data
+  const formatDate = (date: Date | null): string => {
+    if (!date) return "";
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // Função para fazer parse de data
+  const parseDate = (dateString: string): Date | null => {
+    const parts = dateString.split("/");
+    if (parts.length !== 3) return null;
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    return new Date(year, month, day);
+  };
+
+  // Função para baixar período em ZIP
+  const handleDownloadPeriodZip = async () => {
+    try {
+      setIsLoadingZip(true);
+
+      if (filteredChecklists.length === 0) {
+        Alert.alert("Aviso", "Nenhum checklist para baixar no período selecionado.");
+        setIsLoadingZip(false);
+        return;
+      }
+
+      const zip = new JSZip();
+      let successCount = 0;
+
+      for (const checklist of filteredChecklists) {
+        try {
+          const key = `checklist_${checklist.id}`;
+          const checklistData = await AsyncStorage.getItem(key);
+          if (!checklistData) continue;
+
+          const storedChecklist = JSON.parse(checklistData);
+          const { generateChecklistPDF } = await import("@/lib/pdf-generator");
+          const pdfUri = await generateChecklistPDF({
+            checklist: storedChecklist,
+            checklistType: storedChecklist.checklistType,
+            dataFabricacao: checklist.dataFabricacao || storedChecklist.dadosIniciais?.dataFabricacao || "",
+            dataRecuperacao: checklist.dataRecuperacao || storedChecklist.dadosIniciais?.dataRecuperacao || "",
+            numeroOP: checklist.numeroOP || storedChecklist.dadosIniciais?.numeroOP || "",
+            numeroSerie: checklist.numeroSerie || storedChecklist.dadosIniciais?.numeroSerie || "",
+            assinaturas: storedChecklist.assinaturas,
+          });
+
+          if (pdfUri) {
+            const fileContent = await FileSystem.readAsStringAsync(pdfUri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            const fileName = `${checklist.checklistCode}_${checklist.modelo.replace(/\s+/g, "_")}_${checklist.dataRecuperacao.replace(/\//g, "-")}.pdf`;
+            zip.file(fileName, fileContent, { base64: true });
+            successCount++;
+          }
+        } catch (error) {
+          console.error(`Erro ao processar checklist ${checklist.id}:`, error);
+        }
+      }
+
+      if (successCount === 0) {
+        Alert.alert("Erro", "Não foi possível gerar nenhum PDF.");
+        setIsLoadingZip(false);
+        return;
+      }
+
+      const zipContent = await zip.generateAsync({ type: "base64" });
+      const zipUri = `${FileSystem.cacheDirectory}checklists_${formatDate(dateRangeStart)}_a_${formatDate(dateRangeEnd)}.zip`.replace(/\//g, "-");
+      await FileSystem.writeAsStringAsync(zipUri, zipContent, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      await Sharing.shareAsync(zipUri, {
+        mimeType: "application/zip",
+        dialogTitle: `Checklists ${formatDate(dateRangeStart)} a ${formatDate(dateRangeEnd)}`,
+      });
+
+      Alert.alert("Sucesso", `${successCount} PDF(s) baixado(s) com sucesso!`);
+      setIsLoadingZip(false);
+    } catch (error) {
+      console.error("Erro ao gerar ZIP:", error);
+      Alert.alert("Erro", "Não foi possível gerar o arquivo ZIP.");
+      setIsLoadingZip(false);
+    }
+  };
+
+  // Função para visualizar/baixar PDF
+  const handleViewPDF = async (checklist: CompletedChecklistRecord) => {
+    try {
+      setIsLoadingPDF(checklist.id);
+
+      // Recuperar dados do checklist armazenado
+      const key = `checklist_${checklist.id}`;
+      const checklistData = await AsyncStorage.getItem(key);
+      if (!checklistData) {
+        Alert.alert("Erro", "Checklist nao encontrado.");
+        setIsLoadingPDF(null);
+        return;
+      }
+
+      const storedChecklist = JSON.parse(checklistData);
+
+      if (!storedChecklist) {
+        Alert.alert("Erro", "Dados do checklist nao encontrados.");
+        setIsLoadingPDF(null);
+        return;
+      }
+
+      // Gerar PDF usando a funcao existente
+      const { generateChecklistPDF } = await import("@/lib/pdf-generator");
+      const pdfUri = await generateChecklistPDF({
+        checklist: storedChecklist,
+        checklistType: storedChecklist.checklistType,
+        dataFabricacao: checklist.dataFabricacao || storedChecklist.dadosIniciais?.dataFabricacao || "",
+        dataRecuperacao: checklist.dataRecuperacao || storedChecklist.dadosIniciais?.dataRecuperacao || "",
+        numeroOP: checklist.numeroOP || storedChecklist.dadosIniciais?.numeroOP || "",
+        numeroSerie: checklist.numeroSerie || storedChecklist.dadosIniciais?.numeroSerie || "",
+        assinaturas: storedChecklist.assinaturas,
+      });
+
+      // Abrir PDF em novo modal ou compartilhar
+      if (pdfUri) {
+        await Sharing.shareAsync(pdfUri, {
+          mimeType: "application/pdf",
+          dialogTitle: `${checklist.checklistCode} - ${checklist.modelo}`,
+        });
+      }
+
+      setIsLoadingPDF(null);
+    } catch (error) {
+      console.error("Erro ao visualizar PDF:", error);
+      Alert.alert("Erro", "Nao foi possivel gerar o PDF.");
+      setIsLoadingPDF(null);
+    }
+  };
+
+  const renderChecklistItem = ({ item }: { item: CompletedChecklistRecord }) => (
+    <View className="bg-surface rounded-lg p-4 mb-3 border border-border">
+      <View className="flex-row justify-between items-start mb-2">
+        <View className="flex-1">
+          <Text className="text-sm font-semibold text-muted">{item.checklistCode}</Text>
+          <Text className="text-base font-bold text-foreground mt-1">{item.modelo}</Text>
+          <Text className="text-sm text-muted mt-1">{item.executanteName}</Text>
+        </View>
+        <View
+          className="rounded-full px-3 py-1"
+          style={{ backgroundColor: getStatusColor(item.resultado) }}
+        >
+          <Text className="text-white text-xs font-semibold">{item.resultado}</Text>
+        </View>
+      </View>
+
+      {/* Dados Adicionais */}
+      <View className="gap-1 py-2 border-t border-b border-border/50 my-2">
+        {item.numeroSerie && (
+          <View className="flex-row justify-between">
+            <Text className="text-xs text-muted">Série:</Text>
+            <Text className="text-xs font-semibold text-foreground">{item.numeroSerie}</Text>
+          </View>
+        )}
+        {item.numeroOP && (
+          <View className="flex-row justify-between">
+            <Text className="text-xs text-muted">OP:</Text>
+            <Text className="text-xs font-semibold text-foreground">{item.numeroOP}</Text>
+          </View>
+        )}
+      </View>
+
+      <View className="flex-row justify-between items-center pt-3 border-t border-border">
+        <Text className="text-xs text-muted">{item.dataRecuperacao}</Text>
+        <TouchableOpacity
+          onPress={() => handleViewPDF(item)}
+          disabled={isLoadingPDF === item.id}
+          className="bg-primary rounded-lg px-4 py-2 active:opacity-80"
+        >
+          {isLoadingPDF === item.id ? (
+            <ActivityIndicator color="white" size="small" />
+          ) : (
+            <Text className="text-white text-xs font-semibold">📄 Ver PDF</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <ScreenContainer className="p-0">
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="flex-1">
+        {/* Cabeçalho */}
+        <View className="bg-primary px-6 py-6 gap-2">
+          <Text className="text-2xl font-bold text-white">Histórico</Text>
+          <Text className="text-sm text-white/80">
+            {filteredChecklists.length} checklist{filteredChecklists.length !== 1 ? "s" : ""} encontrado
+            {filteredChecklists.length !== 1 ? "s" : ""}
+          </Text>
+        </View>
+
+        {/* Busca */}
+        <View className="px-6 pt-6 pb-4">
+          <TextInput
+            placeholder="Buscar por código, modelo ou executante..."
+            value={searchText}
+            onChangeText={setSearchText}
+            className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
+            placeholderTextColor={colors.muted}
+          />
+        </View>
+
+        {/* Filtros de Data */}
+        <View className="px-6 pb-4 gap-2">
+          <Text className="text-sm font-semibold text-foreground">Período</Text>
+          <View className="flex-row gap-2 flex-wrap">
+            {(["all", "today", "week", "month"] as const).map((date) => (
+              <TouchableOpacity
+                key={date}
+                onPress={() => {
+                  setFilterDate(date);
+                  setShowDatePicker(false);
+                }}
+                className={`rounded-full px-4 py-2 ${
+                  filterDate === date ? "bg-primary" : "bg-surface border border-border"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${
+                    filterDate === date ? "text-white" : "text-foreground"
+                  }`}
+                >
+                  {date === "all"
+                    ? "Todos"
+                    : date === "today"
+                      ? "Hoje"
+                      : date === "week"
+                        ? "Semana"
+                        : "Mês"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              className={`rounded-full px-4 py-2 ${
+                filterDate === "custom" ? "bg-primary" : "bg-surface border border-border"
+              }`}
+            >
+              <Text
+                className={`text-xs font-semibold ${
+                  filterDate === "custom" ? "text-white" : "text-foreground"
+                }`}
+              >
+                Período
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Modal de Seleção de Data */}
+        <Modal
+          visible={showDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <View className="flex-1 bg-black/50 justify-end">
+            <View className="bg-background rounded-t-2xl p-6 gap-4">
+              <Text className="text-lg font-bold text-foreground">Selecionar Período</Text>
+
+              {/* Data Inicial */}
+              <View className="gap-2">
+                <Text className="text-sm font-semibold text-foreground">Data Inicial</Text>
+                <TextInput
+                  placeholder="DD/MM/AAAA"
+                  value={formatDate(dateRangeStart)}
+                  onChangeText={(text) => {
+                    const date = parseDate(text);
+                    if (date) setDateRangeStart(date);
+                  }}
+                  className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
+                  placeholderTextColor={colors.muted}
+                />
+              </View>
+
+              {/* Data Final */}
+              <View className="gap-2">
+                <Text className="text-sm font-semibold text-foreground">Data Final</Text>
+                <TextInput
+                  placeholder="DD/MM/AAAA"
+                  value={formatDate(dateRangeEnd)}
+                  onChangeText={(text) => {
+                    const date = parseDate(text);
+                    if (date) setDateRangeEnd(date);
+                  }}
+                  className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
+                  placeholderTextColor={colors.muted}
+                />
+              </View>
+
+              {/* Botões */}
+              <View className="flex-row gap-3 mt-4">
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(false)}
+                  className="flex-1 bg-surface border border-border rounded-lg py-3"
+                >
+                  <Text className="text-center font-semibold text-foreground">Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (dateRangeStart && dateRangeEnd) {
+                      setFilterDate("custom");
+                      setShowDatePicker(false);
+                    } else {
+                      Alert.alert("Aviso", "Preencha ambas as datas.");
+                    }
+                  }}
+                  className="flex-1 bg-primary rounded-lg py-3"
+                >
+                  <Text className="text-center font-semibold text-white">Aplicar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Botão Baixar Período em ZIP */}
+        {filterDate === "custom" && filteredChecklists.length > 0 && (
+          <View className="px-6 pb-4">
+            <TouchableOpacity
+              onPress={handleDownloadPeriodZip}
+              disabled={isLoadingZip}
+              className="bg-primary rounded-lg py-3 active:opacity-80"
+            >
+              {isLoadingZip ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text className="text-center font-semibold text-white">📦 Baixar Período em ZIP</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Filtro por Modelo */}
+        {uniqueModelos.length > 0 && (
+          <View className="px-6 pb-4 gap-2">
+            <Text className="text-sm font-semibold text-foreground">Modelo</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="gap-2">
+              <TouchableOpacity
+                onPress={() => setFilterModelo(null)}
+                className={`rounded-full px-4 py-2 ${
+                  filterModelo === null ? "bg-primary" : "bg-surface border border-border"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${
+                    filterModelo === null ? "text-white" : "text-foreground"
+                  }`}
+                >
+                  Todos
+                </Text>
+              </TouchableOpacity>
+              {uniqueModelos.map((modelo) => (
+                <TouchableOpacity
+                  key={modelo}
+                  onPress={() => setFilterModelo(filterModelo === modelo ? null : modelo)}
+                  className={`rounded-full px-4 py-2 ${
+                    filterModelo === modelo ? "bg-primary" : "bg-surface border border-border"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-semibold ${
+                      filterModelo === modelo ? "text-white" : "text-foreground"
+                    }`}
+                  >
+                    {modelo.substring(0, 15)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Filtro por Executante */}
+        {uniqueExecutantes.length > 0 && (
+          <View className="px-6 pb-4 gap-2">
+            <Text className="text-sm font-semibold text-foreground">Executante</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="gap-2">
+              <TouchableOpacity
+                onPress={() => setFilterExecutante(null)}
+                className={`rounded-full px-4 py-2 ${
+                  filterExecutante === null ? "bg-primary" : "bg-surface border border-border"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-semibold ${
+                    filterExecutante === null ? "text-white" : "text-foreground"
+                  }`}
+                >
+                  Todos
+                </Text>
+              </TouchableOpacity>
+              {uniqueExecutantes.map((executante) => (
+                <TouchableOpacity
+                  key={executante}
+                  onPress={() =>
+                    setFilterExecutante(filterExecutante === executante ? null : executante)
+                  }
+                  className={`rounded-full px-4 py-2 ${
+                    filterExecutante === executante ? "bg-primary" : "bg-surface border border-border"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-semibold ${
+                      filterExecutante === executante ? "text-white" : "text-foreground"
+                    }`}
+                  >
+                    {executante.substring(0, 12)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Lista de Checklists */}
+        <View className="px-6 pb-6 flex-1">
+          {filteredChecklists.length > 0 ? (
+            <FlatList
+              data={filteredChecklists}
+              renderItem={renderChecklistItem}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              contentContainerStyle={{ gap: 8 }}
+            />
+          ) : (
+            <View className="flex-1 items-center justify-center py-12">
+              <Text className="text-muted text-base">Nenhum checklist encontrado</Text>
+              <Text className="text-muted text-sm mt-2">Tente ajustar os filtros</Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </ScreenContainer>
+  );
+}
