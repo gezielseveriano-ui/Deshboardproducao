@@ -14,12 +14,24 @@ export default function InitialVerificationsScreen() {
   const { checklist, updateVerificacoesIniciais, createNewChecklist } = useChecklist();
 
   // Criar checklist quando receber checklistType
-  // IMPORTANTE: Criar novo checklist SEMPRE que checklistType mudar, mesmo se já existe um anterior
+  // IMPORTANTE: Criar novo checklist APENAS se não existe um do mesmo tipo
+  // Evita reset acidental em React StrictMode (efeito roda 2x em dev)
   useEffect(() => {
-    if (checklistType) {
+    if (checklistType && (!checklist || checklist.checklistType !== checklistType)) {
+      console.log('[InitialVerifications] Criando novo checklist para tipo:', checklistType);
       createNewChecklist(checklistType as ChecklistType);
     }
-  }, [checklistType, createNewChecklist]);
+  }, [checklistType]);
+  // Sincronizar estado local com o contexto
+  useEffect(() => {
+    if (checklist?.verificacoesIniciais?.trinca) {
+      setTrinca(checklist.verificacoesIniciais.trinca);
+    }
+    if (checklist?.verificacoesIniciais?.empenos) {
+      setEmpenos(checklist.verificacoesIniciais.empenos);
+    }
+  }, [checklist?.verificacoesIniciais]);
+
   const [trinca, setTrinca] = useState<ResultadoVerificacao>("APROVADO");
   const [empenos, setEmpenos] = useState<ResultadoVerificacao>("APROVADO");
   const [assinatura, setAssinatura] = useState("");
@@ -36,6 +48,7 @@ export default function InitialVerificationsScreen() {
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
+      console.log('[InitialVerifications] Salvando verificações:', { trinca, empenos });
       updateVerificacoesIniciais({
         trinca: trinca!,
         empenos: empenos!,

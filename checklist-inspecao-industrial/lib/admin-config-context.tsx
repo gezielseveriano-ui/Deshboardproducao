@@ -36,11 +36,14 @@ interface AdminConfigContextType {
 
 const AdminConfigContext = createContext<AdminConfigContextType | undefined>(undefined);
 
+// Sem credenciais reais aqui: isso é enviado no bundle do app para qualquer
+// dispositivo. Preencha email/senha/servidor pela tela de Configurações do
+// app (fica salvo apenas localmente via AsyncStorage), nunca no código-fonte.
 const DEFAULT_CONFIG: AdminConfig = {
   smtp: {
     email: "",
-    servidor: "",
-    porta: "",
+    servidor: "smtp.gmail.com",
+    porta: "587",
     senha: "",
   },
   network: {
@@ -48,7 +51,7 @@ const DEFAULT_CONFIG: AdminConfig = {
     usuario: "",
     senha: "",
     host: "",
-    port: "",
+    port: "4000",
     database: "",
   },
   linkGerencial: "",

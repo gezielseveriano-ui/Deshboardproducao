@@ -45,7 +45,7 @@ export default function HistoryScreen() {
   const [selectedChecklistIds, setSelectedChecklistIds] = useState<Set<string>>(new Set());
   const [isDownloadingSelected, setIsDownloadingSelected] = useState(false);
 
-  // Validar se PDF existe e está íntegro
+  // Validar se PDF existe e está íntegro (apenas para arquivos locais)
   const validatePdfExists = async (pdfPath: string): Promise<boolean> => {
     try {
       const fileInfo = await FileSystem.getInfoAsync(pdfPath);
@@ -55,7 +55,37 @@ export default function HistoryScreen() {
     }
   };
 
+  // `pdfFileName` pode ser um caminho local (checklist gerado neste aparelho)
+  // ou uma URL pública do Supabase Storage (checklist sincronizado de outro
+  // aparelho/dashboard). Resolve sempre para um arquivo local utilizável por
+  // Sharing/FileSystem, baixando da nuvem quando necessário.
+  const resolveLocalPdfPath = async (pdfFileNameOrUrl: string): Promise<string | null> => {
+    const isRemote = /^https?:\/\//i.test(pdfFileNameOrUrl);
+    if (!isRemote) {
+      const exists = await validatePdfExists(pdfFileNameOrUrl);
+      return exists ? pdfFileNameOrUrl : null;
+    }
 
+    try {
+      const fileName = pdfFileNameOrUrl.split("/").pop()?.split("?")[0] || `checklist_${Date.now()}.pdf`;
+      const localPath = `${FileSystem.cacheDirectory}${fileName}`;
+
+      // Reaproveita cópia já baixada nesta sessão, se existir
+      if (await validatePdfExists(localPath)) {
+        return localPath;
+      }
+
+      const { status } = await FileSystem.downloadAsync(pdfFileNameOrUrl, localPath);
+      if (status !== 200) {
+        console.warn("[History] Falha ao baixar PDF do Supabase, status:", status);
+        return null;
+      }
+      return (await validatePdfExists(localPath)) ? localPath : null;
+    } catch (error) {
+      console.error("[History] Erro ao baixar PDF remoto:", error);
+      return null;
+    }
+  };
 
   const handleViewPDF = async (item: CompletedChecklistRecord) => {
     setIsLoadingPDF(item.id);
@@ -65,9 +95,8 @@ export default function HistoryScreen() {
         return;
       }
 
-      // Validar se PDF existe
-      const pdfExists = await validatePdfExists(item.pdfFileName);
-      if (!pdfExists) {
+      const localPath = await resolveLocalPdfPath(item.pdfFileName);
+      if (!localPath) {
         Alert.alert(
           "Erro",
           "PDF não encontrado ou corrompido. Tente sincronizar novamente."
@@ -75,7 +104,7 @@ export default function HistoryScreen() {
         return;
       }
 
-      await Sharing.shareAsync(item.pdfFileName, {
+      await Sharing.shareAsync(localPath, {
         UTI: "com.adobe.pdf",
         mimeType: "application/pdf",
       });
@@ -220,13 +249,13 @@ export default function HistoryScreen() {
         // Baixar um único PDF
         const checklist = selectedChecklists[0];
         if (checklist.pdfFileName) {
-          const pdfExists = await validatePdfExists(checklist.pdfFileName);
-          if (!pdfExists) {
+          const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
+          if (!localPath) {
             Alert.alert("Erro", "PDF não encontrado ou corrompido.");
             return;
           }
 
-          await Sharing.shareAsync(checklist.pdfFileName, {
+          await Sharing.shareAsync(localPath, {
             UTI: "com.adobe.pdf",
             mimeType: "application/pdf",
           });
@@ -242,10 +271,10 @@ export default function HistoryScreen() {
           const checklist = selectedChecklists[i];
           if (checklist.pdfFileName) {
             try {
-              const pdfExists = await validatePdfExists(checklist.pdfFileName);
-              if (pdfExists) {
+              const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
+              if (localPath) {
                 const pdfData = await FileSystem.readAsStringAsync(
-                  checklist.pdfFileName,
+                  localPath,
                   { encoding: FileSystem.EncodingType.Base64 }
                 );
                 // Gerar nome único com sequência para evitar duplicatas
@@ -307,13 +336,13 @@ export default function HistoryScreen() {
         // Compartilhar um único PDF
         const checklist = selectedChecklists[0];
         if (checklist.pdfFileName) {
-          const pdfExists = await validatePdfExists(checklist.pdfFileName);
-          if (!pdfExists) {
+          const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
+          if (!localPath) {
             Alert.alert("Erro", "PDF não encontrado ou corrompido.");
             return;
           }
 
-          await Sharing.shareAsync(checklist.pdfFileName, {
+          await Sharing.shareAsync(localPath, {
             UTI: "com.adobe.pdf",
             mimeType: "application/pdf",
           });
@@ -326,10 +355,10 @@ export default function HistoryScreen() {
         for (const checklist of selectedChecklists) {
           if (checklist.pdfFileName) {
             try {
-              const pdfExists = await validatePdfExists(checklist.pdfFileName);
-              if (pdfExists) {
+              const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
+              if (localPath) {
                 const pdfData = await FileSystem.readAsStringAsync(
-                  checklist.pdfFileName,
+                  localPath,
                   { encoding: FileSystem.EncodingType.Base64 }
                 );
                 const fileName = checklist.pdfFileName.split("/").pop() || `${checklist.checklistCode}.pdf`;

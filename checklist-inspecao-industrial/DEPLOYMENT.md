@@ -64,10 +64,10 @@ Após instalar o APK, o IT deve configurar:
 
 #### SMTP (Opcional - para envio de emails)
 ```
-Email: gezielseveriano@gmail.com
+Email: seu-email@gmail.com
 Servidor: smtp.gmail.com
 Porta: 587
-Senha: fojwzhcguseykank
+Senha: <senha de app do Gmail>
 ```
 
 #### Rede e Banco de Dados (Obrigatório para sincronizar)

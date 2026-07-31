@@ -1,4 +1,3 @@
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
@@ -25,6 +24,7 @@ export const appRouter = router({
     saveCompleted: publicProcedure
       .input(
         z.object({
+          userId: z.number().or(z.string()).transform(v => typeof v === 'string' ? parseInt(v, 10) : v),
           checklistCode: z.string(),
           checklistName: z.string(),
           categoria: z.string(),
@@ -46,21 +46,33 @@ export const appRouter = router({
           etapasNaoAplicavel: z.number(),
           pdfFileName: z.string().optional(),
           email: z.string().email().optional(),
+          deviceId: z.string().optional(),
+          syncStatus: z.enum(["pending", "synced", "failed"]).optional(),
         })
       )
       .mutation(async ({ input }) => {
         try {
+          console.log('[Router] saveCompleted recebeu:', {
+            categoria: input.categoria,
+            checklistCode: input.checklistCode,
+            checklistName: input.checklistName,
+            userId: input.userId,
+            timestamp: new Date().toISOString(),
+          });
+          
           const result = await saveCompletedChecklist(input);
+          console.log('[Router] Checklist salvo com sucesso:', result);
           return {
             success: true,
             message: "Checklist salvo com sucesso",
             data: result,
           };
         } catch (error) {
-          console.error("[Checklist Router] Erro ao salvar checklist:", error);
+          console.error('[Router] ERRO ao salvar checklist:', error);
           return {
             success: false,
             message: `Erro ao salvar checklist: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+            error: error instanceof Error ? error.message : String(error),
           };
         }
       }),
@@ -89,49 +101,72 @@ export const appRouter = router({
         }
       }),
 
-    // Sincronização
-    getChecklistsForSync: protectedProcedure.query(async ({ ctx }) => {
-      try {
-        const checklists = await getChecklistsForUser(ctx.user.id);
-        return {
-          success: true,
-          data: checklists,
-        };
-      } catch (error) {
-        console.error("[Checklist Router] Erro ao recuperar checklists:", error);
-        return {
-          success: false,
-          message: `Erro ao recuperar checklists: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
-        };
-      }
-    }),
-
-    updateSyncStatus: protectedProcedure
+    getChecklistsForUser: publicProcedure
       .input(
         z.object({
-          checklistId: z.number(),
+          email: z.string().email(),
+        })
+      )
+      .query(async ({ input }) => {
+        try {
+          const checklists = await getChecklistsForUser(input.email);
+          return {
+            success: true,
+            data: checklists,
+          };
+        } catch (error) {
+          console.error("[Checklist Router] Erro ao recuperar checklists:", error);
+          return {
+            success: false,
+            message: `Erro ao recuperar checklists: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+          };
+        }
+      }),
+
+    updateSyncStatus: publicProcedure
+      .input(
+        z.object({
+          checklistId: z.string(),
+          syncStatus: z.enum(["pending", "synced", "failed"]),
+          syncError: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const result = await updateChecklistSyncStatus(input.checklistId, input.syncStatus, input.syncError);
+          return {
+            success: true,
+            data: result,
+          };
+        } catch (error) {
+          console.error("[Checklist Router] Erro ao atualizar status de sincronização:", error);
+          return {
+            success: false,
+            message: `Erro ao atualizar status: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+          };
+        }
+      }),
+
+    logSync: publicProcedure
+      .input(
+        z.object({
+          checklistId: z.string(),
+          deviceId: z.string(),
           syncStatus: z.enum(["pending", "synced", "failed"]),
         })
       )
-      .mutation(async ({ input, ctx }) => {
+      .mutation(async ({ input }) => {
         try {
-          await updateChecklistSyncStatus(input.checklistId, input.syncStatus);
-          await logSync({
-            userId: ctx.user.id,
-            deviceId: "web",
-            checklistId: input.checklistId,
-            action: "update",
-            status: "success",
-          } as any);
+          const result = await logSync(input.checklistId, input.deviceId, input.syncStatus);
           return {
             success: true,
-            message: "Status de sincronização atualizado",
+            data: result,
           };
         } catch (error) {
-          console.error("[Checklist Router] Erro ao atualizar sync status:", error);
+          console.error("[Checklist Router] Erro ao registrar sincronização:", error);
           return {
             success: false,
-            message: `Erro ao atualizar sync status: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+            message: `Erro ao registrar sincronização: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
           };
         }
       }),
@@ -151,6 +186,63 @@ export const appRouter = router({
         };
       }
     }),
+
+    uploadPDF: publicProcedure
+      .input(
+        z.object({
+          fileName: z.string(),
+          pdfBase64: z.string(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          console.log("[PDF Upload] Recebido upload de:", input.fileName);
+          
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+          const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON;
+          
+          if (!supabaseUrl || !supabaseKey) {
+            throw new Error("Supabase credentials not configured");
+          }
+          
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          
+          const buffer = Buffer.from(input.pdfBase64, "base64");
+          
+          const { data, error } = await supabase.storage
+            .from("checklist-pdfs")
+            .upload(`pdfs/${input.fileName}`, buffer, {
+              contentType: "application/pdf",
+              upsert: true,
+            });
+          
+          if (error) {
+            console.error("[PDF Upload] Erro ao fazer upload:", error);
+            throw error;
+          }
+          
+          console.log("[PDF Upload] Upload concluido:", data);
+          
+          const { data: publicData } = supabase.storage
+            .from("checklist-pdfs")
+            .getPublicUrl(`pdfs/${input.fileName}`);
+          
+          const pdfUrl = publicData?.publicUrl;
+          console.log("[PDF Upload] URL publica:", pdfUrl);
+          
+          return {
+            success: true,
+            pdfUrl,
+          };
+        } catch (error) {
+          console.error("[PDF Upload] Erro:", error);
+          return {
+            success: false,
+            message: `Erro ao fazer upload de PDF: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+          };
+        }
+      }),
   }),
 
   // Email router

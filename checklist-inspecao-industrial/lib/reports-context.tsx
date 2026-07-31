@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CompletedChecklistRecord } from './reports-types';
+import * as SupabaseSync from './supabase-sync';
+import NetInfo from '@react-native-community/netinfo';
+import * as SecureStore from 'expo-secure-store';
 
 interface ReportsContextType {
   completedChecklists: CompletedChecklistRecord[];
@@ -8,31 +11,125 @@ interface ReportsContextType {
   loadCompletedChecklists: () => Promise<void>;
   syncWithServer: () => Promise<boolean>;
   recoverFromServer: () => Promise<boolean>;
+  isSyncing: boolean;
+  isOnline: boolean;
 }
 
 const ReportsContext = createContext<ReportsContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'completed_checklists';
+const DEVICE_ID_KEY = '@device_id';
+
+/**
+ * Gerar ou carregar ID único do dispositivo
+ */
+async function getOrCreateDeviceId(): Promise<string> {
+  try {
+    let deviceId = await SecureStore.getItemAsync(DEVICE_ID_KEY);
+    if (!deviceId) {
+      deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await SecureStore.setItemAsync(DEVICE_ID_KEY, deviceId);
+      console.log('[Reports] Novo Device ID criado:', deviceId);
+    }
+    return deviceId;
+  } catch (error) {
+    console.warn('[Reports] Erro ao usar SecureStore, usando AsyncStorage:', error);
+    let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (!deviceId) {
+      deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+    return deviceId;
+  }
+}
 
 export function ReportsProvider({ children }: { children: React.ReactNode }) {
   const [completedChecklists, setCompletedChecklists] = useState<CompletedChecklistRecord[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [deviceId, setDeviceId] = useState<string>('');
+
+  // Inicializar Device ID
+  useEffect(() => {
+    const initDeviceId = async () => {
+      const id = await getOrCreateDeviceId();
+      setDeviceId(id);
+    };
+    initDeviceId();
+  }, []);
+
+  // Monitorar conexão
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const online = state.isConnected === true && state.isInternetReachable === true;
+      setIsOnline(online);
+      console.log('[Reports] Conexão:', online ? 'Online' : 'Offline');
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Carregar dados ao inicializar
   useEffect(() => {
     loadCompletedChecklists();
-  }, [refreshTrigger]);
-
-  // Recarregar dados quando completedChecklists mudar (removido interval que causava duplicação)
+  }, [refreshTrigger, deviceId]);
 
   const loadCompletedChecklists = async () => {
+    if (!deviceId) return;
+
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEY);
-      if (data) {
-        setCompletedChecklists(JSON.parse(data));
+      console.log('[Reports] Carregando checklists...');
+      
+      // 1. Carregar dados locais PRIMEIRO (rápido)
+      const localData = await AsyncStorage.getItem(STORAGE_KEY);
+      const localChecklists = localData ? JSON.parse(localData) : [];
+      setCompletedChecklists(localChecklists);
+      
+      // 2. Se online, sincronizar com Supabase
+      if (isOnline) {
+        setIsSyncing(true);
+        try {
+          console.log('[Reports] Sincronizando com Supabase...');
+          
+          // Verificar conexão com Supabase
+          const hasConnection = await SupabaseSync.checkSupabaseConnection();
+          if (!hasConnection) {
+            console.warn('[Reports] Sem conexão com Supabase');
+            setIsSyncing(false);
+            return;
+          }
+          
+          // Carregar checklists do Supabase
+          const supabaseChecklists = await SupabaseSync.loadChecklistsFromSupabase();
+          console.log('[Reports] ✓ Carregados', supabaseChecklists.length, 'checklists do Supabase');
+          
+          // 3. Mesclar: Supabase tem prioridade (mais recente)
+          const merged = [...localChecklists];
+          for (const supabaseChecklist of supabaseChecklists) {
+            const index = merged.findIndex(c => c.id === supabaseChecklist.id);
+            if (index >= 0) {
+              merged[index] = supabaseChecklist; // Atualizar com versão do Supabase
+            } else {
+              merged.push(supabaseChecklist); // Adicionar novo
+            }
+          }
+          
+          setCompletedChecklists(merged);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          console.log('[Reports] ✓ Sincronização com Supabase concluída');
+        } catch (syncError) {
+          console.warn('[Reports] Erro ao sincronizar com Supabase:', syncError);
+          // Continuar com dados locais - não é erro fatal
+        } finally {
+          setIsSyncing(false);
+        }
+      } else {
+        console.log('[Reports] Offline - usando dados locais apenas');
       }
     } catch (error) {
-      console.error('Erro ao carregar checklists completados:', error);
+      console.error('Erro ao carregar checklists:', error);
+      setIsSyncing(false);
     }
   };
 
@@ -44,6 +141,18 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       const updated = [...filtered, record];
       setCompletedChecklists(updated);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      
+      // Se online, sincronizar com Supabase
+      if (isOnline && deviceId) {
+        try {
+          console.log('[Reports] Sincronizando novo checklist com Supabase...');
+          await SupabaseSync.saveChecklistToSupabase(record, deviceId);
+          console.log('[Reports] ✓ Checklist sincronizado com Supabase');
+        } catch (error) {
+          console.warn('[Reports] Erro ao sincronizar com Supabase (será tentado depois):', error);
+          // Continuar mesmo se falhar - dados estão locais
+        }
+      }
     } catch (error) {
       console.error('Erro ao salvar checklist completado:', error);
     }
@@ -53,88 +162,67 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   const syncWithServer = async () => {
     try {
       console.log('[Sync] Iniciando sincronização com servidor...');
-      const apiUrl = "https://chklistapp-8bfswvbm.manus.space";
       
-      for (const checklist of completedChecklists) {
-        try {
-          const response = await fetch(`${apiUrl}/api/checklists`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(checklist),
-          });
-          
-          if (!response.ok) {
-            console.error(`[Sync] Erro ao sincronizar ${checklist.id}:`, response.statusText);
-          } else {
-            console.log(`[Sync] ✓ ${checklist.id} sincronizado`);
-          }
-        } catch (error) {
-          console.error(`[Sync] Erro ao sincronizar ${checklist.id}:`, error);
-        }
-      }
-      
-      console.log('[Sync] Sincronização concluída');
-      return true;
-    } catch (error) {
-      console.error('[Sync] Erro geral:', error);
-      return false;
-    }
-  };
-
-  // Recuperar checklists do servidor (restauração de backup)
-  const recoverFromServer = async () => {
-    try {
-      console.log('[Recovery] Tentando recuperar checklists do servidor...');
-      const apiUrl = "https://chklistapp-8bfswvbm.manus.space";
-      
-      const response = await fetch(`${apiUrl}/api/checklists`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-      
-      if (!response.ok) {
-        console.error('[Recovery] Erro ao recuperar:', response.statusText);
+      if (!isOnline) {
+        console.log('[Sync] Offline - sincronização adiada');
         return false;
       }
-      
-      const serverChecklists = await response.json();
-      console.log(`[Recovery] ✓ ${serverChecklists.length} checklists recuperados`);
-      
-      // Mesclar com dados locais (servidor tem prioridade)
-      const merged = [...completedChecklists];
-      for (const serverChecklist of serverChecklists) {
-        const index = merged.findIndex(c => c.id === serverChecklist.id);
-        if (index >= 0) {
-          merged[index] = serverChecklist; // Atualizar com versão do servidor
-        } else {
-          merged.push(serverChecklist); // Adicionar novo
-        }
+
+      if (!deviceId) {
+        console.warn('[Sync] Device ID não disponível');
+        return false;
       }
-      
-      setCompletedChecklists(merged);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-      return true;
+
+      // Sincronizar checklists locais com Supabase
+      const result = await SupabaseSync.syncLocalChecklistsWithSupabase(
+        completedChecklists,
+        deviceId
+      );
+
+      console.log('[Sync] Resultado:', result);
+      return result.failed === 0;
     } catch (error) {
-      console.error('[Recovery] Erro geral:', error);
+      console.error('[Sync] Erro ao sincronizar:', error);
       return false;
     }
   };
 
-  // Sincronização automática a cada 5 minutos
-  useEffect(() => {
-    const syncInterval = setInterval(() => {
-      console.log('[Auto-Sync] Sincronizando automaticamente...');
-      syncWithServer();
-    }, 5 * 60 * 1000); // 5 minutos
-    
-    return () => clearInterval(syncInterval);
-  }, [completedChecklists]);
+  // Recuperar dados do servidor
+  const recoverFromServer = async () => {
+    try {
+      console.log('[Recover] Recuperando dados do servidor...');
+      
+      if (!isOnline) {
+        console.log('[Recover] Offline - recuperação adiada');
+        return false;
+      }
 
-  return (
-    <ReportsContext.Provider value={{ completedChecklists, addCompletedChecklist, loadCompletedChecklists, syncWithServer, recoverFromServer }}>
-      {children}
-    </ReportsContext.Provider>
-  );
+      // Carregar checklists do Supabase
+      const supabaseChecklists = await SupabaseSync.loadChecklistsFromSupabase();
+      
+      // Atualizar estado local
+      setCompletedChecklists(supabaseChecklists);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(supabaseChecklists));
+      
+      console.log('[Recover] ✓ Recuperados', supabaseChecklists.length, 'checklists');
+      return true;
+    } catch (error) {
+      console.error('[Recover] Erro ao recuperar dados:', error);
+      return false;
+    }
+  };
+
+  const value: ReportsContextType = {
+    completedChecklists,
+    addCompletedChecklist,
+    loadCompletedChecklists,
+    syncWithServer,
+    recoverFromServer,
+    isSyncing,
+    isOnline,
+  };
+
+  return <ReportsContext.Provider value={value}>{children}</ReportsContext.Provider>;
 }
 
 export function useReports() {

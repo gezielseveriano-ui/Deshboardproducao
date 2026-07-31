@@ -15,6 +15,9 @@ import { trpc } from "@/lib/trpc";
 import { useEffect } from "react";
 import { saveChecklistToCompanyDb } from "@/lib/save-to-company-db";
 import * as FileSystem from "expo-file-system/legacy";
+import * as SupabaseSync from "@/lib/supabase-sync";
+import { uploadPDFToSupabaseStorage } from "@/lib/pdf-upload";
+import * as SecureStore from "expo-secure-store";
 
 
 export default function CompletionScreen() {
@@ -105,34 +108,26 @@ export default function CompletionScreen() {
       setGeneratedPDFPath(pdfPath);
       const pdfFileName = pdfPath.split("/").pop() || "checklist.pdf";
       
-      // PASSO 2: Fazer upload do PDF para o servidor
-      let pdfUrl = pdfPath;
+      // PASSO 2: Fazer upload do PDF para Supabase Storage
+      let pdfUrl: string | null = null;
       try {
-        const pdfBase64 = await FileSystem.readAsStringAsync(pdfPath, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        
-        const uploadResponse = await fetch('http://127.0.0.1:3000/api/upload-pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileName: pdfFileName,
-            fileData: pdfBase64,
-          }),
-        });
-        
-        if (uploadResponse.ok) {
-          const uploadData = await uploadResponse.json();
-          pdfUrl = uploadData.pdfUrl;
-          console.log("[DEBUG] PDF enviado para servidor:", pdfUrl);
+        console.log("[DEBUG] Iniciando upload de PDF para Supabase Storage...");
+        pdfUrl = await uploadPDFToSupabaseStorage(pdfPath, pdfFileName);
+        if (pdfUrl) {
+          console.log("[DEBUG] ✓ PDF enviado para Supabase Storage:", pdfUrl);
         } else {
-          console.warn("[WARN] Erro ao fazer upload de PDF, usando caminho local");
+          console.warn("[WARN] Erro ao fazer upload de PDF para Supabase");
+          // Fallback: usar o caminho local completo (não apenas o nome do
+          // arquivo), senão a aba Histórico não consegue mais localizar o
+          // PDF neste mesmo aparelho.
+          pdfUrl = pdfPath;
         }
       } catch (uploadError) {
         console.warn("[WARN] Erro ao fazer upload de PDF:", uploadError);
+        pdfUrl = pdfPath;
       }
       
-      // PASSO 3: Salvar no AsyncStorage COM o pdfUrl do servidor
+      // PASSO 3: Salvar no AsyncStorage COM o pdfFileName
       if (!hasBeenSaved.current) {
         const checklistType = (checklist as any).checklistType as ChecklistType;
         const checklistConfig = (checklist as any).checklistConfig;
@@ -150,12 +145,22 @@ export default function CompletionScreen() {
           numeroSerie: checklist.dadosIniciais?.numeroSerie || "",
           numeroOP: checklist.dadosIniciais?.numeroOP || "",
           timestamp: checklist.timestamp,
-          pdfFileName: pdfUrl,
+          pdfFileName: pdfFileName,
         };
         await addCompletedChecklist(record);
         console.log("[DEBUG] Checklist salvo no AsyncStorage com pdfUrl:", pdfUrl);
         
-        // PASSO 4: Sincronizar com servidor
+        // PASSO 4: Sincronizar com Supabase (novo banco de dados)
+        try {
+          const deviceId = await SecureStore.getItemAsync('@device_id') || `device_${Date.now()}`;
+          console.log("[DEBUG] Sincronizando com Supabase, deviceId:", deviceId);
+          await SupabaseSync.saveChecklistToSupabase(record, deviceId, pdfUrl);
+          console.log("[DEBUG] Checklist sincronizado com Supabase com sucesso!");
+        } catch (supabaseError) {
+          console.warn("[WARN] Erro ao sincronizar com Supabase (dados salvos localmente):", supabaseError);
+        }
+        
+        // PASSO 5: Sincronizar com servidor
         const mutation = saveChecklistMutation;
         mutation.mutate({
           checklistCode: checklistConfig?.codigo || checklistType,

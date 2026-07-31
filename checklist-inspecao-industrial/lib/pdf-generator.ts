@@ -28,8 +28,10 @@ function generatePDFHTML(options: PDFGeneratorOptions): string {
 
   // Gerar linhas da tabela
   let tabelaHTML = "";
-  config.etapas.forEach((etapaConfig, index) => {
-    const etapa = checklist.etapas[index];
+  // Criar mapa de etapas por número para evitar problemas de índice
+  const etapaByNumero = new Map(checklist.etapas.map(e => [e.numero, e]));
+  config.etapas.forEach((etapaConfig) => {
+    const etapa = etapaByNumero.get(etapaConfig.numero);
     const resultado = etapa?.resultado || "";
     // Formatar resultado com quebra de linha para economizar espaço
     let resultadoMarcado = "—";

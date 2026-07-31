@@ -168,6 +168,7 @@ export function ChecklistProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateAssinaturas = (assinaturas: Assinaturas) => {
+    console.log('[Checklist] Atualizando assinaturas:', assinaturas);
     dispatch({ type: "UPDATE_ASSINATURAS", payload: assinaturas });
   };
 
@@ -175,9 +176,16 @@ export function ChecklistProvider({ children }: { children: React.ReactNode }) {
     try {
       if (!checklist) return;
       
+      console.log('[SaveChecklist] Iniciando salvamento...', {
+        tipo: checklist.checklistType,
+        codigo: checklist.checklistConfig?.codigo,
+        categoria: checklist.checklistConfig?.categoria,
+      });
+      
       // 1. Salvar localmente (fallback)
       const key = `checklist_${checklist.id}`;
       await AsyncStorage.setItem(key, JSON.stringify(checklist));
+      console.log('[SaveChecklist] Salvo localmente com sucesso');
       
       // 2. Tentar sincronizar com backend (se houver internet)
       try {
@@ -185,20 +193,22 @@ export function ChecklistProvider({ children }: { children: React.ReactNode }) {
         const user = await trpc.auth.me.query();
         
         if (user?.id) {
+          console.log('[SaveChecklist] Preparando dados para sincronização com backend...');
+          
           // Preparar dados para salvar no banco
           const checklistData = {
-            userId: user.id,
+            userId: typeof user.id === 'string' ? parseInt(user.id, 10) : user.id,
             checklistCode: checklist.checklistConfig?.codigo || 'UNKNOWN',
             checklistName: checklist.checklistConfig?.nome || 'Checklist',
             categoria: checklist.checklistConfig?.categoria || 'Geral',
             modelo: checklist.modeloSelecionado || 'Não especificado',
             resultado: 'OK', // Será atualizado após completar
-            executanteName: checklist.assinaturas?.executante || 'Não assinado',
-            executanteMatricula: '0',
-            liderName: checklist.assinaturas?.liderMRS || '',
-            liderMatricula: '0',
-            inspectorName: checklist.assinaturas?.inspectorTecnico || '',
-            inspectorMatricula: '0',
+            executanteName: checklist.assinaturas?.executante?.nome || 'Não assinado',
+            executanteMatricula: checklist.assinaturas?.executante?.matricula || '0',
+            liderName: checklist.assinaturas?.liderMRS?.nome || '',
+            liderMatricula: checklist.assinaturas?.liderMRS?.matricula || '0',
+            inspectorName: checklist.assinaturas?.inspectorTecnico?.nome || '',
+            inspectorMatricula: checklist.assinaturas?.inspectorTecnico?.matricula || '0',
             dataFabricacao: checklist.dadosIniciais?.dataFabricacao || '',
             dataRecuperacao: checklist.dadosIniciais?.dataRecuperacao || new Date().toLocaleDateString('pt-BR'),
             numeroOP: checklist.dadosIniciais?.numeroOP || '',
@@ -211,8 +221,11 @@ export function ChecklistProvider({ children }: { children: React.ReactNode }) {
             syncStatus: 'pending' as const,
           };
           
+          console.log('[SaveChecklist] Enviando para backend:', checklistData);
+          
           // Salvar no banco via tRPC
           const result = await trpc.checklist.saveCompleted.mutate(checklistData);
+          console.log('[SaveChecklist] Resposta do backend:', result);
           
           if (result?.success && result?.data?.insertId) {
             console.log('[Sync] Checklist salvo no banco com sucesso:', result.data.insertId);
@@ -226,6 +239,7 @@ export function ChecklistProvider({ children }: { children: React.ReactNode }) {
       } catch (syncError) {
         // Se falhar a sincronização, apenas registra no console
         // O checklist já foi salvo localmente, então não há perda de dados
+        console.error('[SaveChecklist] Erro ao sincronizar:', syncError);
         console.warn('[Sync] Falha ao sincronizar com backend (offline?):', syncError);
       }
     } catch (error) {
