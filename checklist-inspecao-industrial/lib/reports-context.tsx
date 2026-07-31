@@ -18,12 +18,16 @@ interface ReportsContextType {
 const ReportsContext = createContext<ReportsContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'completed_checklists';
-const DEVICE_ID_KEY = '@device_id';
+// SecureStore só aceita chaves alfanuméricas + "." "-" "_" (sem "@"), por isso
+// não pode ser "@device_id" — com a chave inválida, getItemAsync/setItemAsync
+// sempre lançavam erro e a lógica sempre caía (silenciosamente) no fallback
+// de AsyncStorage abaixo.
+const DEVICE_ID_KEY = 'device_id';
 
 /**
  * Gerar ou carregar ID único do dispositivo
  */
-async function getOrCreateDeviceId(): Promise<string> {
+export async function getOrCreateDeviceId(): Promise<string> {
   try {
     let deviceId = await SecureStore.getItemAsync(DEVICE_ID_KEY);
     if (!deviceId) {

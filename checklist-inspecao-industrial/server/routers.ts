@@ -4,6 +4,10 @@ import { z } from "zod";
 import { sendEmail, generateChecklistEmailHTML } from "./email";
 import { saveCompletedChecklist, getDashboardStats, getChecklistsForUser, updateChecklistSyncStatus, logSync, getPendingSyncs } from "./db";
 import nodemailer from "nodemailer";
+import { getChecklistConfig } from "../lib/checklist-configs";
+import { buildChecklistPdfDocDefinition } from "../shared/checklist-pdf-content";
+import { renderPdfBuffer } from "./pdf";
+import { getSupabaseAdmin } from "./supabase-admin";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -240,6 +244,147 @@ export const appRouter = router({
           return {
             success: false,
             message: `Erro ao fazer upload de PDF: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+          };
+        }
+      }),
+
+    // Gera o PDF inteiro no servidor (sem depender do expo-print do
+    // dispositivo, que só funciona em Android/iOS nativo) e já salva o
+    // resultado direto no Supabase Storage + tabela completed_checklists.
+    // Isso garante que o checklist fica disponível pra qualquer
+    // aparelho/PC assim que o usuário termina de preencher, mesmo que o
+    // dispositivo que preencheu não consiga gerar/enviar o arquivo sozinho.
+    generateAndUploadPDF: publicProcedure
+      .input(
+        z.object({
+          checklistType: z.string(),
+          numeroSerie: z.string().optional().default(""),
+          numeroOP: z.string().optional().default(""),
+          dataFabricacao: z.string().optional().default(""),
+          dataRecuperacao: z.string().optional().default(""),
+          modeloSelecionado: z.string().nullable().optional(),
+          verificacoesIniciais: z
+            .object({
+              trinca: z.enum(["APROVADO", "REPROVADO"]).nullable().optional(),
+              empenos: z.enum(["APROVADO", "REPROVADO"]).nullable().optional(),
+            })
+            .optional(),
+          perguntasFinais: z
+            .object({
+              substituicaoChapaColuna: z.enum(["SIM", "NAO"]).nullable().optional(),
+              substituicaoChapaGuia: z.enum(["SIM", "NAO"]).nullable().optional(),
+            })
+            .optional(),
+          etapas: z.array(
+            z.object({
+              resultado: z.enum(["OK", "NAO_OK", "NAO_APLICAVEL"]).nullable().optional(),
+              medidas: z
+                .array(
+                  z.object({
+                    label: z.string().optional(),
+                    valor: z.string().nullable().optional(),
+                    unidade: z.string().nullable().optional(),
+                  })
+                )
+                .optional(),
+            })
+          ),
+          assinaturas: z
+            .object({
+              executante: z.object({ nome: z.string().optional(), matricula: z.string().optional() }).nullable().optional(),
+              liderMRS: z.object({ nome: z.string().optional(), matricula: z.string().optional() }).nullable().optional(),
+              inspectorTecnico: z.object({ nome: z.string().optional(), matricula: z.string().optional() }).nullable().optional(),
+            })
+            .optional(),
+          categoria: z.string().optional().default("Geral"),
+          resultadoGeral: z.string().optional().default("OK"),
+          deviceId: z.string().optional().default("desconhecido"),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const config = getChecklistConfig(input.checklistType as any);
+
+          const docDefinition = buildChecklistPdfDocDefinition({
+            config,
+            etapas: input.etapas,
+            dataFabricacao: input.dataFabricacao,
+            dataRecuperacao: input.dataRecuperacao,
+            numeroOP: input.numeroOP,
+            numeroSerie: input.numeroSerie,
+            modeloSelecionado: input.modeloSelecionado,
+            verificacoesIniciais: input.verificacoesIniciais,
+            perguntasFinais: input.perguntasFinais,
+            assinaturas: input.assinaturas,
+          });
+
+          const pdfBuffer = await renderPdfBuffer(docDefinition);
+
+          const supabase = getSupabaseAdmin();
+          if (!supabase) {
+            return { success: false, message: "Supabase não configurado no servidor (EXPO_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes)." };
+          }
+
+          const dataSemBarras = (input.dataRecuperacao || "sem-data").replace(/\//g, "");
+          const fileName = `${input.numeroSerie || "sem-serie"}-${dataSemBarras}-${Date.now()}.pdf`;
+          const storagePath = `pdfs/${fileName}`;
+
+          const { error: uploadError } = await supabase.storage.from("checklist-pdfs").upload(storagePath, pdfBuffer, {
+            contentType: "application/pdf",
+            upsert: true,
+          });
+          if (uploadError) {
+            console.error("[generateAndUploadPDF] Erro no upload:", uploadError);
+            return { success: false, message: `Erro ao enviar PDF para o Supabase Storage: ${uploadError.message}` };
+          }
+
+          const { data: publicData } = supabase.storage.from("checklist-pdfs").getPublicUrl(storagePath);
+          const pdfUrl = publicData?.publicUrl;
+
+          const { data: row, error: insertError } = await supabase
+            .from("completed_checklists")
+            .insert([
+              {
+                device_id: input.deviceId,
+                checklist_code: config.codigo,
+                checklist_name: config.titulo,
+                categoria: input.categoria,
+                modelo: input.modeloSelecionado || "Não especificado",
+                resultado: input.resultadoGeral,
+                executante_name: input.assinaturas?.executante?.nome || "",
+                executante_matricula: input.assinaturas?.executante?.matricula || "",
+                lider_name: input.assinaturas?.liderMRS?.nome || "",
+                lider_matricula: input.assinaturas?.liderMRS?.matricula || "",
+                inspector_name: input.assinaturas?.inspectorTecnico?.nome || "",
+                inspector_matricula: input.assinaturas?.inspectorTecnico?.matricula || "",
+                data_recuperacao: input.dataRecuperacao,
+                data_fabricacao: input.dataFabricacao,
+                numero_serie: input.numeroSerie,
+                numero_op: input.numeroOP,
+                resultado_detalhado: { etapas: input.etapas, verificacoesIniciais: input.verificacoesIniciais, perguntasFinais: input.perguntasFinais },
+                signatures: input.assinaturas || {},
+                pdf_url: pdfUrl,
+                pdf_file_name: fileName,
+                sync_status: "synced",
+                synced_at: new Date().toISOString(),
+                timestamp: Date.now(),
+              },
+            ])
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error("[generateAndUploadPDF] Erro ao salvar linha:", insertError);
+            // O PDF já subiu com sucesso; devolve a URL mesmo que o registro na tabela falhe.
+            return { success: true, pdfUrl, id: null, message: `PDF salvo, mas houve erro ao registrar no banco: ${insertError.message}` };
+          }
+
+          return { success: true, pdfUrl, id: row?.id ?? null };
+        } catch (error) {
+          console.error("[generateAndUploadPDF] Erro:", error);
+          return {
+            success: false,
+            message: `Erro ao gerar/enviar PDF: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
           };
         }
       }),

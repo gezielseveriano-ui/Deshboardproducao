@@ -6,7 +6,7 @@ export interface CompletedChecklistRecord {
   id: string;
   checklistCode: string; // ex: CL-ENG-1029/04.01
   checklistName: string; // ex: CHECKLIST – Inspeção da Lateral do Truque Barba
-  categoria: 'Lateral' | 'Travessa'; // ex: Lateral ou Travessa
+  categoria: 'Lateral' | 'Travessa' | 'Triângulo'; // ex: Lateral, Travessa ou Triângulo
   modelo: string; // ex: Lateral Barber 6.1/2x12
   resultado: 'OK' | 'NÃO OK' | 'NÃO APLICÁVEL'; // resultado final
   executanteName: string; // ex: André Souza

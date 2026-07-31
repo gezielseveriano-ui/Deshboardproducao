@@ -24,6 +24,7 @@ import { DatePickerCalendar } from "@/components/date-picker-calendar";
 import { useSyncChecklist } from "@/hooks/use-sync-checklist";
 import { getApiBaseUrl } from "@/constants/oauth";
 import { Calendar } from "react-native-calendars";
+import { resolveLocalPdfPath } from "@/lib/pdf-local-cache";
 
 
 export default function HistoryScreen() {
@@ -44,48 +45,6 @@ export default function HistoryScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedChecklistIds, setSelectedChecklistIds] = useState<Set<string>>(new Set());
   const [isDownloadingSelected, setIsDownloadingSelected] = useState(false);
-
-  // Validar se PDF existe e está íntegro (apenas para arquivos locais)
-  const validatePdfExists = async (pdfPath: string): Promise<boolean> => {
-    try {
-      const fileInfo = await FileSystem.getInfoAsync(pdfPath);
-      return fileInfo.exists && fileInfo.size > 0;
-    } catch {
-      return false;
-    }
-  };
-
-  // `pdfFileName` pode ser um caminho local (checklist gerado neste aparelho)
-  // ou uma URL pública do Supabase Storage (checklist sincronizado de outro
-  // aparelho/dashboard). Resolve sempre para um arquivo local utilizável por
-  // Sharing/FileSystem, baixando da nuvem quando necessário.
-  const resolveLocalPdfPath = async (pdfFileNameOrUrl: string): Promise<string | null> => {
-    const isRemote = /^https?:\/\//i.test(pdfFileNameOrUrl);
-    if (!isRemote) {
-      const exists = await validatePdfExists(pdfFileNameOrUrl);
-      return exists ? pdfFileNameOrUrl : null;
-    }
-
-    try {
-      const fileName = pdfFileNameOrUrl.split("/").pop()?.split("?")[0] || `checklist_${Date.now()}.pdf`;
-      const localPath = `${FileSystem.cacheDirectory}${fileName}`;
-
-      // Reaproveita cópia já baixada nesta sessão, se existir
-      if (await validatePdfExists(localPath)) {
-        return localPath;
-      }
-
-      const { status } = await FileSystem.downloadAsync(pdfFileNameOrUrl, localPath);
-      if (status !== 200) {
-        console.warn("[History] Falha ao baixar PDF do Supabase, status:", status);
-        return null;
-      }
-      return (await validatePdfExists(localPath)) ? localPath : null;
-    } catch (error) {
-      console.error("[History] Erro ao baixar PDF remoto:", error);
-      return null;
-    }
-  };
 
   const handleViewPDF = async (item: CompletedChecklistRecord) => {
     setIsLoadingPDF(item.id);
