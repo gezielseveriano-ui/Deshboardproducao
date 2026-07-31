@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import path from "path";
+import { fileURLToPath } from "url";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
@@ -90,6 +92,15 @@ async function startServer() {
       createContext,
     }),
   );
+
+  // Em produção, o build do app web (expo export --platform web) é servido
+  // pelo mesmo processo/porta da API — um único serviço, uma única URL,
+  // sem precisar configurar CORS entre front e back.
+  if (process.env.NODE_ENV === "production") {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const webBuildPath = path.join(__dirname, "..", "dist-web");
+    app.use(express.static(webBuildPath, { extensions: ["html"] }));
+  }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);

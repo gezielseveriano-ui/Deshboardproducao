@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: checklist-inspecao-industrial
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: checklist-inspecao-industrial
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Preencha estas 3 no painel do Render (Environment) com os valores
+      # do seu projeto Supabase (Project Settings > API). Nunca commite
+      # esses valores no repositório.
+      - key: EXPO_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: EXPO_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Propositalmente NÃO definir EXPO_PUBLIC_API_BASE_URL: deixando
+      # vazio, o app web usa URLs relativas e chama a própria origem
+      # (mesmo serviço serve o front e a API), sem precisar saber a URL
+      # final do Render de antemão.

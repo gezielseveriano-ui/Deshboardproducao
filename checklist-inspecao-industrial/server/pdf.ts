@@ -1,8 +1,17 @@
 import path from "path";
+import { fileURLToPath } from "url";
+import { createRequire } from "module";
 // pdfmake's Node build has no ESM/type-safe entry point; the documented
-// server-side usage is requiring src/printer directly.
+// server-side usage is requiring src/printer directly. createRequire is
+// needed because the production server bundle is ESM, where the bare
+// `require` global esbuild would otherwise leave behind doesn't exist.
+const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PdfPrinter = require("pdfmake/src/printer");
+
+// __dirname isn't a real ESM global (unlike the CJS output tsx uses in
+// dev) — derive it from import.meta.url so it works in both.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const fonts = {
   DejaVu: {

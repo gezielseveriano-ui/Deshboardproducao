@@ -1,259 +1,80 @@
-# 📱 Guia de Deployment - Checklist Inspeção Industrial
+# Deployment - Checklist Inspeção Industrial
 
-## 🎯 Visão Geral
+## Arquitetura atual
 
-Este aplicativo é um **checklist digital de inspeção de truques** que funciona **offline** e sincroniza com o banco de dados da empresa quando configurado.
+Este app roda como **link web** (aberto no navegador, sem instalar nada),
+não mais como APK Android. Um único processo Node serve duas coisas na
+mesma porta/URL:
 
-**Características:**
-- ✅ 8 tipos de checklists diferentes (Laterais e Travessas)
-- ✅ Geração automática de PDFs com assinaturas digitais
-- ✅ Integração com banco de dados MySQL da empresa
-- ✅ Dashboard web em tempo real
-- ✅ Configuração dinâmica de credenciais (sem hardcoding)
-- ✅ Funciona offline - sincroniza quando conectado
+- O **app web** (build estático gerado por `expo export --platform web`,
+  em `dist-web/`).
+- A **API** (Express + tRPC, em `server/`), que gera o PDF do checklist
+  inteiro no servidor (sem depender do navegador/aparelho) e salva tudo
+  no Supabase — banco de dados (tabela `completed_checklists`) e Storage
+  (arquivo do PDF). Isso resolve o problema original do APK: o PDF não é
+  mais salvo localmente no tablet, então não enche mais a memória do
+  aparelho nem trava a geração do checklist.
 
----
+Por serem o mesmo serviço/origem, o front não precisa saber a URL final
+de antemão nem configurar CORS.
 
-## 🚀 Gerando o APK para Android
+## Variáveis de ambiente necessárias
 
-### Opção 1: Expo EAS Build (Recomendado para Produção)
+Copie `.env.example` para `.env` (local) ou preencha no painel da
+plataforma de hospedagem (produção):
 
-```bash
-# 1. Instalar EAS CLI
-npm install -g eas-cli
+| Variável | Onde pegar | Uso |
+|---|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | Painel Supabase → Project Settings → API | Cliente e servidor |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Painel Supabase → Project Settings → API | Cliente (leitura pública) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Painel Supabase → Project Settings → API | **Só servidor** — nunca expor no app |
 
-# 2. Fazer login na conta Expo
-eas login
+Não defina `EXPO_PUBLIC_API_BASE_URL` em produção: deixando vazio, o app
+web usa URLs relativas (mesma origem do próprio serviço).
 
-# 3. Gerar APK
-eas build --platform android --local
-
-# 4. O APK será salvo em: ./dist/
-```
-
-### Opção 2: Build Local com Expo
-
-```bash
-# 1. Instalar dependências
-npm install
-
-# 2. Gerar APK localmente
-npx expo prebuild --clean --platform android
-cd android && ./gradlew assembleRelease
-```
-
-### Opção 3: Teste Rápido com Expo Go
+## Build e start (produção)
 
 ```bash
-# 1. Instalar Expo Go no Android
-# Disponível em: https://play.google.com/store/apps/details?id=host.exp.exponent
-
-# 2. Gerar QR Code
-npm run qr
-
-# 3. Escanear QR Code com Expo Go
+pnpm install
+pnpm build   # gera dist-web/ (app) e dist-server/ (API), nessa ordem
+pnpm start   # sobe o processo único em produção (usa PORT do ambiente)
 ```
 
----
+## Deploy no Render (configuração já pronta)
 
-## ⚙️ Configuração no Dispositivo
+Existe um `render.yaml` na raiz do repositório (`Deshboardproducao`) com o
+serviço já configurado (plano gratuito, build e start commands, health
+check em `/api/health`). Passos:
 
-Após instalar o APK, o IT deve configurar:
+1. Criar conta em [render.com](https://render.com) (login com GitHub, sem
+   precisar de cartão no plano gratuito).
+2. **New +** → **Blueprint** → selecionar o repositório `Deshboardproducao`.
+   O Render lê o `render.yaml` automaticamente e propõe o serviço
+   `checklist-inspecao-industrial`.
+3. Antes de confirmar, preencher as 3 variáveis de ambiente marcadas como
+   secretas (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`) com os valores do seu projeto Supabase.
+4. Deploy. Ao terminar, o Render fornece uma URL fixa
+   (`https://checklist-inspecao-industrial-XXXX.onrender.com`) — esse é o
+   link definitivo para abrir no Chrome do tablet.
 
-### 1. **Área do Administrador** (⋯ menu em Configurações)
+No plano gratuito, o serviço "dorme" depois de ~15 min sem uso e demora
+alguns segundos para acordar na próxima visita — normal, não é erro.
 
-#### SMTP (Opcional - para envio de emails)
-```
-Email: seu-email@gmail.com
-Servidor: smtp.gmail.com
-Porta: 587
-Senha: <senha de app do Gmail>
-```
+## Fluxo completo de uso
 
-#### Rede e Banco de Dados (Obrigatório para sincronizar)
-```
-URL/IP do Servidor: 192.168.1.100 (ou IP da empresa)
-Usuário de Rede: admin
-Senha de Rede: senha123
+1. Inspetor abre o link no Chrome (tablet ou qualquer dispositivo) →
+   preenche o checklist → assina.
+2. Ao finalizar, o app chama o servidor, que gera o PDF (com todas as
+   etapas, medidas e assinaturas) e sobe pro Supabase Storage — nada é
+   salvo permanentemente no aparelho.
+3. O checklist completo (dados + link do PDF) fica na tabela
+   `completed_checklists` do Supabase, disponível na aba Histórico do
+   app a partir de qualquer dispositivo.
 
-Host do Banco: 192.168.1.100
-Porta do Banco: 3306
-Usuário do Banco: root
-Senha do Banco: senha_banco
-Nome do Banco: checklists_db
-```
+## Banco de dados (Supabase)
 
-### 2. **Adicionar Executantes, Líderes e Inspetores**
-
-Ir em Configurações e adicionar os dados de cada pessoa:
-- Nome Completo
-- Matrícula
-- Email (opcional)
-
----
-
-## 📊 Usando o Dashboard
-
-### Acessar o Dashboard
-
-1. **Gerar o Link Gerencial**
-   - Configurar SMTP e Rede na Área do Administrador
-   - Link será gerado automaticamente
-   - Copiar e compartilhar com gerentes
-
-2. **Acessar via Web**
-   ```
-   http://192.168.1.100:3000/dashboard/hash
-   ```
-
-3. **Conectar ao Banco de Dados**
-   - Preencher credenciais do banco
-   - Clicar em "Conectar e Carregar Dados"
-   - Visualizar checklists em tempo real
-
-### Funcionalidades do Dashboard
-
-- 📈 Estatísticas de checklists completados
-- 📋 Lista de todos os checklists
-- 📥 Download de PDFs
-- 🔍 Filtrar por categoria, resultado, data
-- 📊 Gráficos de produção
-
----
-
-## 🔄 Fluxo Completo de Uso
-
-### 1. **Inspetor Preenche Checklist**
-```
-Abrir App → Selecionar Tipo → Preencher Dados → Assinatura → Gerar PDF
-```
-
-### 2. **PDF é Gerado Automaticamente**
-```
-✅ Salvo localmente no dispositivo
-✅ Enviado por email (se SMTP configurado)
-✅ Salvo no banco da empresa (se banco configurado)
-```
-
-### 3. **Gerente Acessa Dashboard**
-```
-Abrir navegador → http://IP:3000/dashboard/hash
-→ Conectar ao banco → Visualizar checklists
-```
-
----
-
-## 🗄️ Estrutura do Banco de Dados
-
-O app cria automaticamente a tabela:
-
-```sql
-CREATE TABLE checklists_inspecao (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  checklist_code VARCHAR(50),
-  categoria VARCHAR(50),
-  inspector_name VARCHAR(100),
-  completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  checklist_data JSON,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-**Campos JSON em checklist_data:**
-- Todas as etapas e resultados
-- Dados do inspetor
-- Assinaturas digitais
-- Datas e números de série
-- Observações
-
----
-
-## 🔐 Segurança
-
-### Credenciais Armazenadas
-
-- ✅ Armazenadas **localmente** no dispositivo (AsyncStorage)
-- ✅ **Não** são enviadas para servidores externos
-- ✅ **Não** são hardcoded no app
-- ✅ Podem ser alteradas a qualquer momento
-
-### Recomendações
-
-1. **Use credenciais específicas** para o app (não use admin)
-2. **Mude a senha** periodicamente
-3. **Restrinja acesso** do banco de dados ao IP da empresa
-4. **Use HTTPS** em produção (configure certificado SSL)
-
----
-
-## 📱 Tipos de Checklists Suportados
-
-| Código | Nome | Categoria |
-|--------|------|-----------|
-| CL-ENG-1029 | Inspeção da Lateral do Truque Barba | Lateral |
-| CL-ENG-1030 | Inspeção da Lateral do Truque Swing Motion | Lateral |
-| CL-ENG-1031 | Inspeção da Lateral do Truque Ride Control | Lateral |
-| CL-ENG-1032 | Inspeção da Lateral do Truque Ride Master/MC/Híbrido | Lateral |
-| CL-ENG-1033 | Inspeção da Travessa do Truque Ride Master/Motion Control | Travessa |
-| CL-ENG-1034 | Inspeção da Travessa do Truque Barber | Travessa |
-| CL-ENG-1035 | Inspeção da Travessa do Truque Ride Control | Travessa |
-| CL-ENG-1036 | Inspeção da Travessa do Truque Swing Motion | Travessa |
-
----
-
-## 🐛 Troubleshooting
-
-### Problema: App não conecta ao banco
-
-**Solução:**
-1. Verificar se o host/IP está correto
-2. Verificar se porta 3306 está aberta
-3. Verificar credenciais do banco
-4. Testar conexão com MySQL Workbench
-
-### Problema: PDFs não são gerados
-
-**Solução:**
-1. Verificar se o dispositivo tem espaço em disco
-2. Verificar permissões de armazenamento
-3. Reiniciar o app
-
-### Problema: Dashboard não carrega dados
-
-**Solução:**
-1. Verificar se o servidor está rodando
-2. Verificar se a tabela existe no banco
-3. Verificar credenciais no dashboard
-4. Verificar logs do servidor
-
----
-
-## 📞 Suporte
-
-Para dúvidas ou problemas:
-1. Verificar este documento
-2. Consultar logs do app (Configurações → Logs)
-3. Testar conexão com banco (Configurações → Teste de Conexão)
-
----
-
-## 📦 Versão
-
-- **Versão do App:** 1.0.0
-- **Versão do React Native:** 0.81.5
-- **Versão do Expo:** 54.0.29
-- **Data de Build:** 21/02/2026
-
----
-
-## ✅ Checklist de Deployment
-
-- [ ] APK gerado e testado
-- [ ] Credenciais de banco configuradas
-- [ ] Banco de dados criado
-- [ ] Executantes, líderes e inspetores adicionados
-- [ ] Dashboard acessível
-- [ ] Teste de checklist completo realizado
-- [ ] PDFs sendo gerados corretamente
-- [ ] Dados sendo salvos no banco
-- [ ] Dashboard mostrando dados em tempo real
+O schema está em `supabase-schema.sql`, na raiz deste diretório — rode
+esse SQL uma vez no editor SQL do painel Supabase para criar a tabela
+`completed_checklists` e o bucket `checklist-pdfs` do Storage (se ainda
+não existirem).
