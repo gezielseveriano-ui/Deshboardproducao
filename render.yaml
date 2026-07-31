@@ -8,7 +8,11 @@ services:
     # --prod=false é necessário porque NODE_ENV=production (abaixo) faria o
     # pnpm pular as devDependencies durante o install - mas o próprio build
     # (esbuild, expo export) precisa delas para rodar.
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
+    # build:web roda com retry: o Metro bundler tem uma falha instável e
+    # conhecida (race condition ao gerar node_modules/react-native-css-
+    # interop/.cache/web.css) que aparece mais em máquinas mais lentas -
+    # tentar de novo automaticamente resolve na grande maioria das vezes.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && (pnpm build:web || pnpm build:web || pnpm build:web) && pnpm build:server
     startCommand: pnpm start
     healthCheckPath: /api/health
     envVars:
