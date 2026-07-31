@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Platform,
 } from "react-native";
 import * as Sharing from "expo-sharing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -24,7 +25,7 @@ import { DatePickerCalendar } from "@/components/date-picker-calendar";
 import { useSyncChecklist } from "@/hooks/use-sync-checklist";
 import { getApiBaseUrl } from "@/constants/oauth";
 import { Calendar } from "react-native-calendars";
-import { resolveLocalPdfPath } from "@/lib/pdf-local-cache";
+import { resolveLocalPdfPath, downloadUrlOnWeb, buildZipBlobUrlOnWeb } from "@/lib/pdf-local-cache";
 
 
 export default function HistoryScreen() {
@@ -51,6 +52,11 @@ export default function HistoryScreen() {
     try {
       if (!item.pdfFileName) {
         Alert.alert("Erro", "PDF não encontrado para este checklist.");
+        return;
+      }
+
+      if (Platform.OS === "web" && /^https?:\/\//i.test(item.pdfFileName)) {
+        window.open(item.pdfFileName, "_blank", "noopener");
         return;
       }
 
@@ -208,6 +214,12 @@ export default function HistoryScreen() {
         // Baixar um único PDF
         const checklist = selectedChecklists[0];
         if (checklist.pdfFileName) {
+          if (Platform.OS === "web" && /^https?:\/\//i.test(checklist.pdfFileName)) {
+            downloadUrlOnWeb(checklist.pdfFileName, `${checklist.checklistCode}.pdf`);
+            Alert.alert("Sucesso", "Download iniciado!");
+            return;
+          }
+
           const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
           if (!localPath) {
             Alert.alert("Erro", "PDF não encontrado ou corrompido.");
@@ -221,6 +233,26 @@ export default function HistoryScreen() {
 
           Alert.alert("Sucesso", "Arquivo baixado com sucesso!");
         }
+      } else if (Platform.OS === "web") {
+        // Baixar múltiplos PDFs em ZIP com nomes únicos (montado no navegador)
+        const files = selectedChecklists
+          .filter((c) => c.pdfFileName && /^https?:\/\//i.test(c.pdfFileName))
+          .map((c, i) => ({
+            url: c.pdfFileName!,
+            name: `${i + 1}_${c.checklistCode}_${c.dataRecuperacao.replace(/\//g, "-")}.pdf`,
+          }));
+
+        if (files.length === 0) {
+          Alert.alert("Erro", "Nenhum PDF válido encontrado para baixar.");
+          return;
+        }
+
+        const zipBlobUrl = await buildZipBlobUrlOnWeb(files);
+        downloadUrlOnWeb(zipBlobUrl, `checklists_${Date.now()}.zip`);
+        URL.revokeObjectURL(zipBlobUrl);
+
+        Alert.alert("Sucesso", `${files.length} arquivo(s) baixado(s) no ZIP!`);
+        return;
       } else {
         // Baixar múltiplos PDFs em ZIP com nomes únicos
         const zip = new JSZip();
@@ -295,6 +327,17 @@ export default function HistoryScreen() {
         // Compartilhar um único PDF
         const checklist = selectedChecklists[0];
         if (checklist.pdfFileName) {
+          if (Platform.OS === "web" && /^https?:\/\//i.test(checklist.pdfFileName)) {
+            // Navegadores não permitem anexar arquivo via mailto: - baixa o
+            // PDF e abre o cliente de email para o usuário anexar na mão.
+            downloadUrlOnWeb(checklist.pdfFileName, `${checklist.checklistCode}.pdf`);
+            window.open(
+              `mailto:?subject=${encodeURIComponent(`Checklist ${checklist.checklistCode}`)}&body=${encodeURIComponent("PDF baixado - anexe o arquivo a este email antes de enviar.")}`,
+              "_blank"
+            );
+            return;
+          }
+
           const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
           if (!localPath) {
             Alert.alert("Erro", "PDF não encontrado ou corrompido.");
@@ -306,6 +349,31 @@ export default function HistoryScreen() {
             mimeType: "application/pdf",
           });
         }
+      } else if (Platform.OS === "web") {
+        const startDate = selectedChecklists[0].dataRecuperacao;
+        const endDate = selectedChecklists[selectedChecklists.length - 1].dataRecuperacao;
+        const subject = `Checklist ${startDate} a ${endDate}`;
+
+        const files = selectedChecklists
+          .filter((c) => c.pdfFileName && /^https?:\/\//i.test(c.pdfFileName))
+          .map((c) => ({
+            url: c.pdfFileName!,
+            name: c.pdfFileName!.split("/").pop() || `${c.checklistCode}.pdf`,
+          }));
+
+        if (files.length === 0) {
+          Alert.alert("Erro", "Nenhum PDF válido encontrado para compartilhar.");
+          return;
+        }
+
+        const zipBlobUrl = await buildZipBlobUrlOnWeb(files);
+        downloadUrlOnWeb(zipBlobUrl, `checklists_${Date.now()}.zip`);
+        URL.revokeObjectURL(zipBlobUrl);
+        window.open(
+          `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent("ZIP baixado - anexe o arquivo a este email antes de enviar.")}`,
+          "_blank"
+        );
+        return;
       } else {
         // Compartilhar múltiplos PDFs em ZIP
         const zip = new JSZip();
@@ -416,7 +484,7 @@ export default function HistoryScreen() {
       <Text className="text-sm text-muted mb-3">Executante: {item.executanteName}</Text>
 
       <Text className="text-xs text-muted mb-3">
-        {new Date(item.dataRecuperacao).toLocaleDateString("pt-BR")}
+        {item.dataRecuperacao || "—"}
         <Text className="text-success"> ✓ OK - Pronto para download</Text>
       </Text>
 

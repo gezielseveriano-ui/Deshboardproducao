@@ -1,4 +1,39 @@
 import * as FileSystem from "expo-file-system/legacy";
+import JSZip from "jszip";
+
+/**
+ * Dispara o download de uma URL (ou blob: URL) no navegador. Só faz
+ * sentido no Platform.OS "web" - não há DOM em nativo.
+ */
+export function downloadUrlOnWeb(url: string, filename: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/**
+ * Baixa várias URLs de PDF e monta um .zip no próprio navegador
+ * (não existe filesystem local de verdade no web para montar isso como
+ * nas plataformas nativas). Retorna uma blob: URL pronta para
+ * downloadUrlOnWeb - quem chamar deve revogar com URL.revokeObjectURL
+ * depois de usar.
+ */
+export async function buildZipBlobUrlOnWeb(
+  files: { url: string; name: string }[]
+): Promise<string> {
+  const zip = new JSZip();
+  for (const file of files) {
+    const response = await fetch(file.url);
+    const blob = await response.blob();
+    zip.file(file.name, blob);
+  }
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+  return URL.createObjectURL(zipBlob);
+}
 
 export async function validatePdfExists(pdfPath: string): Promise<boolean> {
   try {
