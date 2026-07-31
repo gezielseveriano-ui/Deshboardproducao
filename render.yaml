@@ -5,7 +5,10 @@ services:
     plan: free
     region: oregon
     rootDir: checklist-inspecao-industrial
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    # --prod=false é necessário porque NODE_ENV=production (abaixo) faria o
+    # pnpm pular as devDependencies durante o install - mas o próprio build
+    # (esbuild, expo export) precisa delas para rodar.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
     startCommand: pnpm start
     healthCheckPath: /api/health
     envVars:
