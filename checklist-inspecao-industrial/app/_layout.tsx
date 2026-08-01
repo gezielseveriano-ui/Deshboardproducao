@@ -5,7 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
-import { Platform } from "react-native";
+import { Platform, View, ActivityIndicator } from "react-native";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { ChecklistProvider } from "@/lib/checklist-context";
@@ -13,6 +13,9 @@ import { SignaturesProvider } from "@/lib/signatures-context";
 import { ReportsProvider } from "@/lib/reports-context";
 import { SyncProvider } from "@/lib/sync-context";
 import { AdminConfigProvider } from "@/lib/admin-config-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { LoginScreen } from "@/components/login-screen";
+import { useColors } from "@/hooks/use-colors";
 import {
   SafeAreaFrameContext,
   SafeAreaInsetsContext,
@@ -31,6 +34,35 @@ const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 export const unstable_settings = {
   anchor: "(tabs)",
 };
+
+// Bloqueia todo o app atrás de login. Cadastros só são criados pelo admin
+// direto no painel do Supabase (Authentication > Users) - não existe
+// cadastro público aqui de propósito.
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { session, isLoading, isPasswordRecovery } = useAuth();
+  const colors = useColors();
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.background,
+        }}
+      >
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (isPasswordRecovery || !session) {
+    return <LoginScreen />;
+  }
+
+  return <>{children}</>;
+}
 
 export default function RootLayout() {
   const initialInsets = initialWindowMetrics?.insets ?? DEFAULT_WEB_INSETS;
@@ -97,6 +129,8 @@ export default function RootLayout() {
 
   const content = (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+      <AuthGate>
       <AdminConfigProvider>
         <SyncProvider>
           <ReportsProvider>
@@ -122,6 +156,8 @@ export default function RootLayout() {
         </ReportsProvider>
       </SyncProvider>
       </AdminConfigProvider>
+      </AuthGate>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 

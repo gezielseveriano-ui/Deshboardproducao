@@ -78,3 +78,25 @@ O schema está em `supabase-schema.sql`, na raiz deste diretório — rode
 esse SQL uma vez no editor SQL do painel Supabase para criar a tabela
 `completed_checklists` e o bucket `checklist-pdfs` do Storage (se ainda
 não existirem).
+
+## Login e criação de contas
+
+O app inteiro fica atrás de login (Supabase Auth) - sem login, só
+aparece a tela de entrar. De propósito, **não existe cadastro público**:
+qualquer pessoa logada tem acesso a tudo (não há diferença de
+permissão entre contas), então só quem já tem uma conta criada
+consegue entrar.
+
+Para criar um login para alguém:
+1. Painel do Supabase → projeto **Checklist** → **Authentication** →
+   **Users** → **Add user** → **Create new user**.
+2. Preencha o email e uma senha temporária, e marque **Auto Confirm
+   User** (senão a pessoa precisaria confirmar o email antes de
+   conseguir entrar).
+3. Passe o email e a senha temporária para a pessoa. Se ela quiser
+   trocar a senha depois, usa o "Esqueci minha senha" na tela de
+   login - o Supabase manda um email de recuperação sozinho, não
+   precisa configurar nada a mais.
+
+Para remover o acesso de alguém, basta excluir o usuário na mesma tela
+(Authentication → Users).

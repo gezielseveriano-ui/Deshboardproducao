@@ -3,6 +3,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useSignatures } from "@/lib/signatures-context";
 import { useAdminConfig } from "@/lib/admin-config-context";
+import { useAuth } from "@/lib/auth-context";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -15,6 +16,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const signatures = useSignatures();
   const adminConfig = useAdminConfig();
+  const { signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("executantes");
   const [isResetting, setIsResetting] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
@@ -201,12 +203,25 @@ export default function SettingsScreen() {
           {/* Cabeçalho */}
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-3xl font-bold text-foreground">Configurações</Text>
-            <TouchableOpacity
-              onPress={() => setShowAdminMenu(!showAdminMenu)}
-              className="p-2"
-            >
-              <MaterialIcons name="more-vert" size={24} color={colors.primary} />
-            </TouchableOpacity>
+            <View className="flex-row items-center gap-1">
+              <TouchableOpacity
+                onPress={() =>
+                  Alert.alert("Sair", "Deseja sair da sua conta?", [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Sair", style: "destructive", onPress: () => signOut() },
+                  ])
+                }
+                className="p-2"
+              >
+                <MaterialIcons name="logout" size={24} color={colors.error} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowAdminMenu(!showAdminMenu)}
+                className="p-2"
+              >
+                <MaterialIcons name="more-vert" size={24} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Menu de Três Pontinhos */}

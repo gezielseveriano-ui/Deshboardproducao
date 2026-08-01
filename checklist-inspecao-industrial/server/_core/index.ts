@@ -100,6 +100,15 @@ async function startServer() {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const webBuildPath = path.join(__dirname, "..", "dist-web");
     app.use(express.static(webBuildPath, { extensions: ["html"] }));
+
+    // Fallback para index.html em qualquer rota GET não-API que não bateu
+    // em um arquivo estático - necessário para links como o de
+    // redefinição de senha do Supabase (/reset-password#access_token=...),
+    // que não existem como página exportada, mas precisam carregar o app
+    // para o próprio JS (via onAuthStateChange) tratar o token na URL.
+    app.get(/^(?!\/api).*/, (_req, res) => {
+      res.sendFile(path.join(webBuildPath, "index.html"));
+    });
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
