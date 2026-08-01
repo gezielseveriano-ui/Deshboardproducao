@@ -2,14 +2,13 @@ import { useRouter } from "expo-router";
 import { useReports } from "@/lib/reports-context";
 import { useChecklist } from "@/lib/checklist-context";
 import { useColors } from "@/hooks/use-colors";
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import {
   ScrollView,
   View,
   Text,
   TouchableOpacity,
   TextInput,
-  FlatList,
   Alert,
   ActivityIndicator,
   Modal,
@@ -27,6 +26,77 @@ import { getApiBaseUrl } from "@/constants/oauth";
 import { Calendar } from "react-native-calendars";
 import { resolveLocalPdfPath, downloadUrlOnWeb, buildZipBlobUrlOnWeb } from "@/lib/pdf-local-cache";
 
+
+function HistoryItemCard({
+  item,
+  isSelected,
+  onToggleSelect,
+  onViewPDF,
+  isLoadingPDF,
+  colors,
+}: {
+  item: CompletedChecklistRecord;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
+  onViewPDF: (item: CompletedChecklistRecord) => void;
+  isLoadingPDF: string | null;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const conteudo = (
+    <View>
+      <View className="flex-row items-center justify-between mb-2">
+        <Text className="text-lg font-semibold text-foreground">
+          {item.checklistCode}
+        </Text>
+        <View className="flex-row gap-2">
+          <View
+            className="w-6 h-6 rounded border-2 items-center justify-center"
+            style={{
+              borderColor: colors.primary,
+              backgroundColor: isSelected ? colors.primary : "transparent",
+            }}
+          >
+            {isSelected && <Text className="text-white font-bold">✓</Text>}
+          </View>
+        </View>
+      </View>
+
+      <Text className="text-sm text-muted mb-1">{item.checklistCode}</Text>
+      {item.pdfFileName && (
+        <Text className="text-sm text-primary mb-2">
+          📄 {item.pdfFileName.split("/").pop()?.replace(".pdf", "")}
+        </Text>
+      )}
+      <Text className="text-sm text-muted mb-1">Modelo: {item.modelo}</Text>
+      <Text className="text-sm text-muted mb-3">Executante: {item.executanteName}</Text>
+
+      <Text className="text-xs text-muted mb-3">
+        {item.dataRecuperacao || "—"}
+        <Text className="text-success"> ✓ OK - Pronto para download</Text>
+      </Text>
+    </View>
+  );
+
+  return (
+    <View
+      className="bg-surface rounded-lg p-4 mb-4 border border-border"
+      style={{ borderColor: colors.border }}
+    >
+      <Pressable onPress={() => onToggleSelect(item.id)}>{conteudo}</Pressable>
+
+      <TouchableOpacity
+        className="bg-primary rounded-lg py-2 items-center mt-3"
+        onPress={() => onViewPDF(item)}
+      >
+        {isLoadingPDF === item.id ? (
+          <ActivityIndicator color={colors.background} />
+        ) : (
+          <Text className="text-background font-semibold">Ver PDF</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function HistoryScreen() {
   const colors = useColors();
@@ -329,65 +399,22 @@ export default function HistoryScreen() {
   };
 
   const renderItem = ({ item }: { item: CompletedChecklistRecord }) => (
-    // O botão "Ver PDF" fica fora do Pressable de seleção (irmão, não
-    // filho) para que tocar nele nunca também marque/desmarque o card.
-    <View
-      className="bg-surface rounded-lg p-4 mb-3 border border-border"
-      style={{ borderColor: colors.border }}
-    >
-      <Pressable onPress={() => toggleChecklistSelection(item.id)}>
-        <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-lg font-semibold text-foreground">
-            {item.checklistCode}
-          </Text>
-          <View className="flex-row gap-2">
-            <View
-              className="w-6 h-6 rounded border-2 items-center justify-center"
-              style={{
-                borderColor: colors.primary,
-                backgroundColor: selectedChecklistIds.has(item.id)
-                  ? colors.primary
-                  : "transparent",
-              }}
-            >
-              {selectedChecklistIds.has(item.id) && (
-                <Text className="text-white font-bold">✓</Text>
-              )}
-            </View>
-          </View>
-        </View>
-
-        <Text className="text-sm text-muted mb-1">{item.checklistCode}</Text>
-        {item.pdfFileName && (
-          <Text className="text-sm text-primary mb-2">
-            📄 {item.pdfFileName.split("/").pop()?.replace(".pdf", "")}
-          </Text>
-        )}
-        <Text className="text-sm text-muted mb-1">Modelo: {item.modelo}</Text>
-        <Text className="text-sm text-muted mb-3">Executante: {item.executanteName}</Text>
-
-        <Text className="text-xs text-muted mb-3">
-          {item.dataRecuperacao || "—"}
-          <Text className="text-success"> ✓ OK - Pronto para download</Text>
-        </Text>
-      </Pressable>
-
-      <TouchableOpacity
-        className="bg-primary rounded-lg py-2 items-center"
-        onPress={() => handleViewPDF(item)}
-      >
-        {isLoadingPDF === item.id ? (
-          <ActivityIndicator color={colors.background} />
-        ) : (
-          <Text className="text-background font-semibold">Ver PDF</Text>
-        )}
-      </TouchableOpacity>
-    </View>
+    <HistoryItemCard
+      item={item}
+      isSelected={selectedChecklistIds.has(item.id)}
+      onToggleSelect={toggleChecklistSelection}
+      onViewPDF={handleViewPDF}
+      isLoadingPDF={isLoadingPDF}
+      colors={colors}
+    />
   );
 
   return (
     <ScreenContainer className="bg-background">
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 96 }}
+      >
         <Text className="text-2xl font-bold text-foreground mb-4">
           Histórico de Checklists
         </Text>
@@ -510,17 +537,15 @@ export default function HistoryScreen() {
         )}
 
         {/* Lista de Checklists */}
-        <FlatList
-          data={filteredChecklists}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          scrollEnabled={false}
-          ListEmptyComponent={
-            <View className="items-center justify-center py-8">
-              <Text className="text-muted">Nenhum checklist encontrado</Text>
-            </View>
-          }
-        />
+        {filteredChecklists.length === 0 ? (
+          <View className="items-center justify-center py-8">
+            <Text className="text-muted">Nenhum checklist encontrado</Text>
+          </View>
+        ) : (
+          filteredChecklists.map((item) => (
+            <Fragment key={item.id}>{renderItem({ item })}</Fragment>
+          ))
+        )}
 
         {/* Botões de Ação */}
         {selectedChecklistIds.size > 0 && (
