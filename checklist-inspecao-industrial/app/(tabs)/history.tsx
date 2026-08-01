@@ -502,6 +502,20 @@ export default function HistoryScreen() {
           ))}
         </View>
 
+        {/* Marcar Todos */}
+        {filteredChecklists.length > 0 && (
+          <TouchableOpacity
+            className="bg-blue-600 rounded-lg py-3 items-center mb-3"
+            onPress={() =>
+              setSelectedChecklistIds(new Set(filteredChecklists.map((c) => c.id)))
+            }
+          >
+            <Text className="text-white font-semibold">
+              Marcar Todos ({filteredChecklists.length})
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Lista de Checklists */}
         <FlatList
           data={filteredChecklists}
