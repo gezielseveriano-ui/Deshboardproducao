@@ -2,7 +2,7 @@ import { ScrollView, Text, View, TouchableOpacity, TextInput } from "react-nativ
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useChecklist } from "@/lib/checklist-context";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ResultadoVerificacao } from "@/lib/types";
 import { useColors } from "@/hooks/use-colors";
 import { ChecklistType } from "@/lib/checklist-configs";
@@ -13,27 +13,24 @@ export default function InitialVerificationsScreen() {
   const { checklistType } = useLocalSearchParams<{ checklistType?: string }>();
   const { checklist, updateVerificacoesIniciais, createNewChecklist } = useChecklist();
 
-  // Criar checklist quando receber checklistType
-  // IMPORTANTE: Criar novo checklist APENAS se não existe um do mesmo tipo
-  // Evita reset acidental em React StrictMode (efeito roda 2x em dev)
+  // Criar um checklist em branco sempre que esta tela é aberta para um
+  // checklistType. O guard por ref (em vez de comparar com o checklist
+  // que já está no contexto) evita recriar 2x no React StrictMode em dev,
+  // sem o efeito colateral de "pular" a criação quando o usuário inicia
+  // um checklist do MESMO tipo que acabou de terminar - nesse caso
+  // `checklist` ainda é o anterior (completo), então comparar tipos dizia
+  // "já existe, não recria" e todos os dados antigos (verificações,
+  // assinaturas, matrícula) vazavam para o checklist novo.
+  const criouChecklistRef = useRef(false);
   useEffect(() => {
-    if (checklistType && (!checklist || checklist.checklistType !== checklistType)) {
-      console.log('[InitialVerifications] Criando novo checklist para tipo:', checklistType);
+    if (checklistType && !criouChecklistRef.current) {
+      criouChecklistRef.current = true;
       createNewChecklist(checklistType as ChecklistType);
     }
   }, [checklistType]);
-  // Sincronizar estado local com o contexto
-  useEffect(() => {
-    if (checklist?.verificacoesIniciais?.trinca) {
-      setTrinca(checklist.verificacoesIniciais.trinca);
-    }
-    if (checklist?.verificacoesIniciais?.empenos) {
-      setEmpenos(checklist.verificacoesIniciais.empenos);
-    }
-  }, [checklist?.verificacoesIniciais]);
 
-  const [trinca, setTrinca] = useState<ResultadoVerificacao>("APROVADO");
-  const [empenos, setEmpenos] = useState<ResultadoVerificacao>("APROVADO");
+  const [trinca, setTrinca] = useState<ResultadoVerificacao | null>(null);
+  const [empenos, setEmpenos] = useState<ResultadoVerificacao | null>(null);
   const [assinatura, setAssinatura] = useState("");
   const [matricula, setMatricula] = useState("");
   const [numeroRelatorio, setNumeroRelatorio] = useState("");
