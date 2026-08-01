@@ -630,15 +630,31 @@ export default function HistoryScreen() {
         />
 
         {/* Botões de Ação */}
-        {selectedChecklistIds.size > 0 && (
+        {filteredChecklists.length > 0 && (
           <View className="gap-3 mt-4 mb-4">
-            <TouchableOpacity
-              className="bg-blue-600 rounded-lg py-3 items-center"
-              onPress={() => setSelectedChecklistIds(new Set())}
-            >
-              <Text className="text-white font-semibold">Desmarcar Todos</Text>
-            </TouchableOpacity>
+            <View className="flex-row gap-2">
+              <TouchableOpacity
+                className="flex-1 bg-blue-600 rounded-lg py-3 items-center"
+                onPress={() =>
+                  setSelectedChecklistIds(new Set(filteredChecklists.map((c) => c.id)))
+                }
+              >
+                <Text className="text-white font-semibold">
+                  Marcar Todos ({filteredChecklists.length})
+                </Text>
+              </TouchableOpacity>
 
+              {selectedChecklistIds.size > 0 && (
+                <TouchableOpacity
+                  className="flex-1 bg-blue-600 rounded-lg py-3 items-center"
+                  onPress={() => setSelectedChecklistIds(new Set())}
+                >
+                  <Text className="text-white font-semibold">Desmarcar Todos</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {selectedChecklistIds.size > 0 && (
             <View className="flex-row gap-2">
               <TouchableOpacity
                 className="flex-1 bg-green-600 rounded-lg py-3 items-center"
@@ -668,6 +684,7 @@ export default function HistoryScreen() {
                 )}
               </TouchableOpacity>
             </View>
+            )}
           </View>
         )}
       </ScrollView>
