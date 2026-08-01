@@ -45,7 +45,6 @@ export default function HistoryScreen() {
   const [isLoadingZip, setIsLoadingZip] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedChecklistIds, setSelectedChecklistIds] = useState<Set<string>>(new Set());
-  const [isDownloadingSelected, setIsDownloadingSelected] = useState(false);
 
   const handleViewPDF = async (item: CompletedChecklistRecord) => {
     setIsLoadingPDF(item.id);
@@ -195,119 +194,6 @@ export default function HistoryScreen() {
     ).filter(Boolean);
     return ["Todos", ...unique];
   }, [completedChecklists]);
-
-  // Download sequencial de PDFs selecionados
-  const handleDownloadSelected = async () => {
-    if (selectedChecklistIds.size === 0) {
-      Alert.alert("Aviso", "Selecione pelo menos um checklist para baixar.");
-      return;
-    }
-
-    setIsDownloadingSelected(true);
-    try {
-      const selectedArray = Array.from(selectedChecklistIds);
-      const selectedChecklists = filteredChecklists.filter((c) =>
-        selectedArray.includes(c.id)
-      );
-
-      if (selectedArray.length === 1) {
-        // Baixar um único PDF
-        const checklist = selectedChecklists[0];
-        if (checklist.pdfFileName) {
-          if (Platform.OS === "web" && /^https?:\/\//i.test(checklist.pdfFileName)) {
-            downloadUrlOnWeb(checklist.pdfFileName, `${checklist.checklistCode}.pdf`);
-            Alert.alert("Sucesso", "Download iniciado!");
-            return;
-          }
-
-          const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
-          if (!localPath) {
-            Alert.alert("Erro", "PDF não encontrado ou corrompido.");
-            return;
-          }
-
-          await Sharing.shareAsync(localPath, {
-            UTI: "com.adobe.pdf",
-            mimeType: "application/pdf",
-          });
-
-          Alert.alert("Sucesso", "Arquivo baixado com sucesso!");
-        }
-      } else if (Platform.OS === "web") {
-        // Baixar múltiplos PDFs em ZIP com nomes únicos (montado no navegador)
-        const files = selectedChecklists
-          .filter((c) => c.pdfFileName && /^https?:\/\//i.test(c.pdfFileName))
-          .map((c, i) => ({
-            url: c.pdfFileName!,
-            name: `${i + 1}_${c.checklistCode}_${c.dataRecuperacao.replace(/\//g, "-")}.pdf`,
-          }));
-
-        if (files.length === 0) {
-          Alert.alert("Erro", "Nenhum PDF válido encontrado para baixar.");
-          return;
-        }
-
-        const zipBlobUrl = await buildZipBlobUrlOnWeb(files);
-        downloadUrlOnWeb(zipBlobUrl, `checklists_${Date.now()}.zip`);
-        URL.revokeObjectURL(zipBlobUrl);
-
-        Alert.alert("Sucesso", `${files.length} arquivo(s) baixado(s) no ZIP!`);
-        return;
-      } else {
-        // Baixar múltiplos PDFs em ZIP com nomes únicos
-        const zip = new JSZip();
-        let successCount = 0;
-
-        for (let i = 0; i < selectedChecklists.length; i++) {
-          const checklist = selectedChecklists[i];
-          if (checklist.pdfFileName) {
-            try {
-              const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
-              if (localPath) {
-                const pdfData = await FileSystem.readAsStringAsync(
-                  localPath,
-                  { encoding: FileSystem.EncodingType.Base64 }
-                );
-                // Gerar nome único com sequência para evitar duplicatas
-                const safeDate = checklist.dataRecuperacao.replace(/\//g, "-");
-                const uniqueFileName = `${i + 1}_${checklist.checklistCode}_${safeDate}.pdf`;
-                zip.file(uniqueFileName, pdfData, { base64: true });
-                successCount++;
-              }
-            } catch (error) {
-              console.error(`Erro ao adicionar ${checklist.checklistCode} ao ZIP:`, error);
-            }
-          }
-        }
-
-        if (successCount === 0) {
-          Alert.alert("Erro", "Nenhum PDF válido encontrado para baixar.");
-          return;
-        }
-
-        // Gerar ZIP
-        const zipData = await zip.generateAsync({ type: "base64" });
-        const zipPath = `${FileSystem.cacheDirectory}checklists_${Date.now()}.zip`;
-
-        await FileSystem.writeAsStringAsync(zipPath, zipData, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        // Compartilhar ZIP para download
-        await Sharing.shareAsync(zipPath, {
-          mimeType: "application/zip",
-          UTI: "public.zip-archive",
-        });
-
-        Alert.alert("Sucesso", `${successCount} arquivo(s) baixado(s) no ZIP!`);
-      }
-    } catch (error) {
-      console.error("Erro ao baixar PDFs:", error);
-      Alert.alert("Erro", "Falha ao baixar checklists.");
-    } finally {
-      setIsDownloadingSelected(false);
-    }
-  };
 
   // Compartilhar PDFs selecionados por email
   const handleShareByEmail = async () => {
@@ -630,61 +516,28 @@ export default function HistoryScreen() {
         />
 
         {/* Botões de Ação */}
-        {filteredChecklists.length > 0 && (
+        {selectedChecklistIds.size > 0 && (
           <View className="gap-3 mt-4 mb-4">
-            <View className="flex-row gap-2">
-              <TouchableOpacity
-                className="flex-1 bg-blue-600 rounded-lg py-3 items-center"
-                onPress={() =>
-                  setSelectedChecklistIds(new Set(filteredChecklists.map((c) => c.id)))
-                }
-              >
+            <TouchableOpacity
+              className="bg-blue-600 rounded-lg py-3 items-center"
+              onPress={() => setSelectedChecklistIds(new Set())}
+            >
+              <Text className="text-white font-semibold">Desmarcar Todos</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="bg-blue-600 rounded-lg py-3 items-center"
+              onPress={handleShareByEmail}
+              disabled={isLoadingZip}
+            >
+              {isLoadingZip ? (
+                <ActivityIndicator color="white" />
+              ) : (
                 <Text className="text-white font-semibold">
-                  Marcar Todos ({filteredChecklists.length})
+                  📧 Email ({selectedChecklistIds.size})
                 </Text>
-              </TouchableOpacity>
-
-              {selectedChecklistIds.size > 0 && (
-                <TouchableOpacity
-                  className="flex-1 bg-blue-600 rounded-lg py-3 items-center"
-                  onPress={() => setSelectedChecklistIds(new Set())}
-                >
-                  <Text className="text-white font-semibold">Desmarcar Todos</Text>
-                </TouchableOpacity>
               )}
-            </View>
-
-            {selectedChecklistIds.size > 0 && (
-            <View className="flex-row gap-2">
-              <TouchableOpacity
-                className="flex-1 bg-green-600 rounded-lg py-3 items-center"
-                onPress={handleDownloadSelected}
-                disabled={isDownloadingSelected}
-              >
-                {isDownloadingSelected ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="text-white font-semibold">
-                    📥 Baixar ({selectedChecklistIds.size})
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-1 bg-blue-600 rounded-lg py-3 items-center"
-                onPress={handleShareByEmail}
-                disabled={isLoadingZip}
-              >
-                {isLoadingZip ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="text-white font-semibold">
-                    📧 Email ({selectedChecklistIds.size})
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-            )}
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
