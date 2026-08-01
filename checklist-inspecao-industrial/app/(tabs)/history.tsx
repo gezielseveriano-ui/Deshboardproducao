@@ -47,18 +47,25 @@ export default function HistoryScreen() {
   const [selectedChecklistIds, setSelectedChecklistIds] = useState<Set<string>>(new Set());
 
   const handleViewPDF = async (item: CompletedChecklistRecord) => {
+    if (!item.pdfFileName) {
+      Alert.alert("Erro", "PDF não encontrado para este checklist.");
+      return;
+    }
+
+    if (Platform.OS === "web" && /^https?:\/\//i.test(item.pdfFileName)) {
+      // Navega na mesma aba (em vez de abrir uma nova) porque tanto
+      // window.open() quanto um <a target="_blank"> clicado via JS ou
+      // renderizado como href do TouchableOpacity são bloqueados pelo
+      // navegador nesta tela - o clique perde a confiança de "gesto do
+      // usuário" ao passar pelo sistema de toque do React Native Web,
+      // mesmo com userActivation.isActive true e sem preventDefault em
+      // lugar nenhum. Navegação na mesma aba não sofre desse bloqueio.
+      window.location.href = item.pdfFileName;
+      return;
+    }
+
     setIsLoadingPDF(item.id);
     try {
-      if (!item.pdfFileName) {
-        Alert.alert("Erro", "PDF não encontrado para este checklist.");
-        return;
-      }
-
-      if (Platform.OS === "web" && /^https?:\/\//i.test(item.pdfFileName)) {
-        window.open(item.pdfFileName, "_blank", "noopener");
-        return;
-      }
-
       const localPath = await resolveLocalPdfPath(item.pdfFileName);
       if (!localPath) {
         Alert.alert(
@@ -217,10 +224,7 @@ export default function HistoryScreen() {
             // Navegadores não permitem anexar arquivo via mailto: - baixa o
             // PDF e abre o cliente de email para o usuário anexar na mão.
             downloadUrlOnWeb(checklist.pdfFileName, `${checklist.checklistCode}.pdf`);
-            window.open(
-              `mailto:?subject=${encodeURIComponent(`Checklist ${checklist.checklistCode}`)}&body=${encodeURIComponent("PDF baixado - anexe o arquivo a este email antes de enviar.")}`,
-              "_blank"
-            );
+            window.location.href = `mailto:?subject=${encodeURIComponent(`Checklist ${checklist.checklistCode}`)}&body=${encodeURIComponent("PDF baixado - anexe o arquivo a este email antes de enviar.")}`;
             return;
           }
 
@@ -255,10 +259,7 @@ export default function HistoryScreen() {
         const zipBlobUrl = await buildZipBlobUrlOnWeb(files);
         downloadUrlOnWeb(zipBlobUrl, `checklists_${Date.now()}.zip`);
         URL.revokeObjectURL(zipBlobUrl);
-        window.open(
-          `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent("ZIP baixado - anexe o arquivo a este email antes de enviar.")}`,
-          "_blank"
-        );
+        window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent("ZIP baixado - anexe o arquivo a este email antes de enviar.")}`;
         return;
       } else {
         // Compartilhar múltiplos PDFs em ZIP
@@ -317,32 +318,29 @@ export default function HistoryScreen() {
     }
   };
 
+  const toggleChecklistSelection = (id: string) => {
+    const newSelected = new Set(selectedChecklistIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedChecklistIds(newSelected);
+  };
+
   const renderItem = ({ item }: { item: CompletedChecklistRecord }) => (
+    // O botão "Ver PDF" fica fora do Pressable de seleção (irmão, não
+    // filho) para que tocar nele nunca também marque/desmarque o card.
     <View
       className="bg-surface rounded-lg p-4 mb-3 border border-border"
       style={{ borderColor: colors.border }}
     >
-      <View className="flex-row items-center justify-between mb-2">
-        <Text className="text-lg font-semibold text-foreground">
-          {item.checklistCode}
-        </Text>
-        <View className="flex-row gap-2">
-          <Pressable
-            onPress={() => {
-              const newSelected = new Set(selectedChecklistIds);
-              if (newSelected.has(item.id)) {
-                newSelected.delete(item.id);
-              } else {
-                newSelected.add(item.id);
-              }
-              setSelectedChecklistIds(newSelected);
-            }}
-            style={({ pressed }) => [
-              {
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
+      <Pressable onPress={() => toggleChecklistSelection(item.id)}>
+        <View className="flex-row items-center justify-between mb-2">
+          <Text className="text-lg font-semibold text-foreground">
+            {item.checklistCode}
+          </Text>
+          <View className="flex-row gap-2">
             <View
               className="w-6 h-6 rounded border-2 items-center justify-center"
               style={{
@@ -356,39 +354,34 @@ export default function HistoryScreen() {
                 <Text className="text-white font-bold">✓</Text>
               )}
             </View>
-          </Pressable>
+          </View>
         </View>
-      </View>
 
-      <Text className="text-sm text-muted mb-1">{item.checklistCode}</Text>
-      {item.pdfFileName && (
-        <Text className="text-sm text-primary mb-2">
-          📄 {item.pdfFileName.split("/").pop()?.replace(".pdf", "")}
+        <Text className="text-sm text-muted mb-1">{item.checklistCode}</Text>
+        {item.pdfFileName && (
+          <Text className="text-sm text-primary mb-2">
+            📄 {item.pdfFileName.split("/").pop()?.replace(".pdf", "")}
+          </Text>
+        )}
+        <Text className="text-sm text-muted mb-1">Modelo: {item.modelo}</Text>
+        <Text className="text-sm text-muted mb-3">Executante: {item.executanteName}</Text>
+
+        <Text className="text-xs text-muted mb-3">
+          {item.dataRecuperacao || "—"}
+          <Text className="text-success"> ✓ OK - Pronto para download</Text>
         </Text>
-      )}
-      <Text className="text-sm text-muted mb-1">Modelo: {item.modelo}</Text>
-      <Text className="text-sm text-muted mb-3">Executante: {item.executanteName}</Text>
+      </Pressable>
 
-      <Text className="text-xs text-muted mb-3">
-        {item.dataRecuperacao || "—"}
-        <Text className="text-success"> ✓ OK - Pronto para download</Text>
-      </Text>
-
-      <View className="flex-row gap-2">
-        <TouchableOpacity
-          className="flex-1 bg-primary rounded-lg py-2 items-center"
-          onPress={() => handleViewPDF(item)}
-          disabled={isLoadingPDF === item.id}
-        >
-          {isLoadingPDF === item.id ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text className="text-background font-semibold">Ver PDF</Text>
-          )}
-        </TouchableOpacity>
-
-
-      </View>
+      <TouchableOpacity
+        className="bg-primary rounded-lg py-2 items-center"
+        onPress={() => handleViewPDF(item)}
+      >
+        {isLoadingPDF === item.id ? (
+          <ActivityIndicator color={colors.background} />
+        ) : (
+          <Text className="text-background font-semibold">Ver PDF</Text>
+        )}
+      </TouchableOpacity>
     </View>
   );
 

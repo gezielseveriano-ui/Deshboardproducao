@@ -2,17 +2,30 @@ import * as FileSystem from "expo-file-system/legacy";
 import JSZip from "jszip";
 
 /**
+ * Dispara um clique num <a> real no próximo tick, em vez de síncrono
+ * dentro do onPress do React Native Web (que se mostrou pouco confiável
+ * para disparar downloads aqui).
+ */
+function clickDeferred(configure: (link: HTMLAnchorElement) => void) {
+  setTimeout(() => {
+    const link = document.createElement("a");
+    configure(link);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, 0);
+}
+
+/**
  * Dispara o download de uma URL (ou blob: URL) no navegador. Só faz
  * sentido no Platform.OS "web" - não há DOM em nativo.
  */
 export function downloadUrlOnWeb(url: string, filename: string) {
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.rel = "noopener";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  clickDeferred((link) => {
+    link.href = url;
+    link.download = filename;
+    link.rel = "noopener";
+  });
 }
 
 /**
