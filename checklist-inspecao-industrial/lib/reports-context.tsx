@@ -151,8 +151,19 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       if (isOnline && deviceId) {
         try {
           console.log('[Reports] Sincronizando novo checklist com Supabase...');
-          await SupabaseSync.saveChecklistToSupabase(record, deviceId);
+          const saved = await SupabaseSync.saveChecklistToSupabase(record, deviceId);
           console.log('[Reports] ✓ Checklist sincronizado com Supabase');
+
+          // O id local (gerado no aparelho) é diferente do id real da linha
+          // no Supabase (gerado lá) - corrige o id local pro id real, senão
+          // ações futuras nesse checklist (como excluir) não acham a linha.
+          if (saved?.id && saved.id !== record.id) {
+            setCompletedChecklists((prev) => {
+              const fixed = prev.map((c) => (c.id === record.id ? { ...c, id: saved.id } : c));
+              AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(fixed));
+              return fixed;
+            });
+          }
         } catch (error) {
           console.warn('[Reports] Erro ao sincronizar com Supabase (será tentado depois):', error);
           // Continuar mesmo se falhar - dados estão locais
@@ -173,8 +184,12 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
 
     for (const id of ids) {
       const record = completedChecklists.find((c) => c.id === id);
+      if (!record) {
+        failed++;
+        continue;
+      }
       try {
-        await SupabaseSync.deleteChecklistFromSupabase(id, record?.pdfFileName);
+        await SupabaseSync.deleteChecklistFromSupabase(record);
         idsDeleted.add(id);
       } catch (error) {
         console.warn('[Reports] Erro ao excluir checklist no Supabase:', id, error);

@@ -122,17 +122,19 @@ export async function loadChecklistsFromSupabase(): Promise<
   }
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Excluir um checklist do Supabase (linha da tabela + PDF no Storage,
  * se o pdf_file_name apontar pro bucket checklist-pdfs).
  */
 export async function deleteChecklistFromSupabase(
-  id: string,
-  pdfFileName?: string | null
+  record: Pick<CompletedChecklistRecord, "id" | "checklistCode" | "timestamp" | "pdfFileName">
 ): Promise<void> {
   if (!isSupabaseConfigured) {
     throw new Error("Supabase não configurado (EXPO_PUBLIC_SUPABASE_URL/ANON_KEY ausentes)");
   }
+  const { id, checklistCode, timestamp, pdfFileName } = record;
   try {
     console.log("[Supabase] Excluindo checklist:", id);
 
@@ -154,10 +156,39 @@ export async function deleteChecklistFromSupabase(
       }
     }
 
-    const { error } = await supabase.from("completed_checklists").delete().eq("id", id);
-    if (error) {
-      console.error("[Supabase] Erro ao excluir:", error);
-      throw error;
+    // O id local (checklist_<timestamp>, gerado no aparelho) pode ser
+    // diferente do id real da linha no Supabase (uuid gerado lá) em
+    // checklists sincronizados antes dessa correção - só tenta excluir por
+    // id se for um uuid de verdade.
+    let deletedCount = 0;
+    if (UUID_REGEX.test(id)) {
+      const { error, count } = await supabase
+        .from("completed_checklists")
+        .delete({ count: "exact" })
+        .eq("id", id);
+      if (error) {
+        console.error("[Supabase] Erro ao excluir por id:", error);
+        throw error;
+      }
+      deletedCount = count ?? 0;
+    }
+
+    if (deletedCount === 0) {
+      // Fallback: acha a linha certa pelo código + timestamp do checklist.
+      const { error, count } = await supabase
+        .from("completed_checklists")
+        .delete({ count: "exact" })
+        .eq("checklist_code", checklistCode)
+        .eq("timestamp", timestamp);
+      if (error) {
+        console.error("[Supabase] Erro ao excluir por checklist_code/timestamp:", error);
+        throw error;
+      }
+      deletedCount = count ?? 0;
+    }
+
+    if (deletedCount === 0) {
+      throw new Error("Checklist não encontrado no servidor (pode já ter sido excluído).");
     }
 
     console.log("[Supabase] ✓ Checklist excluído com sucesso:", id);
