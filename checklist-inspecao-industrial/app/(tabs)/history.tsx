@@ -233,12 +233,15 @@ export default function HistoryScreen() {
       }
 
       filtered = filtered.filter((item) => {
-        // Filtra pela data em que o checklist foi de fato concluído
-        // (timestamp), não pela "Data da Recuperação" (item.dataRecuperacao)
-        // - esse campo é digitado à mão pelo inspetor e pode ser editado
-        // pra qualquer data, então não reflete quando o checklist foi
-        // realmente feito. Mesmo critério usado na aba Relatórios.
-        const checklistDate = new Date(item.timestamp);
+        // Filtra pela "Data da Recuperação" digitada pelo inspetor (não
+        // pelo timestamp real de quando o checklist foi salvo) - é assim
+        // de propósito: se o inspetor esqueceu de fazer o checklist no dia
+        // certo e lança retroativo, o relatório/histórico deve contar na
+        // data retroativa que ele informou, não no dia em que preencheu o
+        // formulário. Mesmo critério usado na aba Relatórios.
+        const [day, month, year] = item.dataRecuperacao.split("/").map(Number);
+        const checklistDate = new Date(year, month - 1, day);
+        checklistDate.setHours(0, 0, 0, 0);
         return checklistDate >= startDate && checklistDate <= endDate;
       });
     }

@@ -50,6 +50,18 @@ export default function ReportsScreen() {
     return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
   };
 
+  // Data usada em todos os filtros/comparações por período: a "Data da
+  // Recuperação" digitada pelo inspetor (não o timestamp real de quando o
+  // checklist foi salvo) - de propósito, pra um checklist lançado
+  // retroativamente (inspetor esqueceu de fazer no dia certo) contar na
+  // data retroativa informada, não no dia em que preencheu o formulário.
+  const getRecordDate = (record: { dataRecuperacao: string }): Date => {
+    const [day, month, year] = record.dataRecuperacao.split("/").map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
   // Calcular dados de comparação
   const getComparisonData = () => {
     const today = new Date();
@@ -57,17 +69,17 @@ export default function ReportsScreen() {
     const todayStart = new Date(today);
     const todayEnd = new Date(today.getTime() + 24 * 60 * 60 * 1000);
     const todayCount = completedChecklists.filter(
-      (c) => new Date(c.timestamp) >= todayStart && new Date(c.timestamp) < todayEnd
+      (c) => getRecordDate(c) >= todayStart && getRecordDate(c) < todayEnd
     ).length;
     const lastWeekStart = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
     const lastWeekEnd = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const lastWeekCount = completedChecklists.filter(
-      (c) => new Date(c.timestamp) >= lastWeekStart && new Date(c.timestamp) < lastWeekEnd
+      (c) => getRecordDate(c) >= lastWeekStart && getRecordDate(c) < lastWeekEnd
     ).length;
     const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastMonthCount = completedChecklists.filter(
-      (c) => new Date(c.timestamp) >= lastMonthStart && new Date(c.timestamp) < lastMonthEnd
+      (c) => getRecordDate(c) >= lastMonthStart && getRecordDate(c) < lastMonthEnd
     ).length;
     return { today: todayCount, lastWeek: lastWeekCount, lastMonth: lastMonthCount };
   };
@@ -157,7 +169,7 @@ export default function ReportsScreen() {
   // Filtrar checklists pela data
   const filteredChecklists = useMemo(() => {
     return completedChecklists.filter((record) => {
-      const recordDate = new Date(record.timestamp);
+      const recordDate = getRecordDate(record);
       return recordDate >= dateRange.startDate && recordDate < dateRange.endDate;
     });
   }, [completedChecklists, dateRange]);
