@@ -164,12 +164,10 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteCompletedChecklists = async (ids: string[]) => {
-    if (!isOnline) {
-      // Exclusão só é feita com o Supabase confirmando - offline, o
-      // checklist voltaria a aparecer na próxima sincronização.
-      return { deleted: 0, failed: ids.length };
-    }
-
+    // Não bloqueamos por causa do "isOnline" (NetInfo) aqui - no web esse
+    // estado já se mostrou não confiável (fica "Offline" às vezes mesmo com
+    // internet normal). É melhor sempre tentar a exclusão de verdade no
+    // Supabase e deixar a falha real de rede (se houver) ser o que decide.
     const idsDeleted = new Set<string>();
     let failed = 0;
 
