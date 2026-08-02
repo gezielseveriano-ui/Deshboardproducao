@@ -98,50 +98,44 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       const localChecklists = localData ? JSON.parse(localData) : [];
       setCompletedChecklists(localChecklists);
       
-      // 2. Se online, sincronizar com Supabase
-      if (isOnline) {
-        setIsSyncing(true);
-        try {
-          console.log('[Reports] Sincronizando com Supabase...');
-          
-          // Verificar conexão com Supabase
-          const hasConnection = await SupabaseSync.checkSupabaseConnection();
-          if (!hasConnection) {
-            console.warn('[Reports] Sem conexão com Supabase');
-            setIsSyncing(false);
-            return;
-          }
-          
-          // Carregar checklists do Supabase
-          const supabaseChecklists = await SupabaseSync.loadChecklistsFromSupabase();
-          console.log('[Reports] ✓ Carregados', supabaseChecklists.length, 'checklists do Supabase');
-          
-          // 3. Mesclar: Supabase tem prioridade (mais recente)
-          const merged = [...localChecklists];
-          for (const supabaseChecklist of supabaseChecklists) {
-            const index = merged.findIndex(c => c.id === supabaseChecklist.id);
-            if (index >= 0) {
-              merged[index] = supabaseChecklist; // Atualizar com versão do Supabase
-            } else {
-              merged.push(supabaseChecklist); // Adicionar novo
-            }
-          }
-          
-          setCompletedChecklists(merged);
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-          console.log('[Reports] ✓ Sincronização com Supabase concluída');
+      // 2. Buscar do Supabase - sempre tenta, independente do "isOnline"
+      // (NetInfo): esse estado já se mostrou não confiável no web (fica
+      // "Offline" às vezes com internet normal), e usar ele aqui pra pular
+      // a busca já causou checklists "sumindo" da tela por engano num
+      // navegador só porque o NetInfo achou (errado) que estava offline.
+      // É melhor sempre tentar de verdade e deixar uma falha real de rede
+      // (já tratada abaixo) ser o que decide, não uma suposição.
+      setIsSyncing(true);
+      try {
+        console.log('[Reports] Sincronizando com Supabase...');
 
-          // Aproveita e já tenta mandar pro servidor qualquer checklist
-          // pendente (feito offline, nunca confirmado sincronizado).
-          await syncPendingChecklists(merged);
-        } catch (syncError) {
-          console.warn('[Reports] Erro ao sincronizar com Supabase:', syncError);
-          // Continuar com dados locais - não é erro fatal
-        } finally {
-          setIsSyncing(false);
+        // Carregar checklists do Supabase
+        const supabaseChecklists = await SupabaseSync.loadChecklistsFromSupabase();
+        console.log('[Reports] ✓ Carregados', supabaseChecklists.length, 'checklists do Supabase');
+
+        // 3. Mesclar: Supabase tem prioridade (mais recente)
+        const merged = [...localChecklists];
+        for (const supabaseChecklist of supabaseChecklists) {
+          const index = merged.findIndex(c => c.id === supabaseChecklist.id);
+          if (index >= 0) {
+            merged[index] = supabaseChecklist; // Atualizar com versão do Supabase
+          } else {
+            merged.push(supabaseChecklist); // Adicionar novo
+          }
         }
-      } else {
-        console.log('[Reports] Offline - usando dados locais apenas');
+
+        setCompletedChecklists(merged);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        console.log('[Reports] ✓ Sincronização com Supabase concluída');
+
+        // Aproveita e já tenta mandar pro servidor qualquer checklist
+        // pendente (feito offline, nunca confirmado sincronizado).
+        await syncPendingChecklists(merged);
+      } catch (syncError) {
+        console.warn('[Reports] Erro ao sincronizar com Supabase:', syncError);
+        // Continuar com dados locais - não é erro fatal
+      } finally {
+        setIsSyncing(false);
       }
     } catch (error) {
       console.error('Erro ao carregar checklists:', error);
