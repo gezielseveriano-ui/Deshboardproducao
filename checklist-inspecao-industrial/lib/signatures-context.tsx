@@ -11,6 +11,14 @@ const STORAGE_KEY_LIDERES = "mrs_lideres";
 const STORAGE_KEY_INSPETORES = "mrs_inspetores";
 const STORAGE_KEY_EMAILS = "mrs_emails";
 
+function mesclarPorId<T extends { id: string }>(local: T[], remoto: T[]): T[] {
+  const porId = new Map(local.map((item) => [item.id, item]));
+  for (const item of remoto) {
+    porId.set(item.id, item);
+  }
+  return Array.from(porId.values());
+}
+
 export function SignaturesProvider({ children }: { children: React.ReactNode }) {
   const [executantes, setExecutantes] = useState<Person[]>([]);
   const [lideres, setLideres] = useState<Person[]>([]);
@@ -42,30 +50,38 @@ export function SignaturesProvider({ children }: { children: React.ReactNode }) 
       setIsLoading(false);
     }
 
-    // 2. O Supabase é a fonte de verdade - busca e substitui o estado (e o
-    // cache local) por ele, pra nunca ficar preso em cadastros que sumiram
-    // do navegador de um aparelho (ex: navegador embutido do WhatsApp
-    // limpando os dados) mas continuam salvos no servidor.
+    // 2. Busca do Supabase e MESCLA com o que já está local - nunca
+    // substitui direto. Um cadastro feito e usado em vários checklists já
+    // apareceu como "sumido" antes porque uma resposta vazia (ou parcial)
+    // do Supabase - sem nenhum erro, só um resultado vazio por algum
+    // motivo - sobrescrevia um cache local que estava correto. Mesclar por
+    // id é seguro: exclusões de verdade (removerExecutante/Lider/Inspetor)
+    // já atualizam o cache local na hora, então não "ressuscitam" aqui.
     try {
       const [pessoas, emailsRemotos] = await Promise.all([
         comTentativas(() => PeopleSync.loadPeopleFromSupabase()),
         comTentativas(() => PeopleSync.loadEmailsFromSupabase()),
       ]);
 
-      const novosExecutantes = pessoas.filter((p) => p.tipo === "executante");
-      const novosLideres = pessoas.filter((p) => p.tipo === "lider");
-      const novosInspetores = pessoas.filter((p) => p.tipo === "inspetor");
+      const remotosExecutantes = pessoas.filter((p) => p.tipo === "executante");
+      const remotosLideres = pessoas.filter((p) => p.tipo === "lider");
+      const remotosInspetores = pessoas.filter((p) => p.tipo === "inspetor");
+
+      const novosExecutantes = mesclarPorId(executantes, remotosExecutantes);
+      const novosLideres = mesclarPorId(lideres, remotosLideres);
+      const novosInspetores = mesclarPorId(inspetores, remotosInspetores);
+      const novosEmails = mesclarPorId(emails, emailsRemotos);
 
       setExecutantes(novosExecutantes);
       setLideres(novosLideres);
       setInspetores(novosInspetores);
-      setEmails(emailsRemotos);
+      setEmails(novosEmails);
 
       await Promise.all([
         AsyncStorage.setItem(STORAGE_KEY_EXECUTANTES, JSON.stringify(novosExecutantes)),
         AsyncStorage.setItem(STORAGE_KEY_LIDERES, JSON.stringify(novosLideres)),
         AsyncStorage.setItem(STORAGE_KEY_INSPETORES, JSON.stringify(novosInspetores)),
-        AsyncStorage.setItem(STORAGE_KEY_EMAILS, JSON.stringify(emailsRemotos)),
+        AsyncStorage.setItem(STORAGE_KEY_EMAILS, JSON.stringify(novosEmails)),
       ]);
     } catch (error) {
       console.warn(
