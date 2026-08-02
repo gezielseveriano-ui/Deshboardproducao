@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Person, SignaturesContextType, CompanyEmail } from "./signatures-types";
+import * as PeopleSync from "./supabase-people-sync";
 
 const SignaturesContext = createContext<SignaturesContextType | undefined>(undefined);
 
@@ -16,13 +17,13 @@ export function SignaturesProvider({ children }: { children: React.ReactNode }) 
   const [emails, setEmails] = useState<CompanyEmail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Carregar dados do AsyncStorage ao inicializar
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
     try {
+      // 1. Cache local primeiro (rápido, funciona offline).
       const [executantesData, lideresData, inspetoresData, emailsData] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEY_EXECUTANTES),
         AsyncStorage.getItem(STORAGE_KEY_LIDERES),
@@ -35,95 +36,92 @@ export function SignaturesProvider({ children }: { children: React.ReactNode }) 
       if (inspetoresData) setInspetores(JSON.parse(inspetoresData));
       if (emailsData) setEmails(JSON.parse(emailsData));
     } catch (error) {
-      console.error("Erro ao carregar dados de assinaturas:", error);
+      console.error("Erro ao carregar cache local de assinaturas:", error);
     } finally {
       setIsLoading(false);
     }
-  };
 
-  const saveExecutantes = async (data: Person[]) => {
+    // 2. O Supabase é a fonte de verdade - busca e substitui o estado (e o
+    // cache local) por ele, pra nunca ficar preso em cadastros que sumiram
+    // do navegador de um aparelho (ex: navegador embutido do WhatsApp
+    // limpando os dados) mas continuam salvos no servidor.
     try {
-      await AsyncStorage.setItem(STORAGE_KEY_EXECUTANTES, JSON.stringify(data));
-      setExecutantes(data);
+      const [pessoas, emailsRemotos] = await Promise.all([
+        PeopleSync.loadPeopleFromSupabase(),
+        PeopleSync.loadEmailsFromSupabase(),
+      ]);
+
+      const novosExecutantes = pessoas.filter((p) => p.tipo === "executante");
+      const novosLideres = pessoas.filter((p) => p.tipo === "lider");
+      const novosInspetores = pessoas.filter((p) => p.tipo === "inspetor");
+
+      setExecutantes(novosExecutantes);
+      setLideres(novosLideres);
+      setInspetores(novosInspetores);
+      setEmails(emailsRemotos);
+
+      await Promise.all([
+        AsyncStorage.setItem(STORAGE_KEY_EXECUTANTES, JSON.stringify(novosExecutantes)),
+        AsyncStorage.setItem(STORAGE_KEY_LIDERES, JSON.stringify(novosLideres)),
+        AsyncStorage.setItem(STORAGE_KEY_INSPETORES, JSON.stringify(novosInspetores)),
+        AsyncStorage.setItem(STORAGE_KEY_EMAILS, JSON.stringify(emailsRemotos)),
+      ]);
     } catch (error) {
-      console.error("Erro ao salvar executantes:", error);
+      console.warn(
+        "[Signatures] Não foi possível sincronizar cadastros com o servidor, usando cache local:",
+        error
+      );
     }
   };
 
-  const saveLideres = async (data: Person[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY_LIDERES, JSON.stringify(data));
-      setLideres(data);
-    } catch (error) {
-      console.error("Erro ao salvar líderes:", error);
-    }
+  const adicionarExecutante = async (nomeCompleto: string, matricula: string, email?: string) => {
+    const pessoa = await PeopleSync.savePersonToSupabase(nomeCompleto, matricula, "executante", email);
+    const updated = [...executantes, pessoa];
+    setExecutantes(updated);
+    await AsyncStorage.setItem(STORAGE_KEY_EXECUTANTES, JSON.stringify(updated));
   };
 
-  const saveInspetores = async (data: Person[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY_INSPETORES, JSON.stringify(data));
-      setInspetores(data);
-    } catch (error) {
-      console.error("Erro ao salvar inspetores:", error);
-    }
-  };
-
-  const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-  const adicionarExecutante = (nomeCompleto: string, matricula: string, email?: string) => {
-    const novaPessoa: Person = {
-      id: generateId(),
-      matricula,
-      nomeCompleto,
-      email,
-      tipo: "executante",
-      dataCadastro: new Date().toISOString(),
-    };
-    saveExecutantes([...executantes, novaPessoa]);
-  };
-
-  const removerExecutante = (id: string) => {
-    saveExecutantes(executantes.filter((p) => p.id !== id));
+  const removerExecutante = async (id: string) => {
+    await PeopleSync.deletePersonFromSupabase(id);
+    const updated = executantes.filter((p) => p.id !== id);
+    setExecutantes(updated);
+    await AsyncStorage.setItem(STORAGE_KEY_EXECUTANTES, JSON.stringify(updated));
   };
 
   const buscarExecutantePorMatricula = (matricula: string) => {
     return executantes.find((p) => p.matricula === matricula);
   };
 
-  const adicionarLider = (nomeCompleto: string, matricula: string, email?: string) => {
-    const novaPessoa: Person = {
-      id: generateId(),
-      matricula,
-      nomeCompleto,
-      email,
-      tipo: "lider",
-      dataCadastro: new Date().toISOString(),
-    };
-    saveLideres([...lideres, novaPessoa]);
+  const adicionarLider = async (nomeCompleto: string, matricula: string, email?: string) => {
+    const pessoa = await PeopleSync.savePersonToSupabase(nomeCompleto, matricula, "lider", email);
+    const updated = [...lideres, pessoa];
+    setLideres(updated);
+    await AsyncStorage.setItem(STORAGE_KEY_LIDERES, JSON.stringify(updated));
   };
 
-  const removerLider = (id: string) => {
-    saveLideres(lideres.filter((p) => p.id !== id));
+  const removerLider = async (id: string) => {
+    await PeopleSync.deletePersonFromSupabase(id);
+    const updated = lideres.filter((p) => p.id !== id);
+    setLideres(updated);
+    await AsyncStorage.setItem(STORAGE_KEY_LIDERES, JSON.stringify(updated));
   };
 
   const buscarLiderPorMatricula = (matricula: string) => {
     return lideres.find((p) => p.matricula === matricula);
   };
 
-  const adicionarInspetor = (nomeCompleto: string, matricula: string, email?: string) => {
-    const novaPessoa: Person = {
-      id: generateId(),
-      matricula,
-      nomeCompleto,
-      email,
-      tipo: "inspetor",
-      dataCadastro: new Date().toISOString(),
-    };
-    saveInspetores([...inspetores, novaPessoa]);
+  const adicionarInspetor = async (nomeCompleto: string, matricula: string, email?: string) => {
+    const pessoa = await PeopleSync.savePersonToSupabase(nomeCompleto, matricula, "inspetor", email);
+    const updated = [...inspetores, pessoa];
+    setInspetores(updated);
+    await AsyncStorage.setItem(STORAGE_KEY_INSPETORES, JSON.stringify(updated));
   };
 
-  const removerInspetor = (id: string) => {
-    saveInspetores(inspetores.filter((p) => p.id !== id));
+  const removerInspetor = async (id: string) => {
+    await PeopleSync.deletePersonFromSupabase(id);
+    const updated = inspetores.filter((p) => p.id !== id);
+    setInspetores(updated);
+    await AsyncStorage.setItem(STORAGE_KEY_INSPETORES, JSON.stringify(updated));
   };
 
   const buscarInspetorPorMatricula = (matricula: string) => {
@@ -146,26 +144,18 @@ export function SignaturesProvider({ children }: { children: React.ReactNode }) 
     return pessoa?.nomeCompleto || "";
   };
 
-  const saveEmails = async (data: CompanyEmail[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY_EMAILS, JSON.stringify(data));
-      setEmails(data);
-    } catch (error) {
-      console.error("Erro ao salvar e-mails:", error);
-    }
+  const adicionarEmail = async (email: string) => {
+    const novoEmail = await PeopleSync.saveEmailToSupabase(email);
+    const updated = [...emails, novoEmail];
+    setEmails(updated);
+    await AsyncStorage.setItem(STORAGE_KEY_EMAILS, JSON.stringify(updated));
   };
 
-  const adicionarEmail = (email: string) => {
-    const novoEmail: CompanyEmail = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      email,
-      dataCadastro: new Date().toISOString(),
-    };
-    saveEmails([...emails, novoEmail]);
-  };
-
-  const removerEmail = (id: string) => {
-    saveEmails(emails.filter((e) => e.id !== id));
+  const removerEmail = async (id: string) => {
+    await PeopleSync.deleteEmailFromSupabase(id);
+    const updated = emails.filter((e) => e.id !== id);
+    setEmails(updated);
+    await AsyncStorage.setItem(STORAGE_KEY_EMAILS, JSON.stringify(updated));
   };
 
   const value: SignaturesContextType = {

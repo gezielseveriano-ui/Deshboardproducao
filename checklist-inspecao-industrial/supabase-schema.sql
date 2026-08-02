@@ -79,3 +79,47 @@ CREATE POLICY "Enable update for all users" ON completed_checklists
 -- Política: Qualquer um pode deletar seus próprios checklists
 CREATE POLICY "Enable delete for all users" ON completed_checklists
   FOR DELETE USING (true);
+
+-- Cadastro de pessoas (executantes, líderes, inspetores) usado no Banco de
+-- Assinaturas - antes ficava só no armazenamento local do navegador, o que
+-- fazia o cadastro desaparecer quando o navegador limpava os dados (comum em
+-- navegadores embutidos de outros apps, como o do WhatsApp). Agora fica no
+-- banco de dados, disponível em qualquer aparelho/navegador.
+CREATE TABLE IF NOT EXISTS registered_people (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  tipo TEXT NOT NULL CHECK (tipo IN ('executante', 'lider', 'inspetor')),
+  nome_completo TEXT NOT NULL,
+  matricula TEXT NOT NULL,
+  email TEXT,
+  data_cadastro TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_registered_people_tipo ON registered_people(tipo);
+CREATE INDEX IF NOT EXISTS idx_registered_people_matricula ON registered_people(matricula);
+
+ALTER TABLE registered_people ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Enable read access for all users" ON registered_people
+  FOR SELECT USING (true);
+CREATE POLICY "Enable insert for all users" ON registered_people
+  FOR INSERT WITH CHECK (true);
+CREATE POLICY "Enable delete for all users" ON registered_people
+  FOR DELETE USING (true);
+
+-- E-mails da empresa (destinatários), mesmo motivo da tabela acima.
+CREATE TABLE IF NOT EXISTS company_emails (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  email TEXT NOT NULL,
+  data_cadastro TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE company_emails ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Enable read access for all users" ON company_emails
+  FOR SELECT USING (true);
+CREATE POLICY "Enable insert for all users" ON company_emails
+  FOR INSERT WITH CHECK (true);
+CREATE POLICY "Enable delete for all users" ON company_emails
+  FOR DELETE USING (true);

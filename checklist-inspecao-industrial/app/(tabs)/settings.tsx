@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, TouchableOpacity, TextInput, Alert } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, TextInput } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useSignatures } from "@/lib/signatures-context";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import * as Clipboard from "expo-clipboard";
 import { clearAllAppData } from "@/lib/clear-all-data";
+import { alertar, confirmar } from "@/lib/alert";
 
 type TabType = "executantes" | "lideres" | "inspetores" | "emails" | "admin";
 
@@ -41,82 +42,85 @@ export default function SettingsScreen() {
   const [networkDatabase, setNetworkDatabase] = useState(adminConfig.config?.network.database || "");
   const [novoEmail, setNovoEmail] = useState("");
 
-  const handleAdicionarExecutante = () => {
+  const handleAdicionarExecutante = async () => {
     if (!nomeCompleto.trim() || !matricula.trim()) {
-      Alert.alert("Erro", "Preencha Nome Completo e Matrícula");
+      alertar("Erro", "Preencha Nome Completo e Matrícula");
       return;
     }
-    signatures.adicionarExecutante(nomeCompleto, matricula, email || undefined);
-    setNomeCompleto("");
-    setMatricula("");
-    setEmail("");
-    Alert.alert("Sucesso", "Executante adicionado!");
+    try {
+      await signatures.adicionarExecutante(nomeCompleto, matricula, email || undefined);
+      setNomeCompleto("");
+      setMatricula("");
+      setEmail("");
+      alertar("Sucesso", "Executante adicionado!");
+    } catch (error) {
+      alertar("Erro", "Não foi possível cadastrar o executante. Verifique sua conexão e tente novamente.");
+    }
   };
 
-  const handleAdicionarLider = () => {
+  const handleAdicionarLider = async () => {
     if (!nomeCompleto.trim() || !matricula.trim()) {
-      Alert.alert("Erro", "Preencha Nome Completo e Matrícula");
+      alertar("Erro", "Preencha Nome Completo e Matrícula");
       return;
     }
-    signatures.adicionarLider(nomeCompleto, matricula, email || undefined);
-    setNomeCompleto("");
-    setMatricula("");
-    setEmail("");
-    Alert.alert("Sucesso", "Líder adicionado!");
+    try {
+      await signatures.adicionarLider(nomeCompleto, matricula, email || undefined);
+      setNomeCompleto("");
+      setMatricula("");
+      setEmail("");
+      alertar("Sucesso", "Líder adicionado!");
+    } catch (error) {
+      alertar("Erro", "Não foi possível cadastrar o líder. Verifique sua conexão e tente novamente.");
+    }
   };
 
-  const handleAdicionarInspetor = () => {
+  const handleAdicionarInspetor = async () => {
     if (!nomeCompleto.trim() || !matricula.trim()) {
-      Alert.alert("Erro", "Preencha Nome Completo e Matrícula");
+      alertar("Erro", "Preencha Nome Completo e Matrícula");
       return;
     }
-    signatures.adicionarInspetor(nomeCompleto, matricula, email || undefined);
-    setNomeCompleto("");
-    setMatricula("");
-    setEmail("");
-    Alert.alert("Sucesso", "Inspetor adicionado!");
+    try {
+      await signatures.adicionarInspetor(nomeCompleto, matricula, email || undefined);
+      setNomeCompleto("");
+      setMatricula("");
+      setEmail("");
+      alertar("Sucesso", "Inspetor adicionado!");
+    } catch (error) {
+      alertar("Erro", "Não foi possível cadastrar o inspetor. Verifique sua conexão e tente novamente.");
+    }
   };
 
   const handleRemoverExecutante = (id: string, nome: string) => {
-    Alert.alert("Remover", `Tem certeza que deseja remover ${nome}?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Remover",
-        style: "destructive",
-        onPress: async () => {
-          await signatures.removerExecutante(id);
-          Alert.alert("Sucesso", "Executante removido!");
-        },
-      },
-    ]);
+    confirmar("Remover", `Tem certeza que deseja remover ${nome}?`, async () => {
+      try {
+        await signatures.removerExecutante(id);
+        alertar("Sucesso", "Executante removido!");
+      } catch (error) {
+        alertar("Erro", "Não foi possível remover. Verifique sua conexão e tente novamente.");
+      }
+    }, "Remover");
   };
 
   const handleRemoverLider = (id: string, nome: string) => {
-    Alert.alert("Remover", `Tem certeza que deseja remover ${nome}?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Remover",
-        style: "destructive",
-        onPress: async () => {
-          await signatures.removerLider(id);
-          Alert.alert("Sucesso", "Líder removido!");
-        },
-      },
-    ]);
+    confirmar("Remover", `Tem certeza que deseja remover ${nome}?`, async () => {
+      try {
+        await signatures.removerLider(id);
+        alertar("Sucesso", "Líder removido!");
+      } catch (error) {
+        alertar("Erro", "Não foi possível remover. Verifique sua conexão e tente novamente.");
+      }
+    }, "Remover");
   };
 
   const handleRemoverInspetor = (id: string, nome: string) => {
-    Alert.alert("Remover", `Tem certeza que deseja remover ${nome}?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Remover",
-        style: "destructive",
-        onPress: async () => {
-          await signatures.removerInspetor(id);
-          Alert.alert("Sucesso", "Inspetor removido!");
-        },
-      },
-    ]);
+    confirmar("Remover", `Tem certeza que deseja remover ${nome}?`, async () => {
+      try {
+        await signatures.removerInspetor(id);
+        alertar("Sucesso", "Inspetor removido!");
+      } catch (error) {
+        alertar("Erro", "Não foi possível remover. Verifique sua conexão e tente novamente.");
+      }
+    }, "Remover");
   };
 
   const handleSalvarSMTP = async () => {
@@ -127,9 +131,9 @@ export default function SettingsScreen() {
         porta: smtpPorta,
         senha: smtpSenha,
       });
-      Alert.alert("Sucesso", "Configuração SMTP salva!");
+      alertar("Sucesso", "Configuração SMTP salva!");
     } catch (error) {
-      Alert.alert("Erro", "Erro ao salvar configuração SMTP");
+      alertar("Erro", "Erro ao salvar configuração SMTP");
     }
   };
 
@@ -143,48 +147,48 @@ export default function SettingsScreen() {
         port: networkPort,
         database: networkDatabase,
       });
-      Alert.alert("Sucesso", "Configuração de Rede salva!");
+      alertar("Sucesso", "Configuração de Rede salva!");
     } catch (error) {
-      Alert.alert("Erro", "Erro ao salvar configuração de Rede");
+      alertar("Erro", "Erro ao salvar configuração de Rede");
     }
   };
 
   const handleCopiarLink = async () => {
     if (adminConfig.config?.linkGerencial) {
       await Clipboard.setStringAsync(adminConfig.config.linkGerencial);
-      Alert.alert("Sucesso", "Link copiado para a área de transferência!");
+      alertar("Sucesso", "Link copiado para a área de transferência!");
     }
   };
 
   const handleAdicionarEmail = async () => {
     if (!novoEmail.trim()) {
-      Alert.alert("Erro", "Digite um e-mail válido");
+      alertar("Erro", "Digite um e-mail válido");
       return;
     }
     try {
       await adminConfig.addEmailRecebimento(novoEmail);
       setNovoEmail("");
-      Alert.alert("Sucesso", "E-mail adicionado!");
+      alertar("Sucesso", "E-mail adicionado!");
     } catch (error) {
-      Alert.alert("Erro", "Erro ao adicionar e-mail");
+      alertar("Erro", "Erro ao adicionar e-mail");
     }
   };
 
   const handleRemoverEmail = async (emailToRemove: string) => {
     try {
       await adminConfig.removeEmailRecebimento(emailToRemove);
-      Alert.alert("Sucesso", "E-mail removido!");
+      alertar("Sucesso", "E-mail removido!");
     } catch (error) {
-      Alert.alert("Erro", "Erro ao remover e-mail");
+      alertar("Erro", "Erro ao remover e-mail");
     }
   };
 
   const handleAdminLogin = () => {
     if (adminLogin === "admin" && adminPassword === "admin") {
       setIsAdminAuthenticated(true);
-      Alert.alert("Sucesso", "Bem-vindo ao Administrador!");
+      alertar("Sucesso", "Bem-vindo ao Administrador!");
     } else {
-      Alert.alert("Erro", "Login ou senha incorretos");
+      alertar("Erro", "Login ou senha incorretos");
       setAdminPassword("");
     }
   };
@@ -206,10 +210,7 @@ export default function SettingsScreen() {
             <View className="flex-row items-center gap-1">
               <TouchableOpacity
                 onPress={() =>
-                  Alert.alert("Sair", "Deseja sair da sua conta?", [
-                    { text: "Cancelar", style: "cancel" },
-                    { text: "Sair", style: "destructive", onPress: () => signOut() },
-                  ])
+                  confirmar("Sair", "Deseja sair da sua conta?", () => signOut(), "Sair")
                 }
                 className="p-2"
               >
@@ -806,46 +807,36 @@ export default function SettingsScreen() {
   function handleVerifyAdminPassword() {
     if (adminPassword === "admin") {
       setIsAdminAuthenticated(true);
-      Alert.alert("✅ Sucesso", "Autenticação bem-sucedida!");
+      alertar("✅ Sucesso", "Autenticação bem-sucedida!");
     } else {
-      Alert.alert("❌ Erro", "Senha incorreta!");
+      alertar("❌ Erro", "Senha incorreta!");
       setAdminPassword("");
     }
   }
 
   async function handleResetAllData() {
-    Alert.alert(
+    confirmar(
       "⚠️ Confirmar Limpeza",
       "Tem certeza que deseja deletar TODOS os dados do app? Esta ação não pode ser desfeita!",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Deletar Tudo",
-          style: "destructive",
-          onPress: async () => {
-            setIsResetting(true);
-            try {
-              const result = await clearAllAppData();
-              if (result.success) {
-                Alert.alert("✅ Sucesso", `${result.removedCount} chaves removidas. O app será recarregado.`, [
-                  {
-                    text: "OK",
-                    onPress: () => {
-                      location.reload?.();
-                    },
-                  },
-                ]);
-              } else {
-                Alert.alert("❌ Erro", result.message);
-              }
-            } catch (error) {
-              Alert.alert("❌ Erro", `Erro ao limpar dados: ${error instanceof Error ? error.message : "Erro desconhecido"}`);
-            } finally {
-              setIsResetting(false);
+      async () => {
+        setIsResetting(true);
+        try {
+          const result = await clearAllAppData();
+          if (result.success) {
+            alertar("✅ Sucesso", `${result.removedCount} chaves removidas. O app será recarregado.`);
+            if (typeof location !== "undefined") {
+              location.reload();
             }
-          },
-        },
-      ]
+          } else {
+            alertar("❌ Erro", result.message);
+          }
+        } catch (error) {
+          alertar("❌ Erro", `Erro ao limpar dados: ${error instanceof Error ? error.message : "Erro desconhecido"}`);
+        } finally {
+          setIsResetting(false);
+        }
+      },
+      "Deletar Tudo"
     );
   }
 }

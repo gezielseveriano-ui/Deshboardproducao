@@ -76,8 +76,19 @@ alguns segundos para acordar na próxima visita — normal, não é erro.
 
 O schema está em `supabase-schema.sql`, na raiz deste diretório — rode
 esse SQL uma vez no editor SQL do painel Supabase para criar a tabela
-`completed_checklists` e o bucket `checklist-pdfs` do Storage (se ainda
-não existirem).
+`completed_checklists`, as tabelas `registered_people`/`company_emails`
+(cadastro de executantes/líderes/inspetores/e-mails do Banco de
+Assinaturas) e o bucket `checklist-pdfs` do Storage (se ainda não
+existirem). O arquivo usa `CREATE TABLE IF NOT EXISTS`, então rodar de
+novo em um projeto que já tem `completed_checklists` é seguro - só cria
+o que ainda não existe.
+
+**Importante:** antes dessa correção, o cadastro de executantes/
+líderes/inspetores/e-mails ficava salvo só no armazenamento local do
+navegador (nunca era enviado pro banco de dados), então sumia se o
+navegador limpasse os dados - por exemplo, o navegador embutido de
+outros apps (como o do WhatsApp) costuma fazer isso entre uma abertura
+e outra do link. Agora esse cadastro também fica salvo no Supabase.
 
 ## Login e criação de contas
 
