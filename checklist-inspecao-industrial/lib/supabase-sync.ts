@@ -123,6 +123,51 @@ export async function loadChecklistsFromSupabase(): Promise<
 }
 
 /**
+ * Excluir um checklist do Supabase (linha da tabela + PDF no Storage,
+ * se o pdf_file_name apontar pro bucket checklist-pdfs).
+ */
+export async function deleteChecklistFromSupabase(
+  id: string,
+  pdfFileName?: string | null
+): Promise<void> {
+  if (!isSupabaseConfigured) {
+    throw new Error("Supabase não configurado (EXPO_PUBLIC_SUPABASE_URL/ANON_KEY ausentes)");
+  }
+  try {
+    console.log("[Supabase] Excluindo checklist:", id);
+
+    if (pdfFileName) {
+      const match = pdfFileName.match(/\/checklist-pdfs\/(.+)$/);
+      if (match) {
+        // Best-effort: excluir o PDF nunca deve impedir a exclusão da
+        // linha, que é a ação essencial.
+        try {
+          const { error: storageError } = await supabase.storage
+            .from("checklist-pdfs")
+            .remove([match[1]]);
+          if (storageError) {
+            console.warn("[Supabase] Não foi possível excluir o PDF do Storage:", storageError);
+          }
+        } catch (storageError) {
+          console.warn("[Supabase] Não foi possível excluir o PDF do Storage:", storageError);
+        }
+      }
+    }
+
+    const { error } = await supabase.from("completed_checklists").delete().eq("id", id);
+    if (error) {
+      console.error("[Supabase] Erro ao excluir:", error);
+      throw error;
+    }
+
+    console.log("[Supabase] ✓ Checklist excluído com sucesso:", id);
+  } catch (error) {
+    console.error("[Supabase] Erro ao excluir checklist:", error);
+    throw error;
+  }
+}
+
+/**
  * Carregar checklists de um dispositivo específico
  */
 export async function loadChecklistsByDevice(

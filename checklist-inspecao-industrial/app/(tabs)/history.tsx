@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useReports } from "@/lib/reports-context";
 import { useChecklist } from "@/lib/checklist-context";
 import { useColors } from "@/hooks/use-colors";
@@ -102,7 +103,7 @@ export default function HistoryScreen() {
   const colors = useColors();
   const router = useRouter();
   const { createNewChecklist } = useChecklist();
-  const { completedChecklists } = useReports();
+  const { completedChecklists, deleteCompletedChecklists } = useReports();
   const { syncPendingChecklists, syncStatus } = useSyncChecklist();
   const [searchText, setSearchText] = useState("");
   const [filterModelo, setFilterModelo] = useState<string | null>(null);
@@ -114,6 +115,7 @@ export default function HistoryScreen() {
   const [dateRangeEnd, setDateRangeEnd] = useState<Date | null>(null);
   const [isLoadingZip, setIsLoadingZip] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [selectedChecklistIds, setSelectedChecklistIds] = useState<Set<string>>(new Set());
 
   const handleViewPDF = async (item: CompletedChecklistRecord) => {
@@ -388,6 +390,51 @@ export default function HistoryScreen() {
     }
   };
 
+  const handleDeleteSelected = () => {
+    if (selectedChecklistIds.size === 0) return;
+
+    const count = selectedChecklistIds.size;
+    const title = "Excluir checklist" + (count > 1 ? "s" : "");
+    const message = `Tem certeza que deseja excluir ${count} checklist${count > 1 ? "s" : ""}? Essa ação não pode ser desfeita.`;
+
+    const executarExclusao = async () => {
+      setIsDeleting(true);
+      try {
+        const { deleted, failed } = await deleteCompletedChecklists(
+          Array.from(selectedChecklistIds)
+        );
+        setSelectedChecklistIds(new Set());
+        if (failed > 0) {
+          const aviso =
+            deleted > 0
+              ? `${deleted} checklist(s) excluído(s). ${failed} não puderam ser excluídos - verifique sua conexão e tente novamente.`
+              : "Não foi possível excluir os checklists. Verifique sua conexão e tente novamente.";
+          // Alert.alert não faz nada no React Native Web (é um no-op nessa
+          // plataforma) - por isso usamos window.alert/confirm no web.
+          if (Platform.OS === "web") {
+            window.alert(aviso);
+          } else {
+            Alert.alert("Atenção", aviso);
+          }
+        }
+      } finally {
+        setIsDeleting(false);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        executarExclusao();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Excluir", style: "destructive", onPress: executarExclusao },
+    ]);
+  };
+
   const toggleChecklistSelection = (id: string) => {
     const newSelected = new Set(selectedChecklistIds);
     if (newSelected.has(id)) {
@@ -415,9 +462,29 @@ export default function HistoryScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 96 }}
       >
-        <Text className="text-2xl font-bold text-foreground mb-4">
-          Histórico de Checklists
-        </Text>
+        <View className="flex-row items-center justify-between mb-4">
+          <Text className="text-2xl font-bold text-foreground flex-1">
+            Histórico de Checklists
+          </Text>
+          {selectedChecklistIds.size > 0 && (
+            <TouchableOpacity
+              className="flex-row items-center bg-red-600 rounded-lg px-3 py-2 ml-2"
+              onPress={handleDeleteSelected}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <>
+                  <MaterialIcons name="delete" size={20} color="white" />
+                  <Text className="text-white font-semibold ml-1">
+                    {selectedChecklistIds.size}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Botão Sincronizar */}
         <TouchableOpacity

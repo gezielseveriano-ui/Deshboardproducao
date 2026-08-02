@@ -8,6 +8,7 @@ import * as SecureStore from 'expo-secure-store';
 interface ReportsContextType {
   completedChecklists: CompletedChecklistRecord[];
   addCompletedChecklist: (record: CompletedChecklistRecord) => Promise<void>;
+  deleteCompletedChecklists: (ids: string[]) => Promise<{ deleted: number; failed: number }>;
   loadCompletedChecklists: () => Promise<void>;
   syncWithServer: () => Promise<boolean>;
   recoverFromServer: () => Promise<boolean>;
@@ -162,6 +163,36 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const deleteCompletedChecklists = async (ids: string[]) => {
+    if (!isOnline) {
+      // Exclusão só é feita com o Supabase confirmando - offline, o
+      // checklist voltaria a aparecer na próxima sincronização.
+      return { deleted: 0, failed: ids.length };
+    }
+
+    const idsDeleted = new Set<string>();
+    let failed = 0;
+
+    for (const id of ids) {
+      const record = completedChecklists.find((c) => c.id === id);
+      try {
+        await SupabaseSync.deleteChecklistFromSupabase(id, record?.pdfFileName);
+        idsDeleted.add(id);
+      } catch (error) {
+        console.warn('[Reports] Erro ao excluir checklist no Supabase:', id, error);
+        failed++;
+      }
+    }
+
+    if (idsDeleted.size > 0) {
+      const updated = completedChecklists.filter((c) => !idsDeleted.has(c.id));
+      setCompletedChecklists(updated);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    }
+
+    return { deleted: idsDeleted.size, failed };
+  };
+
   // Sincronizar checklists com servidor (backup remoto)
   const syncWithServer = async () => {
     try {
@@ -219,6 +250,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   const value: ReportsContextType = {
     completedChecklists,
     addCompletedChecklist,
+    deleteCompletedChecklists,
     loadCompletedChecklists,
     syncWithServer,
     recoverFromServer,
