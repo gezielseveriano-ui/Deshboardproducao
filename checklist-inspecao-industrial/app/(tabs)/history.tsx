@@ -399,12 +399,14 @@ export default function HistoryScreen() {
   // Baixa o PDF pro navegador como blob: (em vez de linkar direto pra URL
   // remota) porque um link cross-origin com o atributo "download" costuma
   // ser ignorado pelo navegador (ele só abre o PDF em vez de salvar) - com
-  // o blob, o navegador sempre salva de verdade.
+  // o blob, o navegador sempre salva de verdade. Best-effort: uma falha
+  // aqui nunca deve impedir a exclusão, que é a ação que o usuário pediu -
+  // só faz o backup silenciosamente antes, sem depender de confirmação.
   const baixarBackupAntesDeExcluir = async (
     selecionados: CompletedChecklistRecord[]
-  ): Promise<boolean> => {
+  ): Promise<void> => {
     const comPdf = selecionados.filter((c) => c.pdfFileName);
-    if (comPdf.length === 0) return true;
+    if (comPdf.length === 0) return;
 
     try {
       if (comPdf.length === 1) {
@@ -424,53 +426,56 @@ export default function HistoryScreen() {
         downloadUrlOnWeb(zipUrl, `backup_checklists_excluidos_${Date.now()}.zip`);
         setTimeout(() => URL.revokeObjectURL(zipUrl), 10000);
       }
-      return true;
     } catch (error) {
       console.warn("[Historico] Falha ao baixar backup antes de excluir:", error);
-      return window.confirm(
-        "Não foi possível baixar uma cópia de backup antes de excluir. Excluir mesmo assim, sem backup?"
-      );
     }
   };
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     if (selectedChecklistIds.size === 0) return;
 
     const count = selectedChecklistIds.size;
+    const selecionados = filteredChecklists.filter((c) => selectedChecklistIds.has(c.id));
+
+    // 1. Backup primeiro, incondicional - baixar uma cópia não é destrutivo,
+    // então não precisa de confirmação nenhuma antes. Só depois de já ter
+    // uma cópia salva no aparelho é que perguntamos se pode excluir. Mostra
+    // o spinner já nesse passo (pode demorar com muitos PDFs), senão o
+    // botão parece não fazer nada enquanto baixa em segundo plano.
+    setIsDeleting(true);
+    if (Platform.OS === "web") {
+      await baixarBackupAntesDeExcluir(selecionados);
+    }
+    setIsDeleting(false);
+
+    // 2. Confirmação
     const title = "Excluir checklist" + (count > 1 ? "s" : "");
-    const message = `Tem certeza que deseja excluir ${count} checklist${count > 1 ? "s" : ""}? Um backup em PDF será baixado automaticamente antes da exclusão.`;
+    const message = `Um backup em PDF já foi baixado. Tem certeza que deseja excluir ${count} checklist${count > 1 ? "s" : ""} do histórico?`;
 
-    const executarExclusao = async () => {
-      setIsDeleting(true);
-      try {
-        const selecionados = filteredChecklists.filter((c) =>
-          selectedChecklistIds.has(c.id)
-        );
-
-        if (Platform.OS === "web") {
-          const podeContinuar = await baixarBackupAntesDeExcluir(selecionados);
-          if (!podeContinuar) {
-            return;
+    confirmar(
+      title,
+      message,
+      async () => {
+        setIsDeleting(true);
+        try {
+          const { deleted, failed, lastError } = await deleteCompletedChecklists(
+            Array.from(selectedChecklistIds)
+          );
+          setSelectedChecklistIds(new Set());
+          if (failed > 0) {
+            const detalhe = lastError ? `\n\nDetalhe técnico: ${lastError}` : "";
+            const aviso =
+              deleted > 0
+                ? `${deleted} checklist(s) excluído(s). ${failed} não puderam ser excluídos.${detalhe}`
+                : `Não foi possível excluir os checklists.${detalhe}`;
+            alertar("Atenção", aviso);
           }
+        } finally {
+          setIsDeleting(false);
         }
-
-        const { deleted, failed } = await deleteCompletedChecklists(
-          Array.from(selectedChecklistIds)
-        );
-        setSelectedChecklistIds(new Set());
-        if (failed > 0) {
-          const aviso =
-            deleted > 0
-              ? `${deleted} checklist(s) excluído(s). ${failed} não puderam ser excluídos - verifique sua conexão e tente novamente.`
-              : "Não foi possível excluir os checklists. Verifique sua conexão e tente novamente.";
-          alertar("Atenção", aviso);
-        }
-      } finally {
-        setIsDeleting(false);
-      }
-    };
-
-    confirmar(title, message, executarExclusao, "Excluir");
+      },
+      "Excluir"
+    );
   };
 
   const toggleChecklistSelection = (id: string) => {

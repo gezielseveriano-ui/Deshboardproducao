@@ -9,7 +9,9 @@ import * as SecureStore from 'expo-secure-store';
 interface ReportsContextType {
   completedChecklists: CompletedChecklistRecord[];
   addCompletedChecklist: (record: CompletedChecklistRecord) => Promise<void>;
-  deleteCompletedChecklists: (ids: string[]) => Promise<{ deleted: number; failed: number }>;
+  deleteCompletedChecklists: (
+    ids: string[]
+  ) => Promise<{ deleted: number; failed: number; lastError?: string }>;
   loadCompletedChecklists: () => Promise<void>;
   syncPendingChecklists: () => Promise<{ synced: number; failed: number }>;
   pendingSyncCount: number;
@@ -22,6 +24,22 @@ interface ReportsContextType {
 // "checklist_<timestamp>") continuar, é sinal de que esse checklist ainda
 // não foi sincronizado.
 const isPendingSync = (record: CompletedChecklistRecord) => !UUID_REGEX.test(record.id);
+
+// Erros do Supabase costumam ser objetos comuns (não instâncias de Error de
+// verdade), então "error instanceof Error" falha e String(error) só dá
+// "[object Object]" - extrai o campo .message manualmente nesse caso.
+function extrairMensagemDeErro(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
 
 const ReportsContext = createContext<ReportsContextType | undefined>(undefined);
 
@@ -186,11 +204,13 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     // Supabase e deixar a falha real de rede (se houver) ser o que decide.
     const idsDeleted = new Set<string>();
     let failed = 0;
+    let lastError: string | undefined;
 
     for (const id of ids) {
       const record = completedChecklists.find((c) => c.id === id);
       if (!record) {
         failed++;
+        lastError = 'Checklist não encontrado na lista local.';
         continue;
       }
       try {
@@ -199,6 +219,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.warn('[Reports] Erro ao excluir checklist no Supabase:', id, error);
         failed++;
+        lastError = extrairMensagemDeErro(error);
       }
     }
 
@@ -208,7 +229,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     }
 
-    return { deleted: idsDeleted.size, failed };
+    return { deleted: idsDeleted.size, failed, lastError };
   };
 
   // Reenvia pro Supabase todo checklist que ainda não foi confirmado
