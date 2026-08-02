@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Person, SignaturesContextType, CompanyEmail } from "./signatures-types";
 import * as PeopleSync from "./supabase-people-sync";
+import { comTentativas } from "./retry";
 
 const SignaturesContext = createContext<SignaturesContextType | undefined>(undefined);
 
@@ -47,8 +48,8 @@ export function SignaturesProvider({ children }: { children: React.ReactNode }) 
     // limpando os dados) mas continuam salvos no servidor.
     try {
       const [pessoas, emailsRemotos] = await Promise.all([
-        PeopleSync.loadPeopleFromSupabase(),
-        PeopleSync.loadEmailsFromSupabase(),
+        comTentativas(() => PeopleSync.loadPeopleFromSupabase()),
+        comTentativas(() => PeopleSync.loadEmailsFromSupabase()),
       ]);
 
       const novosExecutantes = pessoas.filter((p) => p.tipo === "executante");

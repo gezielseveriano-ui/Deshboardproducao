@@ -5,6 +5,7 @@ import * as SupabaseSync from './supabase-sync';
 import { UUID_REGEX } from './supabase-sync';
 import NetInfo from '@react-native-community/netinfo';
 import * as SecureStore from 'expo-secure-store';
+import { comTentativas } from './retry';
 
 interface ReportsContextType {
   completedChecklists: CompletedChecklistRecord[];
@@ -128,7 +129,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         console.log('[Reports] Sincronizando com Supabase...');
 
         // Carregar checklists do Supabase
-        const supabaseChecklists = await SupabaseSync.loadChecklistsFromSupabase();
+        const supabaseChecklists = await comTentativas(() => SupabaseSync.loadChecklistsFromSupabase());
         console.log('[Reports] ✓ Carregados', supabaseChecklists.length, 'checklists do Supabase');
 
         // 3. Mesclar: Supabase tem prioridade (mais recente)
@@ -174,7 +175,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       if (isOnline && deviceId) {
         try {
           console.log('[Reports] Sincronizando novo checklist com Supabase...');
-          const saved = await SupabaseSync.saveChecklistToSupabase(record, deviceId);
+          const saved = await comTentativas(() => SupabaseSync.saveChecklistToSupabase(record, deviceId));
           console.log('[Reports] ✓ Checklist sincronizado com Supabase');
 
           // O id local (gerado no aparelho) é diferente do id real da linha
@@ -214,7 +215,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         continue;
       }
       try {
-        await SupabaseSync.deleteChecklistFromSupabase(record);
+        await comTentativas(() => SupabaseSync.deleteChecklistFromSupabase(record));
         idsDeleted.add(id);
       } catch (error) {
         console.warn('[Reports] Erro ao excluir checklist no Supabase:', id, error);
@@ -255,7 +256,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     try {
       for (const record of pendentes) {
         try {
-          const saved = await SupabaseSync.saveChecklistToSupabase(record, deviceId);
+          const saved = await comTentativas(() => SupabaseSync.saveChecklistToSupabase(record, deviceId));
           if (saved?.id) {
             atual = atual.map((c) => (c.id === record.id ? { ...c, id: saved.id } : c));
           }
