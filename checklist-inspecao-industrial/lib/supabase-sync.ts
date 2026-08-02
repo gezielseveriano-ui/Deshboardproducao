@@ -187,11 +187,18 @@ export async function deleteChecklistFromSupabase(
       deletedCount = count ?? 0;
     }
 
+    // Se não achou nada nem por id nem por checklist_code/timestamp, o
+    // checklist nunca chegou a ser sincronizado (foi criado offline e o
+    // sync nunca completou) - não tem o que excluir no servidor, mas isso
+    // não é uma falha: segue em frente pra remover só do aparelho mesmo.
     if (deletedCount === 0) {
-      throw new Error("Checklist não encontrado no servidor (pode já ter sido excluído).");
+      console.warn(
+        "[Supabase] Checklist não encontrado no servidor (provavelmente nunca foi sincronizado):",
+        id
+      );
+    } else {
+      console.log("[Supabase] ✓ Checklist excluído com sucesso:", id);
     }
-
-    console.log("[Supabase] ✓ Checklist excluído com sucesso:", id);
   } catch (error) {
     console.error("[Supabase] Erro ao excluir checklist:", error);
     throw error;
