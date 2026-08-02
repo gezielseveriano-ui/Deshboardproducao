@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { Platform, View, ActivityIndicator } from "react-native";
 import "@/lib/_core/nativewind-pressable";
+import "@/lib/calendar-locale";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { ChecklistProvider } from "@/lib/checklist-context";
 import { SignaturesProvider } from "@/lib/signatures-context";
