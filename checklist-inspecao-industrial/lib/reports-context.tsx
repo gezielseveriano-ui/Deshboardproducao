@@ -6,10 +6,28 @@ import { UUID_REGEX } from './supabase-sync';
 import NetInfo from '@react-native-community/netinfo';
 import * as SecureStore from 'expo-secure-store';
 import { comTentativas } from './retry';
+import { trpcVanilla } from './trpc-vanilla';
+import type { inferRouterInputs } from '@trpc/server';
+import type { AppRouter } from '@/server/routers';
+
+type GerarPdfInput = inferRouterInputs<AppRouter>['checklist']['generateAndUploadPDF'];
+
+interface PendingPdfItem {
+  localId: string;
+  input: GerarPdfInput;
+}
 
 interface ReportsContextType {
   completedChecklists: CompletedChecklistRecord[];
   addCompletedChecklist: (record: CompletedChecklistRecord) => Promise<void>;
+  addCompletedChecklistLocalOnly: (record: CompletedChecklistRecord) => Promise<void>;
+  confirmChecklistPdf: (
+    localId: string,
+    result: { id: string; pdfUrl: string }
+  ) => Promise<void>;
+  queuePdfGeneration: (localId: string, input: GerarPdfInput) => Promise<void>;
+  retryPendingPdfGenerations: () => Promise<{ synced: number; failed: number }>;
+  pendingPdfCount: number;
   deleteCompletedChecklists: (
     ids: string[]
   ) => Promise<{ deleted: number; failed: number; lastError?: string }>;
@@ -45,6 +63,7 @@ function extrairMensagemDeErro(error: unknown): string {
 const ReportsContext = createContext<ReportsContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'completed_checklists';
+const PENDING_PDF_QUEUE_KEY = 'pending_pdf_queue';
 // SecureStore só aceita chaves alfanuméricas + "." "-" "_" (sem "@"), por isso
 // não pode ser "@device_id" — com a chave inválida, getItemAsync/setItemAsync
 // sempre lançavam erro e a lógica sempre caía (silenciosamente) no fallback
@@ -76,6 +95,7 @@ export async function getOrCreateDeviceId(): Promise<string> {
 
 export function ReportsProvider({ children }: { children: React.ReactNode }) {
   const [completedChecklists, setCompletedChecklists] = useState<CompletedChecklistRecord[]>([]);
+  const [pendingPdfQueue, setPendingPdfQueue] = useState<PendingPdfItem[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -88,6 +108,14 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       setDeviceId(id);
     };
     initDeviceId();
+  }, []);
+
+  // Carregar fila de PDFs pendentes (checklists finalizados offline, cuja
+  // geração de PDF ainda não foi confirmada com o servidor)
+  useEffect(() => {
+    AsyncStorage.getItem(PENDING_PDF_QUEUE_KEY).then((data) => {
+      if (data) setPendingPdfQueue(JSON.parse(data));
+    });
   }, []);
 
   // Monitorar conexão
@@ -198,6 +226,80 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Salva só localmente, sem tentar inserir no Supabase pelo caminho normal
+  // - usado na finalização do checklist, onde quem grava a linha de verdade
+  // no Supabase é o próprio servidor (junto com a geração do PDF), pra não
+  // criar duas linhas duplicadas para o mesmo checklist.
+  const addCompletedChecklistLocalOnly = async (record: CompletedChecklistRecord) => {
+    const filtered = completedChecklists.filter((c) => c.id !== record.id);
+    const updated = [...filtered, record];
+    setCompletedChecklists(updated);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  };
+
+  // Depois que o servidor confirma que gerou o PDF e salvou a linha de
+  // verdade no Supabase, atualiza o registro local (que até então só tinha
+  // o id provisório do aparelho e nenhum PDF) com os dados reais.
+  const confirmChecklistPdf = async (
+    localId: string,
+    result: { id: string; pdfUrl: string }
+  ) => {
+    setCompletedChecklists((prev) => {
+      const fixed = prev.map((c) =>
+        c.id === localId ? { ...c, id: result.id, pdfFileName: result.pdfUrl } : c
+      );
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(fixed));
+      return fixed;
+    });
+  };
+
+  const persistPendingPdfQueue = async (queue: PendingPdfItem[]) => {
+    setPendingPdfQueue(queue);
+    await AsyncStorage.setItem(PENDING_PDF_QUEUE_KEY, JSON.stringify(queue));
+  };
+
+  // Guarda os dados completos do checklist (todas as etapas, assinaturas,
+  // etc.) pra poder gerar o PDF de novo mais tarde, sem precisar que o
+  // usuário refaça nada - é isso que garante finalizar um checklist offline
+  // sem perder a geração do PDF depois.
+  const queuePdfGeneration = async (localId: string, input: GerarPdfInput) => {
+    const semDuplicata = pendingPdfQueue.filter((item) => item.localId !== localId);
+    await persistPendingPdfQueue([...semDuplicata, { localId, input }]);
+  };
+
+  // Tenta gerar de novo o PDF (e salvar no Supabase) de todo checklist que
+  // foi finalizado sem internet - roda sozinho quando a conexão volta,
+  // igual o syncPendingChecklists faz para os outros checklists.
+  const retryPendingPdfGenerations = async () => {
+    if (pendingPdfQueue.length === 0) return { synced: 0, failed: 0 };
+
+    console.log('[Reports] Tentando gerar', pendingPdfQueue.length, 'PDF(s) pendente(s)...');
+    let synced = 0;
+    let failed = 0;
+    let filaAtual = pendingPdfQueue;
+
+    for (const item of pendingPdfQueue) {
+      try {
+        const result = await comTentativas(() =>
+          trpcVanilla.checklist.generateAndUploadPDF.mutate(item.input)
+        );
+        if (!result.success || !result.pdfUrl) {
+          throw new Error(result.message || 'Falha ao gerar o PDF no servidor');
+        }
+        await confirmChecklistPdf(item.localId, { id: result.id ?? item.localId, pdfUrl: result.pdfUrl });
+        filaAtual = filaAtual.filter((f) => f.localId !== item.localId);
+        synced++;
+      } catch (error) {
+        console.warn('[Reports] Falha ao gerar PDF pendente:', item.localId, error);
+        failed++;
+      }
+    }
+
+    await persistPendingPdfQueue(filaAtual);
+    console.log('[Reports] Geração de PDFs pendentes concluída:', { synced, failed });
+    return { synced, failed };
+  };
+
   const deleteCompletedChecklists = async (ids: string[]) => {
     // Não bloqueamos por causa do "isOnline" (NetInfo) aqui - no web esse
     // estado já se mostrou não confiável (fica "Offline" às vezes mesmo com
@@ -228,6 +330,14 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       const updated = completedChecklists.filter((c) => !idsDeleted.has(c.id));
       setCompletedChecklists(updated);
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+      // Não deixa uma entrada zumbi na fila de PDF pendente tentando gerar
+      // PDF pra um checklist que acabou de ser excluído.
+      if (pendingPdfQueue.some((item) => idsDeleted.has(item.localId))) {
+        await persistPendingPdfQueue(
+          pendingPdfQueue.filter((item) => !idsDeleted.has(item.localId))
+        );
+      }
     }
 
     return { deleted: idsDeleted.size, failed, lastError };
@@ -240,8 +350,12 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   const syncPendingChecklists = async (baseRecords?: CompletedChecklistRecord[]) => {
     if (!deviceId) return { synced: 0, failed: 0 };
 
+    const idsNaFilaDePdf = new Set(pendingPdfQueue.map((item) => item.localId));
     const atualInicial = baseRecords ?? completedChecklists;
-    const pendentes = atualInicial.filter(isPendingSync);
+    // Checklists na fila de geração de PDF são tratados por
+    // retryPendingPdfGenerations (que faz o insert completo, com PDF, junto
+    // com o servidor) - não pelo insert simples daqui, senão duplicaria.
+    const pendentes = atualInicial.filter((c) => isPendingSync(c) && !idsNaFilaDePdf.has(c.id));
     if (pendentes.length === 0) {
       return { synced: 0, failed: 0 };
     }
@@ -286,15 +400,25 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isOnline && !wasOnlineRef.current) {
       syncPendingChecklists();
+      retryPendingPdfGenerations();
     }
     wasOnlineRef.current = isOnline;
   }, [isOnline]);
 
-  const pendingSyncCount = completedChecklists.filter(isPendingSync).length;
+  const idsNaFilaDePdf = new Set(pendingPdfQueue.map((item) => item.localId));
+  const pendingSyncCount = completedChecklists.filter(
+    (c) => isPendingSync(c) && !idsNaFilaDePdf.has(c.id)
+  ).length;
+  const pendingPdfCount = pendingPdfQueue.length;
 
   const value: ReportsContextType = {
     completedChecklists,
     addCompletedChecklist,
+    addCompletedChecklistLocalOnly,
+    confirmChecklistPdf,
+    queuePdfGeneration,
+    retryPendingPdfGenerations,
+    pendingPdfCount,
     deleteCompletedChecklists,
     loadCompletedChecklists,
     syncPendingChecklists,

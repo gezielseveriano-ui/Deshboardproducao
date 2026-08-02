@@ -1,4 +1,4 @@
-import { Alert, ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
+import { ScrollView, Text, View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -13,6 +13,7 @@ import { useAdminConfig } from "@/lib/admin-config-context";
 import { trpc } from "@/lib/trpc";
 import { useEffect } from "react";
 import { resolveLocalPdfPath } from "@/lib/pdf-local-cache";
+import { alertar } from "@/lib/alert";
 
 
 export default function CompletionScreen() {
@@ -79,7 +80,7 @@ export default function CompletionScreen() {
   const results = useMemo(() => countResults(), [checklist.etapas]);
   const totalEtapas = checklist.etapas.length;
 
-  const { addCompletedChecklist } = useReports();
+  const { addCompletedChecklistLocalOnly, confirmChecklistPdf, queuePdfGeneration } = useReports();
   const hasBeenSaved = useRef(false);
 
   // Nota: Salvamento foi movido para handleGerarPDF para evitar contabilização prematura
@@ -90,13 +91,15 @@ export default function CompletionScreen() {
       setIsGeneratingPDF(true);
 
       const deviceId = await getOrCreateDeviceId();
+      const dataRecuperacao =
+        checklist.dadosIniciais?.dataRecuperacao || new Date().toLocaleDateString("pt-BR");
 
-      const result = await generatePdfMutation.mutateAsync({
+      const input = {
         checklistType,
         numeroSerie: checklist.dadosIniciais?.numeroSerie || "",
         numeroOP: checklist.dadosIniciais?.numeroOP || "",
         dataFabricacao: checklist.dadosIniciais?.dataFabricacao || "",
-        dataRecuperacao: checklist.dadosIniciais?.dataRecuperacao || new Date().toLocaleDateString("pt-BR"),
+        dataRecuperacao,
         modeloSelecionado: checklist.modeloSelecionado,
         verificacoesIniciais: checklist.verificacoesIniciais,
         perguntasFinais: checklist.perguntasFinais,
@@ -105,20 +108,11 @@ export default function CompletionScreen() {
         categoria: checklistConfig.categoria,
         resultadoGeral: results.naoOk > 0 ? "NAO_OK" : results.ok > 0 ? "OK" : "NAO_APLICAVEL",
         deviceId,
-      });
+      };
 
-      if (!result.success || !result.pdfUrl) {
-        throw new Error(result.message || "Falha ao gerar o PDF no servidor");
-      }
-
-      const pdfUrl = result.pdfUrl;
-      console.log("[DEBUG] ✓ PDF gerado e salvo no Supabase:", pdfUrl);
-
-      // Baixa uma cópia local só para permitir compartilhar/visualizar na
-      // hora (o servidor já é a fonte de verdade — isso é só conveniência).
-      const localPath = await resolveLocalPdfPath(pdfUrl);
-      setGeneratedPDFPath(localPath);
-
+      // 1. Contabiliza o checklist JÁ, localmente - não pode depender da
+      // internet pra "existir". Isso resolve não contar um checklist feito
+      // numa hora sem sinal (comum em fábrica com rede instável).
       if (!hasBeenSaved.current) {
         const record: CompletedChecklistRecord = {
           id: checklist.id,
@@ -129,39 +123,66 @@ export default function CompletionScreen() {
           resultado: results.naoOk > 0 ? "NÃO OK" : results.ok > 0 ? "OK" : "NÃO APLICÁVEL",
           executanteName: checklist.assinaturas?.executante?.nome || "",
           executanteMatricula: checklist.assinaturas?.executante?.matricula || "",
-          dataRecuperacao: checklist.dadosIniciais?.dataRecuperacao || new Date().toLocaleDateString("pt-BR"),
+          dataRecuperacao,
           dataFabricacao: checklist.dadosIniciais?.dataFabricacao || "",
           numeroSerie: checklist.dadosIniciais?.numeroSerie || "",
           numeroOP: checklist.dadosIniciais?.numeroOP || "",
           timestamp: checklist.timestamp,
-          pdfFileName: pdfUrl,
+          pdfFileName: "",
         };
-        await addCompletedChecklist(record);
-        console.log("[DEBUG] Checklist salvo no AsyncStorage com pdfUrl:", pdfUrl);
+        await addCompletedChecklistLocalOnly(record);
         hasBeenSaved.current = true;
       }
 
-      // Compartilhar arquivo (usa a cópia local baixada acima)
-      if (localPath && (await Sharing.isAvailableAsync())) {
-        await Sharing.shareAsync(localPath, {
-          mimeType: "application/pdf",
-          dialogTitle: "Compartilhar Checklist PDF",
-        });
-      } else {
-        Alert.alert("Sucesso", "PDF gerado e salvo na nuvem. Veja em Histórico.");
+      // 2. Tenta gerar o PDF de verdade agora (o servidor gera o PDF e já
+      // salva a linha completa no Supabase).
+      try {
+        const result = await generatePdfMutation.mutateAsync(input);
+
+        if (!result.success || !result.pdfUrl) {
+          throw new Error(result.message || "Falha ao gerar o PDF no servidor");
+        }
+
+        const pdfUrl = result.pdfUrl;
+        console.log("[DEBUG] ✓ PDF gerado e salvo no Supabase:", pdfUrl);
+        await confirmChecklistPdf(checklist.id, { id: result.id ?? checklist.id, pdfUrl });
+
+        // Baixa uma cópia local só para permitir compartilhar/visualizar na
+        // hora (o servidor já é a fonte de verdade — isso é só conveniência).
+        const localPath = await resolveLocalPdfPath(pdfUrl);
+        setGeneratedPDFPath(localPath);
+
+        if (localPath && (await Sharing.isAvailableAsync())) {
+          await Sharing.shareAsync(localPath, {
+            mimeType: "application/pdf",
+            dialogTitle: "Compartilhar Checklist PDF",
+          });
+        } else {
+          alertar("Sucesso", "PDF gerado e salvo na nuvem. Veja em Histórico.");
+        }
+      } catch (pdfError) {
+        // Não é um erro fatal: o checklist já foi contabilizado no passo 1.
+        // Só a geração do PDF fica pendente, tentada de novo sozinha quando
+        // a internet voltar (igual outros checklists pendentes).
+        console.warn("Falha ao gerar PDF agora, ficará pendente:", pdfError);
+        await queuePdfGeneration(checklist.id, input);
+        alertar(
+          "Checklist salvo!",
+          "Sem conexão no momento - o checklist já foi contabilizado e o PDF será gerado sozinho assim que a internet voltar. Você pode ver o progresso em Histórico."
+        );
       }
 
       setIsGeneratingPDF(false);
     } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      Alert.alert("Erro", `Não foi possível gerar o PDF: ${error instanceof Error ? error.message : "erro desconhecido"}`);
+      console.error("Erro ao finalizar checklist:", error);
+      alertar("Erro", `Não foi possível finalizar o checklist: ${error instanceof Error ? error.message : "erro desconhecido"}`);
       setIsGeneratingPDF(false);
     }
   };
 
   const handleCompartilharPDF = async () => {
     if (!generatedPDFPath) {
-      Alert.alert("Aviso", "Gere o PDF primeiro clicando em 'Gerar PDF'.");
+      alertar("Aviso", "Gere o PDF primeiro clicando em 'Gerar PDF'.");
       return;
     }
 
@@ -173,7 +194,7 @@ export default function CompletionScreen() {
       });
     } catch (error) {
       console.error("Erro ao compartilhar PDF:", error);
-      Alert.alert("Erro", "Não foi possível compartilhar o PDF. Tente novamente.");
+      alertar("Erro", "Não foi possível compartilhar o PDF. Tente novamente.");
     }
   };
 

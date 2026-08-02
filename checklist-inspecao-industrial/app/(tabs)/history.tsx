@@ -102,8 +102,14 @@ export default function HistoryScreen() {
   const colors = useColors();
   const router = useRouter();
   const { createNewChecklist } = useChecklist();
-  const { completedChecklists, deleteCompletedChecklists, syncPendingChecklists, pendingSyncCount } =
-    useReports();
+  const {
+    completedChecklists,
+    deleteCompletedChecklists,
+    syncPendingChecklists,
+    pendingSyncCount,
+    retryPendingPdfGenerations,
+    pendingPdfCount,
+  } = useReports();
   const [searchText, setSearchText] = useState("");
   const [filterModelo, setFilterModelo] = useState<string | null>(null);
   const [filterExecutante, setFilterExecutante] = useState<string | null>(null);
@@ -156,20 +162,26 @@ export default function HistoryScreen() {
   };
 
   // Sincronizar checklists manualmente - reenvia pro Supabase qualquer
-  // checklist ainda pendente (feito offline, nunca confirmado sincronizado).
+  // checklist ainda pendente (feito offline, nunca confirmado sincronizado)
+  // e tenta gerar de novo o PDF de qualquer checklist finalizado offline.
   const handleSyncNow = async () => {
     setIsSyncing(true);
     try {
-      const { synced, failed } = await syncPendingChecklists();
-      if (synced === 0 && failed === 0) {
+      const [{ synced, failed }, { synced: pdfSynced, failed: pdfFailed }] = await Promise.all([
+        syncPendingChecklists(),
+        retryPendingPdfGenerations(),
+      ]);
+      const totalSynced = synced + pdfSynced;
+      const totalFailed = failed + pdfFailed;
+      if (totalSynced === 0 && totalFailed === 0) {
         alertar("Tudo certo", "Não há checklists pendentes de sincronização.");
-      } else if (failed > 0) {
+      } else if (totalFailed > 0) {
         alertar(
           "Atenção",
-          `${synced} checklist(s) sincronizado(s). ${failed} ainda não puderam ser enviados - verifique sua conexão.`
+          `${totalSynced} checklist(s) sincronizado(s). ${totalFailed} ainda não puderam ser enviados - verifique sua conexão.`
         );
       } else {
-        alertar("Sucesso", `${synced} checklist(s) sincronizado(s) com sucesso!`);
+        alertar("Sucesso", `${totalSynced} checklist(s) sincronizado(s) com sucesso!`);
       }
     } catch (error) {
       console.error("Erro ao sincronizar:", error);
@@ -530,25 +542,39 @@ export default function HistoryScreen() {
         </View>
 
         {/* Botão Sincronizar */}
-        <TouchableOpacity
-          className="bg-primary rounded-lg py-3 mb-1 items-center"
-          onPress={handleSyncNow}
-          disabled={isSyncing}
-        >
-          {isSyncing ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text className="text-background font-semibold">
-              Sincronizar Agora{pendingSyncCount > 0 ? ` (${pendingSyncCount} pendente${pendingSyncCount > 1 ? "s" : ""})` : ""}
-            </Text>
-          )}
-        </TouchableOpacity>
-        {pendingSyncCount > 0 && (
-          <Text className="text-xs text-muted mb-4">
-            {pendingSyncCount} checklist{pendingSyncCount > 1 ? "s" : ""} ainda não confirmado{pendingSyncCount > 1 ? "s" : ""} no servidor - o app tenta sincronizar sozinho quando a internet voltar.
-          </Text>
-        )}
-        {pendingSyncCount === 0 && <View className="mb-4" />}
+        {(() => {
+          const totalPendente = pendingSyncCount + pendingPdfCount;
+          return (
+            <>
+              <TouchableOpacity
+                className="bg-primary rounded-lg py-3 mb-1 items-center"
+                onPress={handleSyncNow}
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <ActivityIndicator color={colors.background} />
+                ) : (
+                  <Text className="text-background font-semibold">
+                    Sincronizar Agora{totalPendente > 0 ? ` (${totalPendente} pendente${totalPendente > 1 ? "s" : ""})` : ""}
+                  </Text>
+                )}
+              </TouchableOpacity>
+              {totalPendente > 0 ? (
+                <Text className="text-xs text-muted mb-4">
+                  {pendingPdfCount > 0
+                    ? `${pendingPdfCount} checklist${pendingPdfCount > 1 ? "s" : ""} finalizado${pendingPdfCount > 1 ? "s" : ""} sem internet, aguardando gerar o PDF. `
+                    : ""}
+                  {pendingSyncCount > 0
+                    ? `${pendingSyncCount} checklist${pendingSyncCount > 1 ? "s" : ""} ainda não confirmado${pendingSyncCount > 1 ? "s" : ""} no servidor. `
+                    : ""}
+                  O app tenta sozinho assim que a internet voltar.
+                </Text>
+              ) : (
+                <View className="mb-4" />
+              )}
+            </>
+          );
+        })()}
 
         {/* Busca */}
         <TextInput
