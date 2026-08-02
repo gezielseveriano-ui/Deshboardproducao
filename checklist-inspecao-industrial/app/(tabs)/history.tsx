@@ -390,16 +390,64 @@ export default function HistoryScreen() {
     }
   };
 
+  // Baixa o PDF pro navegador como blob: (em vez de linkar direto pra URL
+  // remota) porque um link cross-origin com o atributo "download" costuma
+  // ser ignorado pelo navegador (ele só abre o PDF em vez de salvar) - com
+  // o blob, o navegador sempre salva de verdade.
+  const baixarBackupAntesDeExcluir = async (
+    selecionados: CompletedChecklistRecord[]
+  ): Promise<boolean> => {
+    const comPdf = selecionados.filter((c) => c.pdfFileName);
+    if (comPdf.length === 0) return true;
+
+    try {
+      if (comPdf.length === 1) {
+        const c = comPdf[0];
+        const response = await fetch(c.pdfFileName!);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        downloadUrlOnWeb(blobUrl, `${c.checklistCode}_backup.pdf`);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      } else {
+        const files = comPdf.map((c) => ({
+          url: c.pdfFileName!,
+          name: `${c.checklistCode}.pdf`,
+        }));
+        const zipUrl = await buildZipBlobUrlOnWeb(files);
+        downloadUrlOnWeb(zipUrl, `backup_checklists_excluidos_${Date.now()}.zip`);
+        setTimeout(() => URL.revokeObjectURL(zipUrl), 10000);
+      }
+      return true;
+    } catch (error) {
+      console.warn("[Historico] Falha ao baixar backup antes de excluir:", error);
+      return window.confirm(
+        "Não foi possível baixar uma cópia de backup antes de excluir. Excluir mesmo assim, sem backup?"
+      );
+    }
+  };
+
   const handleDeleteSelected = () => {
     if (selectedChecklistIds.size === 0) return;
 
     const count = selectedChecklistIds.size;
     const title = "Excluir checklist" + (count > 1 ? "s" : "");
-    const message = `Tem certeza que deseja excluir ${count} checklist${count > 1 ? "s" : ""}? Essa ação não pode ser desfeita.`;
+    const message = `Tem certeza que deseja excluir ${count} checklist${count > 1 ? "s" : ""}? Um backup em PDF será baixado automaticamente antes da exclusão.`;
 
     const executarExclusao = async () => {
       setIsDeleting(true);
       try {
+        const selecionados = filteredChecklists.filter((c) =>
+          selectedChecklistIds.has(c.id)
+        );
+
+        if (Platform.OS === "web") {
+          const podeContinuar = await baixarBackupAntesDeExcluir(selecionados);
+          if (!podeContinuar) {
+            return;
+          }
+        }
+
         const { deleted, failed } = await deleteCompletedChecklists(
           Array.from(selectedChecklistIds)
         );
