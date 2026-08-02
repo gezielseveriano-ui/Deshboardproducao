@@ -1,9 +1,7 @@
 import { supabase, isSupabaseConfigured } from "./supabase-client";
 import { CompletedChecklistRecord } from "./reports-types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import NetInfo from "@react-native-community/netinfo";
 
-const SYNC_QUEUE_KEY = "@checklist_supabase_sync_queue";
 const LAST_SYNC_TIME_KEY = "@checklist_supabase_last_sync";
 
 /**
@@ -122,7 +120,7 @@ export async function loadChecklistsFromSupabase(): Promise<
   }
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Excluir um checklist do Supabase (linha da tabela + PDF no Storage,
@@ -321,59 +319,6 @@ export async function checkSupabaseConnection(): Promise<boolean> {
   } catch (error) {
     console.error("[Supabase] Erro ao verificar conexão:", error);
     return false;
-  }
-}
-
-/**
- * Sincronizar checklists locais com Supabase
- */
-export async function syncLocalChecklistsWithSupabase(
-  localChecklists: CompletedChecklistRecord[],
-  deviceId: string
-): Promise<{ synced: number; failed: number }> {
-  try {
-    const state = await NetInfo.fetch();
-    if (!state.isConnected) {
-      console.log("[Supabase] Sem conexão, sincronização adiada");
-      return { synced: 0, failed: 0 };
-    }
-
-    console.log(
-      "[Supabase] Sincronizando",
-      localChecklists.length,
-      "checklists locais..."
-    );
-
-    let synced = 0;
-    let failed = 0;
-
-    for (const checklist of localChecklists) {
-      try {
-        await saveChecklistToSupabase(checklist, deviceId);
-        synced++;
-      } catch (error) {
-        console.error("[Supabase] Erro ao sincronizar checklist:", error);
-        failed++;
-      }
-    }
-
-    console.log(
-      "[Supabase] Sincronização concluída:",
-      synced,
-      "sucesso,",
-      failed,
-      "falhas"
-    );
-
-    await AsyncStorage.setItem(
-      LAST_SYNC_TIME_KEY,
-      new Date().toISOString()
-    );
-
-    return { synced, failed };
-  } catch (error) {
-    console.error("[Supabase] Erro ao sincronizar:", error);
-    return { synced: 0, failed: localChecklists.length };
   }
 }
 

@@ -26,7 +26,6 @@ import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
-import { useAutoSyncOnReconnect } from "@/hooks/use-auto-sync-on-reconnect";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
@@ -70,17 +69,6 @@ export default function RootLayout() {
 
   const [insets, setInsets] = useState<EdgeInsets>(initialInsets);
   const [frame, setFrame] = useState<Rect>(initialFrame);
-
-  // Ativar sincronizacao automatica ao reconectar a rede
-  useAutoSyncOnReconnect({
-    onSyncStart: () => console.log("[App] Sincronizacao automatica iniciada"),
-    onSyncComplete: (success, error) => {
-      console.log(`[App] Sincronizacao concluida: ${success} sucesso, ${error} erros`);
-    },
-    onSyncError: (error) => {
-      console.error("[App] Erro na sincronizacao automatica:", error);
-    },
-  });
 
   // Initialize Manus runtime for cookie injection from parent container
   useEffect(() => {

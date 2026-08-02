@@ -10,7 +10,6 @@ import {
   Text,
   TouchableOpacity,
   TextInput,
-  Alert,
   ActivityIndicator,
   Modal,
   Pressable,
@@ -22,10 +21,10 @@ import { CompletedChecklistRecord } from "@/lib/reports-types";
 import JSZip from "jszip";
 import * as FileSystem from "expo-file-system/legacy";
 import { DatePickerCalendar } from "@/components/date-picker-calendar";
-import { useSyncChecklist } from "@/hooks/use-sync-checklist";
 import { getApiBaseUrl } from "@/constants/oauth";
 import { Calendar } from "react-native-calendars";
 import { resolveLocalPdfPath, downloadUrlOnWeb, buildZipBlobUrlOnWeb } from "@/lib/pdf-local-cache";
+import { alertar, confirmar } from "@/lib/alert";
 
 
 function HistoryItemCard({
@@ -103,8 +102,8 @@ export default function HistoryScreen() {
   const colors = useColors();
   const router = useRouter();
   const { createNewChecklist } = useChecklist();
-  const { completedChecklists, deleteCompletedChecklists } = useReports();
-  const { syncPendingChecklists, syncStatus } = useSyncChecklist();
+  const { completedChecklists, deleteCompletedChecklists, syncPendingChecklists, pendingSyncCount } =
+    useReports();
   const [searchText, setSearchText] = useState("");
   const [filterModelo, setFilterModelo] = useState<string | null>(null);
   const [filterExecutante, setFilterExecutante] = useState<string | null>(null);
@@ -120,7 +119,7 @@ export default function HistoryScreen() {
 
   const handleViewPDF = async (item: CompletedChecklistRecord) => {
     if (!item.pdfFileName) {
-      Alert.alert("Erro", "PDF não encontrado para este checklist.");
+      alertar("Erro", "PDF não encontrado para este checklist.");
       return;
     }
 
@@ -140,10 +139,7 @@ export default function HistoryScreen() {
     try {
       const localPath = await resolveLocalPdfPath(item.pdfFileName);
       if (!localPath) {
-        Alert.alert(
-          "Erro",
-          "PDF não encontrado ou corrompido. Tente sincronizar novamente."
-        );
+        alertar("Erro", "PDF não encontrado ou corrompido. Tente sincronizar novamente.");
         return;
       }
 
@@ -153,21 +149,31 @@ export default function HistoryScreen() {
       });
     } catch (error) {
       console.error("Erro ao visualizar PDF:", error);
-      Alert.alert("Erro", "Não foi possível visualizar o PDF.");
+      alertar("Erro", "Não foi possível visualizar o PDF.");
     } finally {
       setIsLoadingPDF(null);
     }
   };
 
-  // Sincronizar checklists manualmente
+  // Sincronizar checklists manualmente - reenvia pro Supabase qualquer
+  // checklist ainda pendente (feito offline, nunca confirmado sincronizado).
   const handleSyncNow = async () => {
     setIsSyncing(true);
     try {
-      await syncPendingChecklists();
-      Alert.alert("Sucesso", "Checklists sincronizados com sucesso!");
+      const { synced, failed } = await syncPendingChecklists();
+      if (synced === 0 && failed === 0) {
+        alertar("Tudo certo", "Não há checklists pendentes de sincronização.");
+      } else if (failed > 0) {
+        alertar(
+          "Atenção",
+          `${synced} checklist(s) sincronizado(s). ${failed} ainda não puderam ser enviados - verifique sua conexão.`
+        );
+      } else {
+        alertar("Sucesso", `${synced} checklist(s) sincronizado(s) com sucesso!`);
+      }
     } catch (error) {
       console.error("Erro ao sincronizar:", error);
-      Alert.alert("Erro", "Falha ao sincronizar checklists.");
+      alertar("Erro", "Falha ao sincronizar checklists.");
     } finally {
       setIsSyncing(false);
     }
@@ -277,7 +283,7 @@ export default function HistoryScreen() {
   // Compartilhar PDFs selecionados por email
   const handleShareByEmail = async () => {
     if (selectedChecklistIds.size === 0) {
-      Alert.alert("Aviso", "Selecione pelo menos um checklist para compartilhar.");
+      alertar("Aviso", "Selecione pelo menos um checklist para compartilhar.");
       return;
     }
 
@@ -302,7 +308,7 @@ export default function HistoryScreen() {
 
           const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
           if (!localPath) {
-            Alert.alert("Erro", "PDF não encontrado ou corrompido.");
+            alertar("Erro", "PDF não encontrado ou corrompido.");
             return;
           }
 
@@ -324,7 +330,7 @@ export default function HistoryScreen() {
           }));
 
         if (files.length === 0) {
-          Alert.alert("Erro", "Nenhum PDF válido encontrado para compartilhar.");
+          alertar("Erro", "Nenhum PDF válido encontrado para compartilhar.");
           return;
         }
 
@@ -358,7 +364,7 @@ export default function HistoryScreen() {
         }
 
         if (successCount === 0) {
-          Alert.alert("Erro", "Nenhum PDF válido encontrado para compartilhar.");
+          alertar("Erro", "Nenhum PDF válido encontrado para compartilhar.");
           return;
         }
 
@@ -380,11 +386,11 @@ export default function HistoryScreen() {
           UTI: "public.zip-archive",
         });
 
-        Alert.alert("Sucesso", `${successCount} arquivo(s) compartilhado(s) no email!`);
+        alertar("Sucesso", `${successCount} arquivo(s) compartilhado(s) no email!`);
       }
     } catch (error) {
       console.error("Erro ao compartilhar por email:", error);
-      Alert.alert("Erro", "Falha ao compartilhar checklists.");
+      alertar("Erro", "Falha ao compartilhar checklists.");
     } finally {
       setIsLoadingZip(false);
     }
@@ -457,30 +463,14 @@ export default function HistoryScreen() {
             deleted > 0
               ? `${deleted} checklist(s) excluído(s). ${failed} não puderam ser excluídos - verifique sua conexão e tente novamente.`
               : "Não foi possível excluir os checklists. Verifique sua conexão e tente novamente.";
-          // Alert.alert não faz nada no React Native Web (é um no-op nessa
-          // plataforma) - por isso usamos window.alert/confirm no web.
-          if (Platform.OS === "web") {
-            window.alert(aviso);
-          } else {
-            Alert.alert("Atenção", aviso);
-          }
+          alertar("Atenção", aviso);
         }
       } finally {
         setIsDeleting(false);
       }
     };
 
-    if (Platform.OS === "web") {
-      if (window.confirm(`${title}\n\n${message}`)) {
-        executarExclusao();
-      }
-      return;
-    }
-
-    Alert.alert(title, message, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Excluir", style: "destructive", onPress: executarExclusao },
-    ]);
+    confirmar(title, message, executarExclusao, "Excluir");
   };
 
   const toggleChecklistSelection = (id: string) => {
@@ -536,16 +526,24 @@ export default function HistoryScreen() {
 
         {/* Botão Sincronizar */}
         <TouchableOpacity
-          className="bg-primary rounded-lg py-3 mb-4 items-center"
+          className="bg-primary rounded-lg py-3 mb-1 items-center"
           onPress={handleSyncNow}
           disabled={isSyncing}
         >
           {isSyncing ? (
             <ActivityIndicator color={colors.background} />
           ) : (
-            <Text className="text-background font-semibold">Sincronizar Agora</Text>
+            <Text className="text-background font-semibold">
+              Sincronizar Agora{pendingSyncCount > 0 ? ` (${pendingSyncCount} pendente${pendingSyncCount > 1 ? "s" : ""})` : ""}
+            </Text>
           )}
         </TouchableOpacity>
+        {pendingSyncCount > 0 && (
+          <Text className="text-xs text-muted mb-4">
+            {pendingSyncCount} checklist{pendingSyncCount > 1 ? "s" : ""} ainda não confirmado{pendingSyncCount > 1 ? "s" : ""} no servidor - o app tenta sincronizar sozinho quando a internet voltar.
+          </Text>
+        )}
+        {pendingSyncCount === 0 && <View className="mb-4" />}
 
         {/* Busca */}
         <TextInput
@@ -786,7 +784,7 @@ export default function HistoryScreen() {
                 setFilterDate("custom");
                 setShowDatePicker(false);
               } else {
-                Alert.alert("Erro", "Selecione data inicial e final");
+                alertar("Erro", "Selecione data inicial e final");
               }
             }}
           >

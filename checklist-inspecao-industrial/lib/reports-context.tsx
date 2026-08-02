@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CompletedChecklistRecord } from './reports-types';
 import * as SupabaseSync from './supabase-sync';
+import { UUID_REGEX } from './supabase-sync';
 import NetInfo from '@react-native-community/netinfo';
 import * as SecureStore from 'expo-secure-store';
 
@@ -10,11 +11,17 @@ interface ReportsContextType {
   addCompletedChecklist: (record: CompletedChecklistRecord) => Promise<void>;
   deleteCompletedChecklists: (ids: string[]) => Promise<{ deleted: number; failed: number }>;
   loadCompletedChecklists: () => Promise<void>;
-  syncWithServer: () => Promise<boolean>;
-  recoverFromServer: () => Promise<boolean>;
+  syncPendingChecklists: () => Promise<{ synced: number; failed: number }>;
+  pendingSyncCount: number;
   isSyncing: boolean;
   isOnline: boolean;
 }
+
+// Um checklist só recebe um id de verdade (uuid) depois de confirmado salvo
+// no Supabase - enquanto o id local (gerado no aparelho, tipo
+// "checklist_<timestamp>") continuar, é sinal de que esse checklist ainda
+// não foi sincronizado.
+const isPendingSync = (record: CompletedChecklistRecord) => !UUID_REGEX.test(record.id);
 
 const ReportsContext = createContext<ReportsContextType | undefined>(undefined);
 
@@ -123,6 +130,10 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
           setCompletedChecklists(merged);
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
           console.log('[Reports] ✓ Sincronização com Supabase concluída');
+
+          // Aproveita e já tenta mandar pro servidor qualquer checklist
+          // pendente (feito offline, nunca confirmado sincronizado).
+          await syncPendingChecklists(merged);
         } catch (syncError) {
           console.warn('[Reports] Erro ao sincronizar com Supabase:', syncError);
           // Continuar com dados locais - não é erro fatal
@@ -206,67 +217,72 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     return { deleted: idsDeleted.size, failed };
   };
 
-  // Sincronizar checklists com servidor (backup remoto)
-  const syncWithServer = async () => {
+  // Reenvia pro Supabase todo checklist que ainda não foi confirmado
+  // sincronizado (id local, não-uuid) - é isso que garante que um checklist
+  // feito sem internet realmente chega no banco de dados assim que a
+  // conexão voltar, em vez de ficar preso só no aparelho pra sempre.
+  const syncPendingChecklists = async (baseRecords?: CompletedChecklistRecord[]) => {
+    if (!deviceId) return { synced: 0, failed: 0 };
+
+    const atualInicial = baseRecords ?? completedChecklists;
+    const pendentes = atualInicial.filter(isPendingSync);
+    if (pendentes.length === 0) {
+      return { synced: 0, failed: 0 };
+    }
+
+    console.log('[Reports] Sincronizando', pendentes.length, 'checklist(s) pendente(s)...');
+    setIsSyncing(true);
+
+    let synced = 0;
+    let failed = 0;
+    let atual = atualInicial;
+
     try {
-      console.log('[Sync] Iniciando sincronização com servidor...');
-      
-      if (!isOnline) {
-        console.log('[Sync] Offline - sincronização adiada');
-        return false;
+      for (const record of pendentes) {
+        try {
+          const saved = await SupabaseSync.saveChecklistToSupabase(record, deviceId);
+          if (saved?.id) {
+            atual = atual.map((c) => (c.id === record.id ? { ...c, id: saved.id } : c));
+          }
+          synced++;
+        } catch (error) {
+          console.warn('[Reports] Falha ao sincronizar checklist pendente:', record.id, error);
+          failed++;
+        }
       }
 
-      if (!deviceId) {
-        console.warn('[Sync] Device ID não disponível');
-        return false;
+      if (synced > 0) {
+        setCompletedChecklists(atual);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(atual));
       }
 
-      // Sincronizar checklists locais com Supabase
-      const result = await SupabaseSync.syncLocalChecklistsWithSupabase(
-        completedChecklists,
-        deviceId
-      );
-
-      console.log('[Sync] Resultado:', result);
-      return result.failed === 0;
-    } catch (error) {
-      console.error('[Sync] Erro ao sincronizar:', error);
-      return false;
+      console.log('[Reports] Sincronização de pendentes concluída:', { synced, failed });
+      return { synced, failed };
+    } finally {
+      setIsSyncing(false);
     }
   };
 
-  // Recuperar dados do servidor
-  const recoverFromServer = async () => {
-    try {
-      console.log('[Recover] Recuperando dados do servidor...');
-      
-      if (!isOnline) {
-        console.log('[Recover] Offline - recuperação adiada');
-        return false;
-      }
-
-      // Carregar checklists do Supabase
-      const supabaseChecklists = await SupabaseSync.loadChecklistsFromSupabase();
-      
-      // Atualizar estado local
-      setCompletedChecklists(supabaseChecklists);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(supabaseChecklists));
-      
-      console.log('[Recover] ✓ Recuperados', supabaseChecklists.length, 'checklists');
-      return true;
-    } catch (error) {
-      console.error('[Recover] Erro ao recuperar dados:', error);
-      return false;
+  // Tenta sincronizar pendentes sempre que a conexão volta - sem isso, um
+  // checklist feito offline só sincronizaria se o usuário lembrasse de
+  // tocar em "Sincronizar Agora".
+  const wasOnlineRef = React.useRef(isOnline);
+  useEffect(() => {
+    if (isOnline && !wasOnlineRef.current) {
+      syncPendingChecklists();
     }
-  };
+    wasOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  const pendingSyncCount = completedChecklists.filter(isPendingSync).length;
 
   const value: ReportsContextType = {
     completedChecklists,
     addCompletedChecklist,
     deleteCompletedChecklists,
     loadCompletedChecklists,
-    syncWithServer,
-    recoverFromServer,
+    syncPendingChecklists,
+    pendingSyncCount,
     isSyncing,
     isOnline,
   };
