@@ -17,6 +17,13 @@ interface PendingPdfItem {
   input: GerarPdfInput;
 }
 
+// Registro mínimo guardado quando um checklist é excluído, até a exclusão
+// no Supabase ser confirmada de verdade.
+type PendingDeleteItem = Pick<
+  CompletedChecklistRecord,
+  'id' | 'checklistCode' | 'timestamp' | 'pdfFileName' | 'clientChecklistId'
+>;
+
 interface ReportsContextType {
   completedChecklists: CompletedChecklistRecord[];
   addCompletedChecklist: (record: CompletedChecklistRecord) => Promise<void>;
@@ -31,6 +38,8 @@ interface ReportsContextType {
   deleteCompletedChecklists: (
     ids: string[]
   ) => Promise<{ deleted: number; failed: number; lastError?: string }>;
+  retryPendingDeletes: () => Promise<{ deleted: number; failed: number }>;
+  pendingDeleteCount: number;
   loadCompletedChecklists: () => Promise<void>;
   syncPendingChecklists: () => Promise<{ synced: number; failed: number }>;
   pendingSyncCount: number;
@@ -44,26 +53,11 @@ interface ReportsContextType {
 // não foi sincronizado.
 const isPendingSync = (record: CompletedChecklistRecord) => !UUID_REGEX.test(record.id);
 
-// Erros do Supabase costumam ser objetos comuns (não instâncias de Error de
-// verdade), então "error instanceof Error" falha e String(error) só dá
-// "[object Object]" - extrai o campo .message manualmente nesse caso.
-function extrairMensagemDeErro(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message) return message;
-  }
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
-
 const ReportsContext = createContext<ReportsContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'completed_checklists';
 const PENDING_PDF_QUEUE_KEY = 'pending_pdf_queue';
+const PENDING_DELETE_QUEUE_KEY = 'pending_delete_queue';
 // SecureStore só aceita chaves alfanuméricas + "." "-" "_" (sem "@"), por isso
 // não pode ser "@device_id" — com a chave inválida, getItemAsync/setItemAsync
 // sempre lançavam erro e a lógica sempre caía (silenciosamente) no fallback
@@ -96,10 +90,29 @@ export async function getOrCreateDeviceId(): Promise<string> {
 export function ReportsProvider({ children }: { children: React.ReactNode }) {
   const [completedChecklists, setCompletedChecklists] = useState<CompletedChecklistRecord[]>([]);
   const [pendingPdfQueue, setPendingPdfQueue] = useState<PendingPdfItem[]>([]);
+  const [pendingDeleteQueue, setPendingDeleteQueue] = useState<PendingDeleteItem[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [deviceId, setDeviceId] = useState<string>('');
+
+  // Sempre reflete o completedChecklists mais atual, mesmo dentro de uma
+  // função assíncrona de vida longa (como retryPendingPdfGenerations, que
+  // fica esperando uma resposta de rede) - usado pra checar se um checklist
+  // ainda existe localmente sem depender de um closure que pode estar
+  // desatualizado.
+  const completedChecklistsRef = React.useRef<CompletedChecklistRecord[]>([]);
+  useEffect(() => {
+    completedChecklistsRef.current = completedChecklists;
+  }, [completedChecklists]);
+
+  // Mesma ideia acima, para a fila de exclusões pendentes - usada pra evitar
+  // que um checklist recém-excluído "ressuscite" na tela se uma linha dele
+  // ainda existir no Supabase no momento em que essa busca acontecer.
+  const pendingDeleteQueueRef = React.useRef<PendingDeleteItem[]>([]);
+  useEffect(() => {
+    pendingDeleteQueueRef.current = pendingDeleteQueue;
+  }, [pendingDeleteQueue]);
 
   // Inicializar Device ID
   useEffect(() => {
@@ -115,6 +128,14 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     AsyncStorage.getItem(PENDING_PDF_QUEUE_KEY).then((data) => {
       if (data) setPendingPdfQueue(JSON.parse(data));
+    });
+  }, []);
+
+  // Carregar fila de exclusões pendentes (checklists excluídos localmente,
+  // cuja exclusão no Supabase ainda não foi confirmada)
+  useEffect(() => {
+    AsyncStorage.getItem(PENDING_DELETE_QUEUE_KEY).then((data) => {
+      if (data) setPendingDeleteQueue(JSON.parse(data));
     });
   }, []);
 
@@ -163,6 +184,17 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         // 3. Mesclar: Supabase tem prioridade (mais recente)
         const merged = [...localChecklists];
         for (const supabaseChecklist of supabaseChecklists) {
+          // Um checklist que acabou de ser excluído (fila de exclusão
+          // pendente) não pode "ressuscitar" só porque a linha dele ainda
+          // não terminou de ser removida do Supabase - ignora completamente
+          // enquanto ele estiver nessa fila.
+          const foiExcluido = pendingDeleteQueueRef.current.some(
+            (item) =>
+              item.id === supabaseChecklist.id ||
+              (!!supabaseChecklist.clientChecklistId && item.clientChecklistId === supabaseChecklist.clientChecklistId)
+          );
+          if (foiExcluido) continue;
+
           // Compara tanto pelo id quanto pelo client_checklist_id: um
           // checklist feito offline começa com o id provisório do aparelho
           // (igual ao client_checklist_id) e só é trocado pelo id real do
@@ -312,47 +344,81 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     return { synced, failed };
   };
 
+  const persistPendingDeleteQueue = async (queue: PendingDeleteItem[]) => {
+    setPendingDeleteQueue(queue);
+    pendingDeleteQueueRef.current = queue;
+    await AsyncStorage.setItem(PENDING_DELETE_QUEUE_KEY, JSON.stringify(queue));
+  };
+
+  // Exclui da lista local IMEDIATAMENTE (antes de qualquer chamada de rede) -
+  // se isso dependesse da exclusão no Supabase terminar primeiro (como era
+  // antes), fechar o app/aba logo depois de confirmar a exclusão podia
+  // interromper a chamada de rede no meio e o checklist "reaparecia" depois,
+  // porque a remoção local nunca tinha chegado a acontecer de fato. A
+  // exclusão real no servidor agora é tentada em seguida e, se falhar, fica
+  // guardada numa fila (igual a fila de PDF pendente) pra ser tentada de novo
+  // sozinha depois - sem nunca voltar a aparecer na tela nesse meio tempo,
+  // graças ao "não ressuscitar" no merge do loadCompletedChecklists.
   const deleteCompletedChecklists = async (ids: string[]) => {
-    // Não bloqueamos por causa do "isOnline" (NetInfo) aqui - no web esse
-    // estado já se mostrou não confiável (fica "Offline" às vezes mesmo com
-    // internet normal). É melhor sempre tentar a exclusão de verdade no
-    // Supabase e deixar a falha real de rede (se houver) ser o que decide.
-    const idsDeleted = new Set<string>();
-    let failed = 0;
-    let lastError: string | undefined;
+    const idsSet = new Set(ids);
+    const registrosParaExcluir = completedChecklists.filter((c) => idsSet.has(c.id));
+    const idsNaoEncontrados = ids.length - registrosParaExcluir.length;
 
-    for (const id of ids) {
-      const record = completedChecklists.find((c) => c.id === id);
-      if (!record) {
-        failed++;
-        lastError = 'Checklist não encontrado na lista local.';
-        continue;
-      }
-      try {
-        await comTentativas(() => SupabaseSync.deleteChecklistFromSupabase(record));
-        idsDeleted.add(id);
-      } catch (error) {
-        console.warn('[Reports] Erro ao excluir checklist no Supabase:', id, error);
-        failed++;
-        lastError = extrairMensagemDeErro(error);
-      }
-    }
-
-    if (idsDeleted.size > 0) {
-      const updated = completedChecklists.filter((c) => !idsDeleted.has(c.id));
+    if (registrosParaExcluir.length > 0) {
+      const updated = completedChecklists.filter((c) => !idsSet.has(c.id));
       setCompletedChecklists(updated);
+      completedChecklistsRef.current = updated;
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
 
       // Não deixa uma entrada zumbi na fila de PDF pendente tentando gerar
       // PDF pra um checklist que acabou de ser excluído.
-      if (pendingPdfQueue.some((item) => idsDeleted.has(item.localId))) {
-        await persistPendingPdfQueue(
-          pendingPdfQueue.filter((item) => !idsDeleted.has(item.localId))
-        );
+      if (pendingPdfQueue.some((item) => idsSet.has(item.localId))) {
+        await persistPendingPdfQueue(pendingPdfQueue.filter((item) => !idsSet.has(item.localId)));
+      }
+
+      const semDuplicata = pendingDeleteQueue.filter((item) => !idsSet.has(item.id));
+      await persistPendingDeleteQueue([
+        ...semDuplicata,
+        ...registrosParaExcluir.map((record) => ({
+          id: record.id,
+          checklistCode: record.checklistCode,
+          timestamp: record.timestamp,
+          pdfFileName: record.pdfFileName,
+          clientChecklistId: record.clientChecklistId,
+        })),
+      ]);
+    }
+
+    const { deleted, failed } = await retryPendingDeletes();
+    return {
+      deleted,
+      failed: failed + idsNaoEncontrados,
+      lastError: idsNaoEncontrados > 0 ? 'Checklist não encontrado na lista local.' : undefined,
+    };
+  };
+
+  // Tenta de novo excluir no Supabase todo checklist já removido daqui -
+  // roda sozinho quando a conexão volta, igual os outros "pendentes".
+  const retryPendingDeletes = async () => {
+    if (pendingDeleteQueue.length === 0) return { deleted: 0, failed: 0 };
+
+    let deleted = 0;
+    let failed = 0;
+    let filaAtual = pendingDeleteQueue;
+
+    for (const item of pendingDeleteQueue) {
+      try {
+        await comTentativas(() => SupabaseSync.deleteChecklistFromSupabase(item));
+        filaAtual = filaAtual.filter((f) => f.id !== item.id);
+        deleted++;
+      } catch (error) {
+        console.warn('[Reports] Erro ao excluir checklist no Supabase:', item.id, error);
+        failed++;
       }
     }
 
-    return { deleted: idsDeleted.size, failed, lastError };
+    await persistPendingDeleteQueue(filaAtual);
+    return { deleted, failed };
   };
 
   // Reenvia pro Supabase todo checklist que ainda não foi confirmado
@@ -413,6 +479,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     if (isOnline && !wasOnlineRef.current) {
       syncPendingChecklists();
       retryPendingPdfGenerations();
+      retryPendingDeletes();
     }
     wasOnlineRef.current = isOnline;
   }, [isOnline]);
@@ -420,25 +487,28 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   // O evento de reconexão acima depende do NetInfo, que já se mostrou não
   // confiável no web (às vezes nem chega a disparar a transição
   // offline->online de verdade, mesmo com a internet de volta). Por
-  // segurança, tenta de novo sozinho a cada 20s enquanto houver checklist ou
-  // PDF pendente, pra garantir que os dados chegam no servidor mesmo que o
-  // evento de reconexão nunca dispare - sem depender do usuário lembrar de
-  // tocar em "Sincronizar Agora" ou recarregar a página.
+  // segurança, tenta de novo sozinho a cada 20s enquanto houver checklist,
+  // PDF ou exclusão pendente, pra garantir que os dados chegam no servidor
+  // mesmo que o evento de reconexão nunca dispare - sem depender do usuário
+  // lembrar de tocar em "Sincronizar Agora" ou recarregar a página.
   useEffect(() => {
-    const temPendente = pendingPdfQueue.length > 0 || completedChecklists.some(isPendingSync);
+    const temPendente =
+      pendingPdfQueue.length > 0 || pendingDeleteQueue.length > 0 || completedChecklists.some(isPendingSync);
     if (!temPendente) return;
     const interval = setInterval(() => {
       syncPendingChecklists();
       retryPendingPdfGenerations();
+      retryPendingDeletes();
     }, 20000);
     return () => clearInterval(interval);
-  }, [pendingPdfQueue.length, completedChecklists]);
+  }, [pendingPdfQueue.length, pendingDeleteQueue.length, completedChecklists]);
 
   const idsNaFilaDePdf = new Set(pendingPdfQueue.map((item) => item.localId));
   const pendingSyncCount = completedChecklists.filter(
     (c) => isPendingSync(c) && !idsNaFilaDePdf.has(c.id)
   ).length;
   const pendingPdfCount = pendingPdfQueue.length;
+  const pendingDeleteCount = pendingDeleteQueue.length;
 
   const value: ReportsContextType = {
     completedChecklists,
@@ -449,6 +519,8 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     retryPendingPdfGenerations,
     pendingPdfCount,
     deleteCompletedChecklists,
+    retryPendingDeletes,
+    pendingDeleteCount,
     loadCompletedChecklists,
     syncPendingChecklists,
     pendingSyncCount,

@@ -113,6 +113,8 @@ export default function HistoryScreen() {
     pendingSyncCount,
     retryPendingPdfGenerations,
     pendingPdfCount,
+    retryPendingDeletes,
+    pendingDeleteCount,
   } = useReports();
   const [searchText, setSearchText] = useState("");
   const [filterModelo, setFilterModelo] = useState<string | null>(null);
@@ -166,17 +168,23 @@ export default function HistoryScreen() {
   };
 
   // Sincronizar checklists manualmente - reenvia pro Supabase qualquer
-  // checklist ainda pendente (feito offline, nunca confirmado sincronizado)
-  // e tenta gerar de novo o PDF de qualquer checklist finalizado offline.
+  // checklist ainda pendente (feito offline, nunca confirmado sincronizado),
+  // tenta gerar de novo o PDF de qualquer checklist finalizado offline, e
+  // tenta de novo qualquer exclusão que ainda não foi confirmada no servidor.
   const handleSyncNow = async () => {
     setIsSyncing(true);
     try {
-      const [{ synced, failed }, { synced: pdfSynced, failed: pdfFailed }] = await Promise.all([
+      const [
+        { synced, failed },
+        { synced: pdfSynced, failed: pdfFailed },
+        { deleted: deletesSynced, failed: deletesFailed },
+      ] = await Promise.all([
         syncPendingChecklists(),
         retryPendingPdfGenerations(),
+        retryPendingDeletes(),
       ]);
-      const totalSynced = synced + pdfSynced;
-      const totalFailed = failed + pdfFailed;
+      const totalSynced = synced + pdfSynced + deletesSynced;
+      const totalFailed = failed + pdfFailed + deletesFailed;
       if (totalSynced === 0 && totalFailed === 0) {
         alertar("Tudo certo", "Não há checklists pendentes de sincronização.");
       } else if (totalFailed > 0) {
@@ -478,17 +486,16 @@ export default function HistoryScreen() {
       async () => {
         setIsDeleting(true);
         try {
-          const { deleted, failed, lastError } = await deleteCompletedChecklists(
-            Array.from(selectedChecklistIds)
-          );
+          // A remoção da lista aqui no aparelho é imediata (não espera o
+          // Supabase) - "failed" agora só significa que a exclusão real no
+          // servidor ainda não foi confirmada e vai ser tentada de novo
+          // sozinha em segundo plano, não que o checklist continua
+          // aparecendo na tela. "lastError" só aparece pra um caso realmente
+          // anômalo (checklist selecionado que já não existia na lista).
+          const { lastError } = await deleteCompletedChecklists(Array.from(selectedChecklistIds));
           setSelectedChecklistIds(new Set());
-          if (failed > 0) {
-            const detalhe = lastError ? `\n\nDetalhe técnico: ${lastError}` : "";
-            const aviso =
-              deleted > 0
-                ? `${deleted} checklist(s) excluído(s). ${failed} não puderam ser excluídos.${detalhe}`
-                : `Não foi possível excluir os checklists.${detalhe}`;
-            alertar("Atenção", aviso);
+          if (lastError) {
+            alertar("Atenção", lastError);
           }
         } finally {
           setIsDeleting(false);
@@ -551,7 +558,7 @@ export default function HistoryScreen() {
 
         {/* Botão Sincronizar */}
         {(() => {
-          const totalPendente = pendingSyncCount + pendingPdfCount;
+          const totalPendente = pendingSyncCount + pendingPdfCount + pendingDeleteCount;
           return (
             <>
               <TouchableOpacity
@@ -574,6 +581,9 @@ export default function HistoryScreen() {
                     : ""}
                   {pendingSyncCount > 0
                     ? `${pendingSyncCount} checklist${pendingSyncCount > 1 ? "s" : ""} ainda não confirmado${pendingSyncCount > 1 ? "s" : ""} no servidor. `
+                    : ""}
+                  {pendingDeleteCount > 0
+                    ? `${pendingDeleteCount} exclusão${pendingDeleteCount > 1 ? "ões" : ""} ainda não confirmada${pendingDeleteCount > 1 ? "s" : ""} no servidor. `
                     : ""}
                   O app tenta sozinho assim que a internet voltar.
                 </Text>
