@@ -314,17 +314,26 @@ export const appRouter = router({
             return { success: false, message: "Supabase não configurado no servidor (EXPO_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes)." };
           }
 
-          // Se esse checklist já foi gerado antes (mesmo clientChecklistId),
-          // reaproveita a linha existente em vez de gerar tudo de novo -
-          // isso é o que garante que uma tentativa repetida nunca duplica.
+          // Se esse checklist já foi gerado antes de verdade (mesmo
+          // clientChecklistId E já com um PDF salvo), reaproveita a linha
+          // existente em vez de gerar tudo de novo - isso é o que garante
+          // que uma tentativa repetida nunca duplica. Importante: só
+          // considera "já feito" se a linha existente TEM pdf_url - uma
+          // linha sem PDF (inserida por um caminho diferente, como o de
+          // sincronização de metadados) não pode travar esse checklist pra
+          // sempre sem nunca gerar o PDF de verdade.
+          let idParaAtualizar: string | null = null;
           if (input.clientChecklistId) {
             const { data: existing } = await supabase
               .from("completed_checklists")
               .select("id, pdf_url")
               .eq("client_checklist_id", input.clientChecklistId)
               .maybeSingle();
-            if (existing) {
+            if (existing?.pdf_url) {
               return { success: true, pdfUrl: existing.pdf_url, id: existing.id };
+            }
+            if (existing) {
+              idParaAtualizar = existing.id;
             }
           }
 
@@ -361,52 +370,82 @@ export const appRouter = router({
           const { data: publicData } = supabase.storage.from("checklist-pdfs").getPublicUrl(storagePath);
           const pdfUrl = publicData?.publicUrl;
 
+          const rowData = {
+            device_id: input.deviceId,
+            checklist_code: config.codigo,
+            checklist_name: config.titulo,
+            categoria: input.categoria,
+            modelo: input.modeloSelecionado || "Não especificado",
+            resultado: input.resultadoGeral,
+            executante_name: input.assinaturas?.executante?.nome || "",
+            executante_matricula: input.assinaturas?.executante?.matricula || "",
+            lider_name: input.assinaturas?.liderMRS?.nome || "",
+            lider_matricula: input.assinaturas?.liderMRS?.matricula || "",
+            inspector_name: input.assinaturas?.inspectorTecnico?.nome || "",
+            inspector_matricula: input.assinaturas?.inspectorTecnico?.matricula || "",
+            data_recuperacao: input.dataRecuperacao,
+            data_fabricacao: input.dataFabricacao,
+            numero_serie: input.numeroSerie,
+            numero_op: input.numeroOP,
+            resultado_detalhado: { etapas: input.etapas, verificacoesIniciais: input.verificacoesIniciais, perguntasFinais: input.perguntasFinais },
+            signatures: input.assinaturas || {},
+            pdf_url: pdfUrl,
+            pdf_file_name: fileName,
+            sync_status: "synced",
+            synced_at: new Date().toISOString(),
+            timestamp: Date.now(),
+            client_checklist_id: input.clientChecklistId ?? null,
+          };
+
+          // Já existia uma linha pra esse checklist (sem PDF, inserida por
+          // outro caminho, como o de sincronização de metadados) - atualiza
+          // ela com os dados completos e o PDF de verdade, em vez de inserir
+          // uma linha nova (que violaria o índice único de
+          // client_checklist_id).
+          if (idParaAtualizar) {
+            const { data: updatedRow, error: updateError } = await supabase
+              .from("completed_checklists")
+              .update(rowData)
+              .eq("id", idParaAtualizar)
+              .select()
+              .single();
+            if (updateError) {
+              console.error("[generateAndUploadPDF] Erro ao atualizar linha existente:", updateError);
+              return { success: true, pdfUrl, id: idParaAtualizar, message: `PDF salvo, mas houve erro ao atualizar o registro no banco: ${updateError.message}` };
+            }
+            return { success: true, pdfUrl, id: updatedRow?.id ?? idParaAtualizar };
+          }
+
           const { data: row, error: insertError } = await supabase
             .from("completed_checklists")
-            .insert([
-              {
-                device_id: input.deviceId,
-                checklist_code: config.codigo,
-                checklist_name: config.titulo,
-                categoria: input.categoria,
-                modelo: input.modeloSelecionado || "Não especificado",
-                resultado: input.resultadoGeral,
-                executante_name: input.assinaturas?.executante?.nome || "",
-                executante_matricula: input.assinaturas?.executante?.matricula || "",
-                lider_name: input.assinaturas?.liderMRS?.nome || "",
-                lider_matricula: input.assinaturas?.liderMRS?.matricula || "",
-                inspector_name: input.assinaturas?.inspectorTecnico?.nome || "",
-                inspector_matricula: input.assinaturas?.inspectorTecnico?.matricula || "",
-                data_recuperacao: input.dataRecuperacao,
-                data_fabricacao: input.dataFabricacao,
-                numero_serie: input.numeroSerie,
-                numero_op: input.numeroOP,
-                resultado_detalhado: { etapas: input.etapas, verificacoesIniciais: input.verificacoesIniciais, perguntasFinais: input.perguntasFinais },
-                signatures: input.assinaturas || {},
-                pdf_url: pdfUrl,
-                pdf_file_name: fileName,
-                sync_status: "synced",
-                synced_at: new Date().toISOString(),
-                timestamp: Date.now(),
-                client_checklist_id: input.clientChecklistId ?? null,
-              },
-            ])
+            .insert([rowData])
             .select()
             .single();
 
           if (insertError) {
             // Violação do índice único de client_checklist_id: outra tentativa
-            // pro mesmo checklist já inseriu a linha entre o check acima e
-            // esse insert (corrida). Reaproveita a linha que já existe em vez
-            // de tratar como erro.
+            // pro mesmo checklist inseriu a linha entre o check inicial e
+            // esse insert (corrida). Atualiza essa linha com o PDF que
+            // acabamos de gerar, em vez de só devolver o que já tinha lá
+            // (que pode estar sem PDF ainda, se a outra tentativa também
+            // ainda não tiver terminado).
             if (insertError.code === "23505" && input.clientChecklistId) {
               const { data: existing } = await supabase
                 .from("completed_checklists")
                 .select("id, pdf_url")
                 .eq("client_checklist_id", input.clientChecklistId)
                 .maybeSingle();
-              if (existing) {
+              if (existing?.pdf_url) {
                 return { success: true, pdfUrl: existing.pdf_url, id: existing.id };
+              }
+              if (existing) {
+                const { data: updatedRow } = await supabase
+                  .from("completed_checklists")
+                  .update(rowData)
+                  .eq("id", existing.id)
+                  .select()
+                  .single();
+                return { success: true, pdfUrl, id: updatedRow?.id ?? existing.id };
               }
             }
             console.error("[generateAndUploadPDF] Erro ao salvar linha:", insertError);
