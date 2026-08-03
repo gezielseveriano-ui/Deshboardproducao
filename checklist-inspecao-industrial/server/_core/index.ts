@@ -14,6 +14,7 @@ import dashboardApiRouter from "../routes/dashboard-api";
 import dashboardLinksRouter from "../routes/dashboard-links";
 import downloadChecklistsRouter from "../routes/download-checklists";
 import syncChecklistRouter from "../routes/sync-checklist";
+import painelDiretoriaRouter from "../routes/painel-diretoria";
 import { setupWebSocketServer } from "../routes/websocket-notifications";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -70,6 +71,7 @@ async function startServer() {
   app.use(dashboardLinksRouter);
   app.use(downloadChecklistsRouter);
   app.use(syncChecklistRouter);
+  app.use(painelDiretoriaRouter);
   
   // Configurar WebSocket para notificações em tempo real
   setupWebSocketServer(server);
