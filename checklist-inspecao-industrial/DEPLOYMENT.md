@@ -90,6 +90,15 @@ navegador limpasse os dados - por exemplo, o navegador embutido de
 outros apps (como o do WhatsApp) costuma fazer isso entre uma abertura
 e outra do link. Agora esse cadastro também fica salvo no Supabase.
 
+**Importante:** rodar de novo o `supabase-schema.sql` também é necessário
+depois da correção do bug de checklist duplicado no Histórico - ele
+adiciona a coluna `client_checklist_id` (e um índice único) na tabela
+`completed_checklists`, usada pra garantir que o mesmo checklist nunca
+seja salvo duas vezes mesmo se o app tentar gerar o PDF de novo (por
+exemplo, depois de uma resposta perdida com a internet instável da
+fábrica). Sem rodar essa migração, o app continua funcionando, mas essa
+proteção contra duplicidade fica inativa até o SQL ser executado.
+
 ## Login e criação de contas
 
 O app inteiro fica atrás de login (Supabase Auth) - sem login, só

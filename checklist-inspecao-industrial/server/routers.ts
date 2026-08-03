@@ -299,10 +299,35 @@ export const appRouter = router({
           categoria: z.string().optional().default("Geral"),
           resultadoGeral: z.string().optional().default("OK"),
           deviceId: z.string().optional().default("desconhecido"),
+          // Id gerado no aparelho (checklist.id) - usado como chave de
+          // idempotência: evita criar uma linha duplicada se essa mutation
+          // for chamada de novo pro mesmo checklist (double-tap no botão,
+          // retry automático depois de uma resposta perdida por internet
+          // instável em fábrica, etc.).
+          clientChecklistId: z.string().optional(),
         })
       )
       .mutation(async ({ input }) => {
         try {
+          const supabase = getSupabaseAdmin();
+          if (!supabase) {
+            return { success: false, message: "Supabase não configurado no servidor (EXPO_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes)." };
+          }
+
+          // Se esse checklist já foi gerado antes (mesmo clientChecklistId),
+          // reaproveita a linha existente em vez de gerar tudo de novo -
+          // isso é o que garante que uma tentativa repetida nunca duplica.
+          if (input.clientChecklistId) {
+            const { data: existing } = await supabase
+              .from("completed_checklists")
+              .select("id, pdf_url")
+              .eq("client_checklist_id", input.clientChecklistId)
+              .maybeSingle();
+            if (existing) {
+              return { success: true, pdfUrl: existing.pdf_url, id: existing.id };
+            }
+          }
+
           const config = getChecklistConfig(input.checklistType as any);
 
           const docDefinition = buildChecklistPdfDocDefinition({
@@ -319,11 +344,6 @@ export const appRouter = router({
           });
 
           const pdfBuffer = await renderPdfBuffer(docDefinition);
-
-          const supabase = getSupabaseAdmin();
-          if (!supabase) {
-            return { success: false, message: "Supabase não configurado no servidor (EXPO_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes)." };
-          }
 
           const dataSemBarras = (input.dataRecuperacao || "sem-data").replace(/\//g, "");
           const fileName = `${input.numeroSerie || "sem-serie"}-${dataSemBarras}-${Date.now()}.pdf`;
@@ -368,12 +388,27 @@ export const appRouter = router({
                 sync_status: "synced",
                 synced_at: new Date().toISOString(),
                 timestamp: Date.now(),
+                client_checklist_id: input.clientChecklistId ?? null,
               },
             ])
             .select()
             .single();
 
           if (insertError) {
+            // Violação do índice único de client_checklist_id: outra tentativa
+            // pro mesmo checklist já inseriu a linha entre o check acima e
+            // esse insert (corrida). Reaproveita a linha que já existe em vez
+            // de tratar como erro.
+            if (insertError.code === "23505" && input.clientChecklistId) {
+              const { data: existing } = await supabase
+                .from("completed_checklists")
+                .select("id, pdf_url")
+                .eq("client_checklist_id", input.clientChecklistId)
+                .maybeSingle();
+              if (existing) {
+                return { success: true, pdfUrl: existing.pdf_url, id: existing.id };
+              }
+            }
             console.error("[generateAndUploadPDF] Erro ao salvar linha:", insertError);
             // O PDF já subiu com sucesso; devolve a URL mesmo que o registro na tabela falhe.
             return { success: true, pdfUrl, id: null, message: `PDF salvo, mas houve erro ao registrar no banco: ${insertError.message}` };

@@ -51,8 +51,20 @@ CREATE TABLE IF NOT EXISTS completed_checklists (
   synced_at TIMESTAMP WITH TIME ZONE,
   
   -- Timestamp para cálculos
-  timestamp BIGINT NOT NULL
+  timestamp BIGINT NOT NULL,
+
+  -- Id gerado no aparelho (checklist.id) no momento em que o checklist foi
+  -- finalizado. Usado como chave de idempotência: se o app tentar gerar o
+  -- PDF de novo pro mesmo checklist (double-tap, retry automático depois de
+  -- uma resposta perdida por internet instável, etc.), o servidor reaproveita
+  -- a linha existente em vez de criar uma duplicada. NULL em linhas antigas,
+  -- criadas antes dessa coluna existir.
+  client_checklist_id TEXT
 );
+
+-- Se a tabela já existia antes dessa coluna ser adicionada, garante que ela
+-- exista mesmo assim (ALTER TABLE é seguro rodar de novo).
+ALTER TABLE completed_checklists ADD COLUMN IF NOT EXISTS client_checklist_id TEXT;
 
 -- Índices para melhor performance
 CREATE INDEX IF NOT EXISTS idx_completed_checklists_device_id ON completed_checklists(device_id);
@@ -60,6 +72,11 @@ CREATE INDEX IF NOT EXISTS idx_completed_checklists_categoria ON completed_check
 CREATE INDEX IF NOT EXISTS idx_completed_checklists_created_at ON completed_checklists(created_at);
 CREATE INDEX IF NOT EXISTS idx_completed_checklists_sync_status ON completed_checklists(sync_status);
 CREATE INDEX IF NOT EXISTS idx_completed_checklists_executante ON completed_checklists(executante_matricula);
+-- Índice único parcial: garante que o mesmo checklist (mesmo client_checklist_id)
+-- nunca seja inserido duas vezes, mas permite múltiplas linhas antigas com
+-- client_checklist_id NULL.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_completed_checklists_client_id_unique
+  ON completed_checklists(client_checklist_id) WHERE client_checklist_id IS NOT NULL;
 
 -- Ativar RLS (Row Level Security) - qualquer um pode ler/escrever
 ALTER TABLE completed_checklists ENABLE ROW LEVEL SECURITY;

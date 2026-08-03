@@ -108,6 +108,11 @@ export default function CompletionScreen() {
         categoria: checklistConfig.categoria,
         resultadoGeral: results.naoOk > 0 ? "NAO_OK" : results.ok > 0 ? "OK" : "NAO_APLICAVEL",
         deviceId,
+        // Chave de idempotência: garante que o servidor nunca crie uma linha
+        // duplicada pra esse checklist, mesmo que essa mutation seja chamada
+        // mais de uma vez (double-tap, retry automático depois de uma
+        // resposta perdida por internet instável, etc.).
+        clientChecklistId: checklist.id,
       };
 
       // 1. Contabiliza o checklist JÁ, localmente - não pode depender da
