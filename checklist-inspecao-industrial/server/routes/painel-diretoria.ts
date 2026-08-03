@@ -2,7 +2,25 @@ import { Router, Request, Response } from "express";
 import { parse as parseCookieHeader } from "cookie";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "../supabase-admin";
-import { getSessionCookieOptions } from "../_core/cookies";
+
+// Cookie próprio (sem domain) - o painel é sempre acessado pela mesma
+// origem, então não precisa (nem deve) do domain cross-subdomain usado
+// pelo login do app. Setar domain=".onrender.com" faria o navegador
+// rejeitar o cookie, já que onrender.com é um domínio público compartilhado
+// por várias apps.
+function cookieOptions(req: Request) {
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const secure =
+    req.protocol === "https" ||
+    (typeof forwardedProto === "string" && forwardedProto.split(",")[0].trim() === "https");
+
+  return {
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax" as const,
+    secure,
+  };
+}
 
 // Painel de análise para diretoria - um link separado do app (não usa o
 // login do Supabase), protegido por uma senha simples fixa. Lê os
@@ -356,7 +374,7 @@ router.post("/painel-diretoria/entrar", (req: Request, res: Response) => {
   const senhaDigitada = req.body?.senha;
   if (typeof senhaDigitada === "string" && senhaDigitada === SENHA) {
     res.cookie(COOKIE_NAME, HASH_ESPERADO, {
-      ...getSessionCookieOptions(req),
+      ...cookieOptions(req),
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
     res.redirect("/painel-diretoria");
@@ -366,7 +384,7 @@ router.post("/painel-diretoria/entrar", (req: Request, res: Response) => {
 });
 
 router.get("/painel-diretoria/sair", (req: Request, res: Response) => {
-  res.clearCookie(COOKIE_NAME, { ...getSessionCookieOptions(req) });
+  res.clearCookie(COOKIE_NAME, { ...cookieOptions(req) });
   res.redirect("/painel-diretoria");
 });
 
