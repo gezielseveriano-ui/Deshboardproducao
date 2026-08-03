@@ -97,6 +97,11 @@ export default function TechnicalChecklistScreen() {
         setNaoAplicavelMedidas({});
       }
       setError(false);
+    } else if (checklistType === "CL-ENG-1066") {
+      // Checklist de Triângulo de Freio não tem a página "Pergunta Final" -
+      // essas perguntas (substituição de chapa na coluna/guia) não se
+      // aplicam a esse processo, só a Laterais e Travessas.
+      router.push("/checklist/signatures-bank" as any);
     } else {
       router.push("/checklist/final-questions" as any);
     }
