@@ -72,7 +72,11 @@ function HistoryItemCard({
 
       <Text className="text-xs text-muted mb-3">
         {item.dataRecuperacao || "—"}
-        <Text className="text-success"> ✓ OK - Pronto para download</Text>
+        {item.pdfFileName ? (
+          <Text className="text-success"> ✓ OK - Pronto para download</Text>
+        ) : (
+          <Text className="text-warning"> ⏳ Aguardando conexão para gerar o PDF</Text>
+        )}
       </Text>
     </View>
   );

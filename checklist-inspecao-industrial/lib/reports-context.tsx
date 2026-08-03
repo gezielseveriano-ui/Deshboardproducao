@@ -405,6 +405,23 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     wasOnlineRef.current = isOnline;
   }, [isOnline]);
 
+  // O evento de reconexão acima depende do NetInfo, que já se mostrou não
+  // confiável no web (às vezes nem chega a disparar a transição
+  // offline->online de verdade, mesmo com a internet de volta). Por
+  // segurança, tenta de novo sozinho a cada 20s enquanto houver checklist ou
+  // PDF pendente, pra garantir que os dados chegam no servidor mesmo que o
+  // evento de reconexão nunca dispare - sem depender do usuário lembrar de
+  // tocar em "Sincronizar Agora" ou recarregar a página.
+  useEffect(() => {
+    const temPendente = pendingPdfQueue.length > 0 || completedChecklists.some(isPendingSync);
+    if (!temPendente) return;
+    const interval = setInterval(() => {
+      syncPendingChecklists();
+      retryPendingPdfGenerations();
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [pendingPdfQueue.length, completedChecklists]);
+
   const idsNaFilaDePdf = new Set(pendingPdfQueue.map((item) => item.localId));
   const pendingSyncCount = completedChecklists.filter(
     (c) => isPendingSync(c) && !idsNaFilaDePdf.has(c.id)
