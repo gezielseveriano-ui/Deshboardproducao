@@ -163,7 +163,19 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         // 3. Mesclar: Supabase tem prioridade (mais recente)
         const merged = [...localChecklists];
         for (const supabaseChecklist of supabaseChecklists) {
-          const index = merged.findIndex(c => c.id === supabaseChecklist.id);
+          // Compara tanto pelo id quanto pelo client_checklist_id: um
+          // checklist feito offline começa com o id provisório do aparelho
+          // (igual ao client_checklist_id) e só é trocado pelo id real do
+          // Supabase quando o PDF é confirmado - se essa confirmação
+          // acontecer bem nessa janela (enquanto essa busca ainda estava em
+          // andamento), o registro local ainda tem o id antigo. Sem esse
+          // segundo critério, esse checklist não seria reconhecido como o
+          // mesmo e viraria um card duplicado no Histórico.
+          const index = merged.findIndex(
+            (c) =>
+              c.id === supabaseChecklist.id ||
+              (!!supabaseChecklist.clientChecklistId && c.id === supabaseChecklist.clientChecklistId)
+          );
           if (index >= 0) {
             merged[index] = supabaseChecklist; // Atualizar com versão do Supabase
           } else {

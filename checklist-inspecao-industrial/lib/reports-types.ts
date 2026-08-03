@@ -17,6 +17,12 @@ export interface CompletedChecklistRecord {
   numeroOP: string; // ex: 677
   timestamp: number; // timestamp para cálculos de data
   pdfFileName: string; // ex: 456-02022026.pdf
+  // Id gerado no aparelho no momento em que o checklist foi finalizado -
+  // igual a `id` até o servidor confirmar e trocar `id` pelo id real do
+  // Supabase. Usado pra reconhecer que uma linha vinda do Supabase é a
+  // mesma que um registro local ainda com o id provisório, evitando
+  // duplicar o card no Histórico quando os dois lados ainda não bateram.
+  clientChecklistId?: string;
 }
 
 /**

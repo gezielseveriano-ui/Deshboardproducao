@@ -113,6 +113,7 @@ export async function loadChecklistsFromSupabase(): Promise<
       numeroOP: row.numero_op,
       pdfFileName: row.pdf_url || row.pdf_file_name,
       timestamp: row.timestamp,
+      clientChecklistId: row.client_checklist_id || undefined,
     }));
   } catch (error) {
     console.error("[Supabase] Erro ao carregar checklists:", error);
