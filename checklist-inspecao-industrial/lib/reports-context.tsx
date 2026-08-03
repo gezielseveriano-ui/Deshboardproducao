@@ -165,7 +165,8 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       const localData = await AsyncStorage.getItem(STORAGE_KEY);
       const localChecklists = localData ? JSON.parse(localData) : [];
       setCompletedChecklists(localChecklists);
-      
+      completedChecklistsRef.current = localChecklists;
+
       // 2. Buscar do Supabase - sempre tenta, independente do "isOnline"
       // (NetInfo): esse estado já se mostrou não confiável no web (fica
       // "Offline" às vezes com internet normal), e usar ele aqui pra pular
@@ -181,8 +182,13 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         const supabaseChecklists = await comTentativas(() => SupabaseSync.loadChecklistsFromSupabase());
         console.log('[Reports] ✓ Carregados', supabaseChecklists.length, 'checklists do Supabase');
 
-        // 3. Mesclar: Supabase tem prioridade (mais recente)
-        const merged = [...localChecklists];
+        // 3. Mesclar: Supabase tem prioridade (mais recente). Usa o estado
+        // mais atual (via ref), não o snapshot capturado no passo 1 - essa
+        // busca no Supabase pode levar alguns segundos (com retry), e nesse
+        // meio tempo outra coisa (como a confirmação de um PDF gerado em
+        // segundo plano) pode ter mudado o registro local; mesclar contra um
+        // snapshot antigo sobrescreveria essa mudança mais recente.
+        const merged = [...completedChecklistsRef.current];
         for (const supabaseChecklist of supabaseChecklists) {
           // Um checklist que acabou de ser excluído (fila de exclusão
           // pendente) não pode "ressuscitar" só porque a linha dele ainda
@@ -324,8 +330,18 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
 
     for (const item of pendingPdfQueue) {
       try {
+        // Itens enfileirados antes da chave de idempotência existir ficaram
+        // gravados no aparelho sem clientChecklistId (o payload já estava
+        // congelado no armazenamento local antes dessa correção) - completa
+        // aqui na hora de enviar, senão esse checklist específico nunca
+        // ganha a proteção contra duplicidade, não importa quantas vezes o
+        // código do servidor seja corrigido.
+        const inputComIdempotencia = {
+          ...item.input,
+          clientChecklistId: item.input.clientChecklistId ?? item.localId,
+        };
         const result = await comTentativas(() =>
-          trpcVanilla.checklist.generateAndUploadPDF.mutate(item.input)
+          trpcVanilla.checklist.generateAndUploadPDF.mutate(inputComIdempotencia)
         );
         if (!result.success || !result.pdfUrl) {
           throw new Error(result.message || 'Falha ao gerar o PDF no servidor');

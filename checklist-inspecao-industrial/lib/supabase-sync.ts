@@ -56,6 +56,10 @@ export async function saveChecklistToSupabase(
       sync_status: "synced",
       synced_at: new Date().toISOString(),
       timestamp: record.timestamp,
+      // Mesma chave de idempotência usada em generateAndUploadPDF - evita
+      // duplicar esse checklist se essa função for chamada mais de uma vez
+      // pra ele (retry automático de sincronização, por exemplo).
+      client_checklist_id: record.clientChecklistId || record.id,
     };
 
     const { data: result, error } = await supabase
@@ -64,6 +68,20 @@ export async function saveChecklistToSupabase(
       .select();
 
     if (error) {
+      // Violação do índice único de client_checklist_id: esse checklist já
+      // foi salvo antes (outra tentativa venceu a corrida) - reaproveita a
+      // linha existente em vez de tratar como erro.
+      if (error.code === "23505") {
+        const { data: existing } = await supabase
+          .from("completed_checklists")
+          .select("*")
+          .eq("client_checklist_id", data.client_checklist_id)
+          .maybeSingle();
+        if (existing) {
+          console.log("[Supabase] Checklist já existia (idempotência):", existing.id);
+          return existing;
+        }
+      }
       console.error("[Supabase] Erro ao salvar:", error);
       throw error;
     }
