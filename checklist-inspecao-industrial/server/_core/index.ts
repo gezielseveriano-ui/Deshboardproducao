@@ -99,7 +99,28 @@ async function startServer() {
   if (process.env.NODE_ENV === "production") {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const webBuildPath = path.join(__dirname, "..", "dist-web");
-    app.use(express.static(webBuildPath, { extensions: ["html"] }));
+
+    // index.html referencia o JS com hash do build atual (ex:
+    // AppEntry-<hash>.js) - se o navegador (principalmente o modo
+    // "standalone" de PWA instalada na tela de início do iOS, que já se
+    // mostrou bem agressivo em cachear a página raiz) guardar esse
+    // index.html em cache, o usuário fica preso pra sempre numa versão
+    // antiga do app, mesmo depois de deploys novos - forçamos revalidação
+    // sempre. Os arquivos com hash no nome (JS/CSS/imagens do bundle) são
+    // seguros pra cache longo, já que o nome muda sempre que o conteúdo
+    // muda.
+    app.use(
+      express.static(webBuildPath, {
+        extensions: ["html"],
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith("index.html")) {
+            res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          } else if (filePath.includes(`${path.sep}_expo${path.sep}static${path.sep}`)) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          }
+        },
+      }),
+    );
 
     // Fallback para index.html em qualquer rota GET não-API que não bateu
     // em um arquivo estático - necessário para links como o de
@@ -107,6 +128,7 @@ async function startServer() {
     // que não existem como página exportada, mas precisam carregar o app
     // para o próprio JS (via onAuthStateChange) tratar o token na URL.
     app.get(/^(?!\/api).*/, (_req, res) => {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.sendFile(path.join(webBuildPath, "index.html"));
     });
   }
