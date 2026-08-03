@@ -106,7 +106,9 @@ export default function HomeScreen() {
 
               <TouchableOpacity
                 onPress={() => handleInitiarChecklist(checklist.id)}
-                className="bg-primary rounded-lg py-3 items-center"
+                className={`rounded-lg py-3 items-center ${
+                  checklist.id === "CL-ENG-1066" ? "bg-success" : "bg-primary"
+                }`}
               >
                 <Text className="text-white font-semibold">Iniciar Checklist →</Text>
               </TouchableOpacity>
