@@ -200,11 +200,16 @@ export function buildChecklistPdfContent(options: ChecklistPdfContentOptions) {
     sectionTitle("MODELO DA LATERAL"),
     sectionBox([{ columns: [{ width: 160, text: "Modelo Selecionado:", bold: true, fontSize: 9 }, { text: options.modeloSelecionado || "Não selecionado", fontSize: 9 }] }]),
 
-    // SUBSTITUIÇÃO DE CHAPA
-    sectionTitle("HOUVE SUBSTITUIÇÃO DE CHAPA NA COLUNA?"),
-    sectionBox([{ text: `${checkbox(perguntasFinais.substituicaoChapaColuna === "SIM")} Sim   ${checkbox(perguntasFinais.substituicaoChapaColuna === "NAO")} Não`, fontSize: 9 }]),
-    sectionTitle("HOUVE SUBSTITUIÇÃO DE CHAPA NA GUIA?"),
-    sectionBox([{ text: `${checkbox(perguntasFinais.substituicaoChapaGuia === "SIM")} Sim   ${checkbox(perguntasFinais.substituicaoChapaGuia === "NAO")} Não`, fontSize: 9 }]),
+    // SUBSTITUIÇÃO DE CHAPA - essas perguntas não se aplicam ao checklist de
+    // Triângulo de Freio (CL-ENG-1066), só a Laterais e Travessas.
+    ...(config.codigo === "CL-ENG-1066"
+      ? []
+      : [
+          sectionTitle("HOUVE SUBSTITUIÇÃO DE CHAPA NA COLUNA?"),
+          sectionBox([{ text: `${checkbox(perguntasFinais.substituicaoChapaColuna === "SIM")} Sim   ${checkbox(perguntasFinais.substituicaoChapaColuna === "NAO")} Não`, fontSize: 9 }]),
+          sectionTitle("HOUVE SUBSTITUIÇÃO DE CHAPA NA GUIA?"),
+          sectionBox([{ text: `${checkbox(perguntasFinais.substituicaoChapaGuia === "SIM")} Sim   ${checkbox(perguntasFinais.substituicaoChapaGuia === "NAO")} Não`, fontSize: 9 }]),
+        ]),
 
     // ETAPAS TÉCNICAS
     sectionTitle("ETAPAS TÉCNICAS", "before"),
