@@ -269,6 +269,13 @@ export const appRouter = router({
               empenos: z.enum(["APROVADO", "REPROVADO"]).nullable().optional(),
             })
             .optional(),
+          inspetorPM: z
+            .object({
+              nome: z.string().optional(),
+              matricula: z.string().optional(),
+              numeroRelatorio: z.string().optional(),
+            })
+            .optional(),
           perguntasFinais: z
             .object({
               substituicaoChapaColuna: z.enum(["SIM", "NAO"]).nullable().optional(),
@@ -348,6 +355,7 @@ export const appRouter = router({
             numeroSerie: input.numeroSerie,
             modeloSelecionado: input.modeloSelecionado,
             verificacoesIniciais: input.verificacoesIniciais,
+            inspetorPM: input.inspetorPM,
             perguntasFinais: input.perguntasFinais,
             assinaturas: input.assinaturas,
           });
@@ -387,7 +395,7 @@ export const appRouter = router({
             data_fabricacao: input.dataFabricacao,
             numero_serie: input.numeroSerie,
             numero_op: input.numeroOP,
-            resultado_detalhado: { etapas: input.etapas, verificacoesIniciais: input.verificacoesIniciais, perguntasFinais: input.perguntasFinais },
+            resultado_detalhado: { etapas: input.etapas, verificacoesIniciais: input.verificacoesIniciais, inspetorPM: input.inspetorPM, perguntasFinais: input.perguntasFinais },
             signatures: input.assinaturas || {},
             pdf_url: pdfUrl,
             pdf_file_name: fileName,

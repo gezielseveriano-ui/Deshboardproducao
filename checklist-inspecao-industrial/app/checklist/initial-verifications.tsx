@@ -2,6 +2,7 @@ import { ScrollView, Text, View, TouchableOpacity, TextInput } from "react-nativ
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useChecklist } from "@/lib/checklist-context";
+import { useSignatures } from "@/lib/signatures-context";
 import { useState, useEffect, useRef } from "react";
 import { ResultadoVerificacao } from "@/lib/types";
 import { useColors } from "@/hooks/use-colors";
@@ -11,7 +12,8 @@ export default function InitialVerificationsScreen() {
   const router = useRouter();
   const colors = useColors();
   const { checklistType } = useLocalSearchParams<{ checklistType?: string }>();
-  const { checklist, updateVerificacoesIniciais, createNewChecklist } = useChecklist();
+  const { checklist, updateVerificacoesIniciais, updateInspetorPM, createNewChecklist } = useChecklist();
+  const signatures = useSignatures();
 
   // Criar um checklist em branco sempre que esta tela é aberta para um
   // checklistType. O guard por ref (em vez de comparar com o checklist
@@ -31,10 +33,22 @@ export default function InitialVerificationsScreen() {
 
   const [trinca, setTrinca] = useState<ResultadoVerificacao | null>(null);
   const [empenos, setEmpenos] = useState<ResultadoVerificacao | null>(null);
-  const [assinatura, setAssinatura] = useState("");
   const [matricula, setMatricula] = useState("");
+  const [assinatura, setAssinatura] = useState("");
   const [numeroRelatorio, setNumeroRelatorio] = useState("");
   const [errors, setErrors] = useState<Record<string, boolean>>({});
+
+  // Auto-preencher o nome do inspetor de PM quando a matrícula é digitada -
+  // mesmo padrão já usado no Banco de Assinaturas, puxando do cadastro de
+  // Inspetores feito em Configurações.
+  useEffect(() => {
+    if (matricula.trim()) {
+      const pessoa = signatures.buscarInspetorPorMatricula(matricula);
+      setAssinatura(pessoa ? pessoa.nomeCompleto : "");
+    } else {
+      setAssinatura("");
+    }
+  }, [matricula, signatures]);
 
   const handleNext = () => {
     const newErrors: Record<string, boolean> = {};
@@ -49,6 +63,11 @@ export default function InitialVerificationsScreen() {
       updateVerificacoesIniciais({
         trinca: trinca!,
         empenos: empenos!,
+      });
+      updateInspetorPM({
+        nome: assinatura,
+        matricula,
+        numeroRelatorio,
       });
       router.push("/checklist/initial-data");
     }
@@ -140,25 +159,25 @@ export default function InitialVerificationsScreen() {
             <Text className="text-lg font-semibold text-foreground">Assinatura do Inspetor de PM</Text>
 
             <View className="gap-2">
-              <Text className="text-sm text-muted">Assinatura (opcional)</Text>
-              <TextInput
-                className="border border-border rounded-lg p-3 text-foreground bg-background"
-                placeholder="Assinatura do Inspetor"
-                placeholderTextColor={colors.muted}
-                value={assinatura}
-                onChangeText={setAssinatura}
-              />
-            </View>
-
-            <View className="gap-2">
               <Text className="text-sm text-muted">Matrícula (opcional)</Text>
               <TextInput
                 className="border border-border rounded-lg p-3 text-foreground bg-background"
-                placeholder="Matrícula"
+                placeholder="Digite a matrícula"
                 placeholderTextColor={colors.muted}
                 value={matricula}
                 onChangeText={setMatricula}
                 keyboardType="numeric"
+              />
+            </View>
+
+            <View className="gap-2">
+              <Text className="text-sm text-muted">Nome</Text>
+              <TextInput
+                className="border border-border rounded-lg p-3 text-foreground bg-muted/10"
+                placeholder="Nome será preenchido automaticamente"
+                placeholderTextColor={colors.muted}
+                value={assinatura}
+                editable={false}
               />
             </View>
 

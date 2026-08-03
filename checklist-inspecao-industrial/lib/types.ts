@@ -56,6 +56,15 @@ export interface PerguntasFinais {
   substituicaoChapaGuia: "SIM" | "NAO" | null;
 }
 
+// Inspetor de PM que libera a inspeção de trincas/empenos - a matrícula é
+// digitada e o nome vem automaticamente do cadastro de Inspetores em
+// Configurações (mesmo padrão do Banco de Assinaturas).
+export interface InspetorPM {
+  nome: string;
+  matricula: string;
+  numeroRelatorio: string;
+}
+
 export interface Checklist {
   id: string;
   timestamp: number;
@@ -68,6 +77,7 @@ export interface Checklist {
     trinca?: "APROVADO" | "REPROVADO";
     empeno?: "APROVADO" | "REPROVADO";
   };
+  inspetorPM: InspetorPM;
   etapas: Etapa[];
   perguntasFinais: PerguntasFinais;
   assinaturas: Assinaturas;

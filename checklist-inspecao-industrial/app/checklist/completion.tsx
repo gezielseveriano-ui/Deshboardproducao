@@ -110,6 +110,7 @@ export default function CompletionScreen() {
         dataRecuperacao,
         modeloSelecionado: checklist.modeloSelecionado,
         verificacoesIniciais: checklist.verificacoesIniciais,
+        inspetorPM: checklist.inspetorPM,
         perguntasFinais: checklist.perguntasFinais,
         etapas: checklist.etapas.map((e) => ({ resultado: e.resultado, medidas: e.medidas })),
         assinaturas: checklist.assinaturas,

@@ -57,6 +57,7 @@ export interface ChecklistPdfContentOptions {
   numeroSerie: string;
   modeloSelecionado?: string | null;
   verificacoesIniciais?: { trinca?: "APROVADO" | "REPROVADO" | null; empenos?: "APROVADO" | "REPROVADO" | null };
+  inspetorPM?: { nome?: string | null; matricula?: string | null; numeroRelatorio?: string | null } | null;
   perguntasFinais?: { substituicaoChapaColuna?: "SIM" | "NAO" | null; substituicaoChapaGuia?: "SIM" | "NAO" | null };
   assinaturas?: {
     executante?: AssinaturaPdf | null;
@@ -176,6 +177,14 @@ export function buildChecklistPdfContent(options: ChecklistPdfContentOptions) {
     sectionBox([
       { text: [{ text: "Verificação de Trinca: ", bold: true }, `${checkbox(trinca === "APROVADO")} Aprovado   ${checkbox(trinca === "REPROVADO")} Reprovado`], fontSize: 9, margin: [0, 0, 0, 4] as [number, number, number, number] },
       { text: [{ text: "Verificação de Empenos: ", bold: true }, `${checkbox(empenos === "APROVADO")} Aprovado   ${checkbox(empenos === "REPROVADO")} Reprovado`], fontSize: 9 },
+    ]),
+
+    // ASSINATURA DO INSPETOR DE PM
+    sectionTitle("ASSINATURA DO INSPETOR DE PM"),
+    sectionBox([
+      { columns: [{ width: 160, text: "Nome:", bold: true, fontSize: 9 }, { text: options.inspetorPM?.nome || "—", fontSize: 9 }], margin: [0, 0, 0, 3] as [number, number, number, number] },
+      { columns: [{ width: 160, text: "Matrícula:", bold: true, fontSize: 9 }, { text: options.inspetorPM?.matricula || "—", fontSize: 9 }], margin: [0, 0, 0, 3] as [number, number, number, number] },
+      { columns: [{ width: 160, text: "Nº do Relatório de PM:", bold: true, fontSize: 9 }, { text: options.inspetorPM?.numeroRelatorio || "—", fontSize: 9 }] },
     ]),
 
     // DADOS ADICIONAIS

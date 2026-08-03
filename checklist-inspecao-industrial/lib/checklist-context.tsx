@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Checklist, DadosIniciais, VerificacoesIniciais, Etapa, Assinaturas, PerguntasFinais } from "./types";
+import { Checklist, DadosIniciais, VerificacoesIniciais, Etapa, Assinaturas, PerguntasFinais, InspetorPM } from "./types";
 import { ChecklistType, getChecklistConfig } from "./checklist-configs";
 
 interface ChecklistContextType {
@@ -8,6 +8,7 @@ interface ChecklistContextType {
   updateDadosIniciais: (dados: DadosIniciais) => void;
   updateModeloSelecionado: (modelo: string) => void;
   updateVerificacoesIniciais: (verificacoes: VerificacoesIniciais) => void;
+  updateInspetorPM: (inspetorPM: InspetorPM) => void;
   updateEtapa: (numero: number, resultado: string, medidas: Record<string, string>) => void;
   updatePerguntasFinais: (perguntas: PerguntasFinais) => void;
   updateAssinaturas: (assinaturas: Assinaturas) => void;
@@ -24,6 +25,7 @@ type ChecklistAction =
   | { type: "UPDATE_DADOS_INICIAIS"; payload: DadosIniciais }
   | { type: "UPDATE_MODELO"; payload: string }
   | { type: "UPDATE_VERIFICACOES"; payload: VerificacoesIniciais }
+  | { type: "UPDATE_INSPETOR_PM"; payload: InspetorPM }
   | { type: "UPDATE_ETAPA"; payload: { numero: number; resultado: string; medidas: Record<string, string> } }
   | { type: "UPDATE_PERGUNTAS_FINAIS"; payload: PerguntasFinais }
   | { type: "UPDATE_ASSINATURAS"; payload: Assinaturas };
@@ -62,6 +64,11 @@ function createEmptyChecklist(checklistType: ChecklistType): Checklist {
     verificacoesIniciais: {
       trinca: null,
       empenos: null,
+    },
+    inspetorPM: {
+      nome: "",
+      matricula: "",
+      numeroRelatorio: "",
     },
     etapas,
     perguntasFinais: {
@@ -103,6 +110,12 @@ function checklistReducer(state: Checklist | null, action: ChecklistAction): Che
       return {
         ...state,
         verificacoesIniciais: action.payload,
+      };
+
+    case "UPDATE_INSPETOR_PM":
+      return {
+        ...state,
+        inspetorPM: action.payload,
       };
 
     case "UPDATE_ETAPA": {
@@ -157,6 +170,10 @@ export function ChecklistProvider({ children }: { children: React.ReactNode }) {
 
   const updateVerificacoesIniciais = (verificacoes: VerificacoesIniciais) => {
     dispatch({ type: "UPDATE_VERIFICACOES", payload: verificacoes });
+  };
+
+  const updateInspetorPM = (inspetorPM: InspetorPM) => {
+    dispatch({ type: "UPDATE_INSPETOR_PM", payload: inspetorPM });
   };
 
   const updateEtapa = (numero: number, resultado: string, medidas: Record<string, string>) => {
@@ -307,6 +324,7 @@ export function ChecklistProvider({ children }: { children: React.ReactNode }) {
         updateDadosIniciais,
         updateModeloSelecionado,
         updateVerificacoesIniciais,
+        updateInspetorPM,
         updateEtapa,
         updatePerguntasFinais,
         updateAssinaturas,
