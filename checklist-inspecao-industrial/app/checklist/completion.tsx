@@ -25,6 +25,13 @@ export default function CompletionScreen() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [generatedPDFPath, setGeneratedPDFPath] = useState<string | null>(null);
+  // Banner colorido e fixo na tela (em vez de um alerta que passa rápido) -
+  // "sucesso" (verde) confirma que o PDF já está sendo gerado/salvo na
+  // nuvem; "aguardando" (amarelo) avisa que vai ser gerado assim que a
+  // internet voltar, pro executante ficar tranquilo em qualquer um dos casos.
+  const [statusBanner, setStatusBanner] = useState<{ tipo: "sucesso" | "aguardando"; mensagem: string } | null>(
+    null
+  );
 
   const sendEmailMutation = trpc.email.sendChecklistReport.useMutation({
     onError: () => {
@@ -89,6 +96,7 @@ export default function CompletionScreen() {
   const handleGerarPDF = async () => {
     try {
       setIsGeneratingPDF(true);
+      setStatusBanner(null);
 
       const deviceId = await getOrCreateDeviceId();
       const dataRecuperacao =
@@ -151,6 +159,10 @@ export default function CompletionScreen() {
         const pdfUrl = result.pdfUrl;
         console.log("[DEBUG] ✓ PDF gerado e salvo no Supabase:", pdfUrl);
         await confirmChecklistPdf(checklist.id, { id: result.id ?? checklist.id, pdfUrl });
+        setStatusBanner({
+          tipo: "sucesso",
+          mensagem: "✅ PDF gerado com sucesso! Já está salvo na nuvem e disponível em Histórico.",
+        });
 
         // Baixa uma cópia local só para permitir compartilhar/visualizar na
         // hora (o servidor já é a fonte de verdade — isso é só conveniência).
@@ -162,8 +174,6 @@ export default function CompletionScreen() {
             mimeType: "application/pdf",
             dialogTitle: "Compartilhar Checklist PDF",
           });
-        } else {
-          alertar("Sucesso", "PDF gerado e salvo na nuvem. Veja em Histórico.");
         }
       } catch (pdfError) {
         // Não é um erro fatal: o checklist já foi contabilizado no passo 1.
@@ -171,10 +181,11 @@ export default function CompletionScreen() {
         // a internet voltar (igual outros checklists pendentes).
         console.warn("Falha ao gerar PDF agora, ficará pendente:", pdfError);
         await queuePdfGeneration(checklist.id, input);
-        alertar(
-          "Checklist salvo!",
-          "Sem conexão no momento - o checklist já foi contabilizado e o PDF será gerado sozinho assim que a internet voltar. Você pode ver o progresso em Histórico."
-        );
+        setStatusBanner({
+          tipo: "aguardando",
+          mensagem:
+            "⏳ Checklist salvo! Sem internet no momento - assim que a conexão voltar, o PDF será gerado sozinho na nuvem.",
+        });
       }
 
       setIsGeneratingPDF(false);
@@ -214,6 +225,27 @@ export default function CompletionScreen() {
               {checklistConfig.titulo}
             </Text>
           </View>
+
+          {/* Banner de status - fica na tela (não é um alerta que passa
+          rápido), verde quando o PDF já foi gerado com sucesso, amarelo
+          quando ficou aguardando internet pra gerar sozinho depois. */}
+          {statusBanner && (
+            <View
+              className={`rounded-lg p-4 border ${
+                statusBanner.tipo === "sucesso"
+                  ? "bg-success/10 border-success"
+                  : "bg-warning/10 border-warning"
+              }`}
+            >
+              <Text
+                className={`text-base font-semibold text-center ${
+                  statusBanner.tipo === "sucesso" ? "text-success" : "text-warning"
+                }`}
+              >
+                {statusBanner.mensagem}
+              </Text>
+            </View>
+          )}
 
           {/* Botões de Ação */}
           <View className="gap-3">
