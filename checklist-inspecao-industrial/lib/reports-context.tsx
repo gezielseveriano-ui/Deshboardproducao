@@ -221,13 +221,22 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        setCompletedChecklists(merged);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        // Remove daqui os que sumiram do Supabase - foram excluídos em
+        // outro aparelho. Só vale pra registro já confirmado (id real,
+        // veio do servidor em algum momento): um registro ainda pendente
+        // (id provisório, feito offline e nunca sincronizado) nunca está
+        // no Supabase mesmo sem ter sido excluído por ninguém, então não
+        // pode ser removido por esse motivo.
+        const idsNoSupabase = new Set(supabaseChecklists.map((c) => c.id));
+        const podado = merged.filter((c) => isPendingSync(c) || idsNoSupabase.has(c.id));
+
+        setCompletedChecklists(podado);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(podado));
         console.log('[Reports] ✓ Sincronização com Supabase concluída');
 
         // Aproveita e já tenta mandar pro servidor qualquer checklist
         // pendente (feito offline, nunca confirmado sincronizado).
-        await syncPendingChecklists(merged);
+        await syncPendingChecklists(podado);
       } catch (syncError) {
         console.warn('[Reports] Erro ao sincronizar com Supabase:', syncError);
         // Continuar com dados locais - não é erro fatal
