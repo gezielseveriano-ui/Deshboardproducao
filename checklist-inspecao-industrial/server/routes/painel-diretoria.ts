@@ -163,6 +163,12 @@ function paginaDashboard(): string {
   .barra-h-fundo { flex: 1; background: #f3f4f6; border-radius: 6px; height: 20px; overflow: hidden; }
   .barra-h-preenchida { height: 100%; border-radius: 6px; }
   .barra-h-linha .qtd { width: 36px; text-align: right; color: #374151; font-weight: 600; flex-shrink: 0; }
+  .grupo-categoria { margin-bottom: 18px; }
+  .grupo-categoria:last-child { margin-bottom: 0; }
+  .grupo-categoria-titulo {
+    font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase;
+    letter-spacing: 0.04em; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0;
+  }
 
   /* Barras verticais coloridas */
   .barras-v-wrap { display: flex; align-items: flex-end; gap: 18px; overflow-x: auto; padding: 8px 4px 4px; min-height: 190px; }
@@ -433,6 +439,52 @@ function paginaDashboard(): string {
       \`).join('');
     }
 
+    // Distribuição por Modelo, separada por categoria (Lateral / Triângulo /
+    // Travessa cada uma com sua própria lista) em vez de uma lista única
+    // misturando tudo por quantidade.
+    function renderizarModeloPorCategoria(containerId, porModelo) {
+      const container = document.getElementById(containerId);
+      if (porModelo.length === 0) {
+        container.innerHTML = '<div class="vazio">Nenhum dado no período.</div>';
+        return;
+      }
+
+      const grupos = new Map();
+      porModelo.forEach((m) => {
+        const chave = m.categoria || '—';
+        if (!grupos.has(chave)) grupos.set(chave, []);
+        grupos.get(chave).push(m);
+      });
+
+      const gruposOrdenados = Array.from(grupos.entries())
+        .map(([categoria, itens]) => ({
+          categoria,
+          itens,
+          total: itens.reduce((soma, item) => soma + item.quantidade, 0),
+        }))
+        .sort((a, b) => b.total - a.total);
+
+      const max = Math.max(...porModelo.map((m) => m.quantidade));
+      let corIndex = 0;
+
+      container.innerHTML = gruposOrdenados.map((grupo) => \`
+        <div class="grupo-categoria">
+          <div class="grupo-categoria-titulo">\${grupo.categoria} (\${grupo.total})</div>
+          \${grupo.itens.map((item) => {
+            const cor = CORES[corIndex % CORES.length];
+            corIndex++;
+            return \`
+              <div class="barra-h-linha">
+                <div class="rotulo" title="\${item.modelo}">\${item.modelo}</div>
+                <div class="barra-h-fundo"><div class="barra-h-preenchida" style="width:\${(item.quantidade / max) * 100}%;background:\${cor}"></div></div>
+                <div class="qtd">\${item.quantidade}</div>
+              </div>
+            \`;
+          }).join('')}
+        </div>
+      \`).join('');
+    }
+
     function renderizarBarrasVerticais(containerId, itens) {
       const container = document.getElementById(containerId);
       if (itens.length === 0) {
@@ -548,7 +600,7 @@ function paginaDashboard(): string {
       document.getElementById('stat-executantes').textContent = porExecutante.length;
 
       renderizarBarrasHorizontais('grafico-categoria', porCategoria.map((c) => ({ rotulo: c.categoria, valor: c.quantidade })));
-      renderizarBarrasHorizontais('grafico-modelo', porModelo.slice(0, 8).map((m) => ({ rotulo: \`\${m.categoria} - \${m.modelo}\`, valor: m.quantidade })));
+      renderizarModeloPorCategoria('grafico-modelo', porModelo);
       renderizarBarrasVerticais('grafico-executante', porExecutante.slice(0, 10).map((e) => ({ rotulo: e.executanteName, valor: e.quantidade })));
 
       const porModeloFiltradoBusca = busca
