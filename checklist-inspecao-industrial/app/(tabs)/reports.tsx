@@ -8,7 +8,6 @@ import { ScrollView, View, Text, TextInput, TouchableOpacity, Modal, Alert, Acti
 import { ModeloResumo, ExecutanteResumoAgrupado, ModeloDetalhes, ExecutanteDetalhes, DateFilterType, DateRange } from "@/lib/reports-types";
 import { CategoriaResumo, ExecutanteCategoriaResumo } from "@/lib/reports-types";
 import { generateProductionReportPDF } from "@/lib/production-report-pdf";
-import * as Sharing from "expo-sharing";
 import { Calendar } from "react-native-calendars";
 import { PieChart } from "@/components/charts/pie-chart";
 import { HorizontalBarChart } from "@/components/charts/horizontal-bar-chart";
@@ -424,7 +423,7 @@ export default function ReportsScreen() {
     try {
       setIsGeneratingPDF(true);
 
-      const pdfPath = await generateProductionReportPDF({
+      await generateProductionReportPDF({
         periodo: dateRange.label,
         dataGeracao: new Date().toLocaleDateString("pt-BR"),
         categoriaResumo,
@@ -432,16 +431,6 @@ export default function ReportsScreen() {
         executanteCategoriaResumo,
         totalChecklists: filteredChecklists.length,
       });
-
-      // Compartilhar arquivo
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(pdfPath, {
-          mimeType: "application/pdf",
-          dialogTitle: "Compartilhar Relatorio de Producao",
-        });
-      } else {
-        Alert.alert("Sucesso", `PDF salvo em: ${pdfPath}`);
-      }
 
       setIsGeneratingPDF(false);
     } catch (error) {

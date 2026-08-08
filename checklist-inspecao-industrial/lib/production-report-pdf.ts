@@ -1,6 +1,9 @@
-import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
+import { getApiBaseUrl } from "@/constants/oauth";
 import { CategoriaResumo, ExecutanteCategoriaResumo, ModeloResumo } from "./reports-types";
+import { downloadUrlOnWeb } from "./pdf-local-cache";
 
 interface ProductionReportData {
   periodo: string;
@@ -11,303 +14,58 @@ interface ProductionReportData {
   totalChecklists: number;
 }
 
-/**
- * Gera um PDF de relatório de produção com informações de modelos e estatísticas
- */
-export async function generateProductionReportPDF(data: ProductionReportData): Promise<string> {
-  try {
-    // Gerar HTML do relatório
-    const htmlContent = generateReportHTML(data);
-
-    // Gerar PDF usando expo-print
-    const { uri } = await Print.printToFileAsync({
-      html: htmlContent,
-      base64: false,
-    });
-
-    // Copiar arquivo para documentDirectory
-    const fileName = `relatorio-producao-${Date.now()}.pdf`;
-    const filePath = `${FileSystem.documentDirectory}${fileName}`;
-
-    // Ler arquivo gerado e copiar
-    const fileContent = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    await FileSystem.writeAsStringAsync(filePath, fileContent, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    return filePath;
-  } catch (error) {
-    console.error("Erro ao gerar PDF de relatorio:", error);
-    throw error;
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
   }
-}
-
-function agruparPor<T, K extends string>(itens: T[], chave: (item: T) => K): Map<K, T[]> {
-  const mapa = new Map<K, T[]>();
-  itens.forEach((item) => {
-    const k = chave(item);
-    if (!mapa.has(k)) mapa.set(k, []);
-    mapa.get(k)!.push(item);
-  });
-  return mapa;
+  return btoa(binary);
 }
 
 /**
- * Gera HTML para o relatório de produção
+ * Gera o PDF do relatório de produção no servidor (pdfmake, o mesmo motor
+ * usado pro PDF de checklist) - não usa expo-print, que no web só sabe
+ * imprimir a tela atual do app (window.print()) e não sabe renderizar o
+ * HTML do relatório de verdade.
+ *
+ * No web, dispara o download direto no navegador. Em nativo, salva
+ * localmente e abre o menu de compartilhar.
  */
-function generateReportHTML(data: ProductionReportData): string {
-  const categoriaBoxes = data.categoriaResumo
-    .map(
-      (item) => `
-    <div class="summary-box">
-      <div class="number">${item.quantidade}</div>
-      <div class="label">${item.categoria}</div>
-    </div>
-  `
-    )
-    .join("");
+export async function generateProductionReportPDF(data: ProductionReportData): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/api/relatorio-producao/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 
-  // Modelos agrupados por categoria (Triângulo, Lateral, Travessa...), cada
-  // grupo já ordenado por quantidade (modeloResumo já vem assim)
-  const modelosPorCategoria = agruparPor(data.modeloResumo, (item) => item.categoria);
-  const modeloSecoes = Array.from(modelosPorCategoria.entries())
-    .map(([categoria, itens]) => {
-      const linhas = itens
-        .map(
-          (item) => `
-        <tr>
-          <td>${item.modelo}</td>
-          <td style="text-align: center; font-weight: bold;">${item.quantidade}</td>
-          <td>${item.dataRecuperacao}</td>
-        </tr>
-      `
-        )
-        .join("");
-      return `
-        <h3 class="subsection-title">${categoria}</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Modelo</th>
-              <th>Quantidade</th>
-              <th>Data</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${linhas}
-          </tbody>
-        </table>
-      `;
-    })
-    .join("");
+  if (!response.ok) {
+    throw new Error(`Erro ao gerar PDF do relatório (HTTP ${response.status})`);
+  }
 
-  // Produção por executante, agrupada por categoria (sem detalhar modelo) -
-  // cada executante com um total geral e as linhas por categoria
-  const executantesAgrupados = agruparPor(data.executanteCategoriaResumo, (item) => item.executanteName);
-  const totalExecutantes = executantesAgrupados.size;
-  const executanteSecoes = Array.from(executantesAgrupados.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([executanteName, itens]) => {
-      const totalExecutante = itens.reduce((soma, item) => soma + item.quantidade, 0);
-      const matricula = itens[0]?.executanteMatricula || "";
-      const linhas = itens
-        .sort((a, b) => b.quantidade - a.quantidade)
-        .map(
-          (item) => `
-        <tr>
-          <td>${item.categoria}</td>
-          <td style="text-align: center; font-weight: bold;">${item.quantidade}</td>
-          <td>${item.dataExecucao}</td>
-        </tr>
-      `
-        )
-        .join("");
-      return `
-        <h3 class="subsection-title">${executanteName} (Matrícula: ${matricula}) — Total: ${totalExecutante}</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Categoria</th>
-              <th>Quantidade</th>
-              <th>Data</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${linhas}
-          </tbody>
-        </table>
-      `;
-    })
-    .join("");
+  const fileName = `relatorio-producao-${Date.now()}.pdf`;
 
-  return `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          body {
-            font-family: Arial, sans-serif;
-            color: #11181c;
-            line-height: 1.6;
-            padding: 20px;
-          }
-          .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #0a7ea4;
-            padding-bottom: 20px;
-          }
-          .header h1 {
-            color: #0a7ea4;
-            font-size: 28px;
-            margin-bottom: 5px;
-          }
-          .header p {
-            color: #687076;
-            font-size: 14px;
-          }
-          .info-section {
-            margin-bottom: 20px;
-            padding: 15px;
-            background-color: #f5f5f5;
-            border-radius: 5px;
-          }
-          .info-section p {
-            margin: 5px 0;
-            font-size: 12px;
-          }
-          .section-title {
-            color: #0a7ea4;
-            font-size: 16px;
-            font-weight: bold;
-            margin-top: 25px;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #e5e7eb;
-            padding-bottom: 10px;
-          }
-          .subsection-title {
-            color: #11181c;
-            font-size: 13px;
-            font-weight: bold;
-            margin-top: 16px;
-            margin-bottom: 8px;
-            background-color: #eef4f7;
-            padding: 6px 10px;
-            border-radius: 4px;
-          }
-          .categoria-summary {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            font-size: 12px;
-          }
-          table thead {
-            background-color: #0a7ea4;
-            color: white;
-          }
-          table th {
-            padding: 10px;
-            text-align: left;
-            font-weight: bold;
-          }
-          table td {
-            padding: 8px 10px;
-            border-bottom: 1px solid #e5e7eb;
-          }
-          table tbody tr:nth-child(even) {
-            background-color: #f5f5f5;
-          }
-          .summary {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
-          }
-          .summary-box {
-            background-color: #f5f5f5;
-            padding: 15px;
-            border-radius: 5px;
-            text-align: center;
-            border-left: 4px solid #0a7ea4;
-          }
-          .summary-box .number {
-            font-size: 24px;
-            font-weight: bold;
-            color: #0a7ea4;
-          }
-          .summary-box .label {
-            font-size: 12px;
-            color: #687076;
-            margin-top: 5px;
-          }
-          .footer {
-            margin-top: 30px;
-            padding-top: 15px;
-            border-top: 1px solid #e5e7eb;
-            text-align: center;
-            font-size: 11px;
-            color: #687076;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>RELATORIO DE PRODUCAO</h1>
-          <p>MRS - Manutencao de Vagoes</p>
-        </div>
+  if (Platform.OS === "web") {
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    downloadUrlOnWeb(blobUrl, fileName);
+    // Só revoga depois de dar tempo do navegador iniciar o download de fato.
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+    return;
+  }
 
-        <div class="info-section">
-          <p><strong>Periodo:</strong> ${data.periodo}</p>
-          <p><strong>Data de Geracao:</strong> ${data.dataGeracao}</p>
-        </div>
+  const arrayBuffer = await response.arrayBuffer();
+  const base64 = arrayBufferToBase64(arrayBuffer);
+  const filePath = `${FileSystem.documentDirectory}${fileName}`;
+  await FileSystem.writeAsStringAsync(filePath, base64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
 
-        <h2 class="section-title">RESUMO GERAL</h2>
-        <div class="summary">
-          <div class="summary-box">
-            <div class="number">${data.totalChecklists}</div>
-            <div class="label">Total de Checklists</div>
-          </div>
-          <div class="summary-box">
-            <div class="number">${data.modeloResumo.length}</div>
-            <div class="label">Total de Modelos</div>
-          </div>
-          <div class="summary-box">
-            <div class="number">${totalExecutantes}</div>
-            <div class="label">Total de Executantes</div>
-          </div>
-        </div>
-
-        <h2 class="section-title">RESUMO POR CATEGORIA</h2>
-        <div class="categoria-summary">
-          ${categoriaBoxes}
-        </div>
-
-        <h2 class="section-title">RESUMO POR MODELO</h2>
-        ${modeloSecoes}
-
-        <h2 class="section-title">PRODUCAO POR EXECUTANTE</h2>
-        ${executanteSecoes}
-
-        <div class="footer">
-          <p>Este relatorio foi gerado automaticamente pelo sistema de checklists MRS.</p>
-          <p>© 2026 MRS - Manutencao de Vagoes. Todos os direitos reservados.</p>
-        </div>
-      </body>
-    </html>
-  `;
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(filePath, {
+      mimeType: "application/pdf",
+      dialogTitle: "Compartilhar Relatorio de Producao",
+    });
+  }
 }
