@@ -48,6 +48,26 @@ export async function generateProductionReportPDF(data: ProductionReportData): P
 
   if (Platform.OS === "web") {
     const blob = await response.blob();
+
+    // No share nativo do celular (Web Share API com um File de verdade), o
+    // resultado é só o PDF, sem nada mais junto. O caminho antigo (link
+    // <a download> de uma blob: URL) faz o Safari/iOS abrir o PDF numa
+    // pré-visualização própria e, ao compartilhar dali, anexar a blob: URL
+    // como texto/link junto do arquivo - por isso preferimos isso aqui
+    // sempre que o navegador suportar, e só cai pro download direto (sem
+    // share, mais comum em desktop) quando não suportar.
+    const file = new File([blob], fileName, { type: "application/pdf" });
+    const nav = typeof navigator !== "undefined" ? (navigator as any) : null;
+    if (nav?.canShare?.({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: "Relatório de Produção" });
+        return;
+      } catch (err) {
+        if ((err as any)?.name === "AbortError") return; // usuário cancelou o compartilhamento
+        // Qualquer outro erro: cai pro download direto abaixo.
+      }
+    }
+
     const blobUrl = URL.createObjectURL(blob);
     downloadUrlOnWeb(blobUrl, fileName);
     // Só revoga depois de dar tempo do navegador iniciar o download de fato.
