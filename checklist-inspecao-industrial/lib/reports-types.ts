@@ -34,6 +34,28 @@ export interface ModeloResumo {
   quantidade: number;
   checklistCode: string;
   dataRecuperacao: string; // data mais recente
+  categoria: string;
+}
+
+/**
+ * Resumo por Categoria - Agrupado
+ * Exemplo: Triângulo teve 50 checklists, independente do modelo
+ */
+export interface CategoriaResumo {
+  categoria: string;
+  quantidade: number;
+}
+
+/**
+ * Resumo por Executante + Categoria - Agrupado
+ * Exemplo: Alex fez 15 Laterais e 8 Triângulos
+ */
+export interface ExecutanteCategoriaResumo {
+  executanteName: string;
+  executanteMatricula: string;
+  categoria: string;
+  quantidade: number;
+  dataExecucao: string; // data mais recente
 }
 
 /**

@@ -1,12 +1,13 @@
 import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
-import { ModeloResumo, ExecutanteResumoAgrupado } from "./reports-types";
+import { CategoriaResumo, ExecutanteCategoriaResumo, ModeloResumo } from "./reports-types";
 
 interface ProductionReportData {
   periodo: string;
   dataGeracao: string;
+  categoriaResumo: CategoriaResumo[];
   modeloResumo: ModeloResumo[];
-  executanteResumo: ExecutanteResumoAgrupado[];
+  executanteCategoriaResumo: ExecutanteCategoriaResumo[];
   totalChecklists: number;
 }
 
@@ -44,33 +45,102 @@ export async function generateProductionReportPDF(data: ProductionReportData): P
   }
 }
 
+function agruparPor<T, K extends string>(itens: T[], chave: (item: T) => K): Map<K, T[]> {
+  const mapa = new Map<K, T[]>();
+  itens.forEach((item) => {
+    const k = chave(item);
+    if (!mapa.has(k)) mapa.set(k, []);
+    mapa.get(k)!.push(item);
+  });
+  return mapa;
+}
+
 /**
  * Gera HTML para o relatório de produção
  */
 function generateReportHTML(data: ProductionReportData): string {
-  const modeloRows = data.modeloResumo
+  const categoriaBoxes = data.categoriaResumo
     .map(
       (item) => `
-    <tr>
-      <td>${item.modelo}</td>
-      <td style="text-align: center; font-weight: bold;">${item.quantidade}</td>
-      <td>${item.dataRecuperacao}</td>
-    </tr>
+    <div class="summary-box">
+      <div class="number">${item.quantidade}</div>
+      <div class="label">${item.categoria}</div>
+    </div>
   `
     )
     .join("");
 
-  const executanteRows = data.executanteResumo
-    .map(
-      (item) => `
-    <tr>
-      <td>${item.executanteName}</td>
-      <td>${item.executanteMatricula}</td>
-      <td style="text-align: center; font-weight: bold;">${item.quantidadeTotal}</td>
-      <td>${item.dataExecucao}</td>
-    </tr>
-  `
-    )
+  // Modelos agrupados por categoria (Triângulo, Lateral, Travessa...), cada
+  // grupo já ordenado por quantidade (modeloResumo já vem assim)
+  const modelosPorCategoria = agruparPor(data.modeloResumo, (item) => item.categoria);
+  const modeloSecoes = Array.from(modelosPorCategoria.entries())
+    .map(([categoria, itens]) => {
+      const linhas = itens
+        .map(
+          (item) => `
+        <tr>
+          <td>${item.modelo}</td>
+          <td style="text-align: center; font-weight: bold;">${item.quantidade}</td>
+          <td>${item.dataRecuperacao}</td>
+        </tr>
+      `
+        )
+        .join("");
+      return `
+        <h3 class="subsection-title">${categoria}</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Modelo</th>
+              <th>Quantidade</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${linhas}
+          </tbody>
+        </table>
+      `;
+    })
+    .join("");
+
+  // Produção por executante, agrupada por categoria (sem detalhar modelo) -
+  // cada executante com um total geral e as linhas por categoria
+  const executantesAgrupados = agruparPor(data.executanteCategoriaResumo, (item) => item.executanteName);
+  const totalExecutantes = executantesAgrupados.size;
+  const executanteSecoes = Array.from(executantesAgrupados.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([executanteName, itens]) => {
+      const totalExecutante = itens.reduce((soma, item) => soma + item.quantidade, 0);
+      const matricula = itens[0]?.executanteMatricula || "";
+      const linhas = itens
+        .sort((a, b) => b.quantidade - a.quantidade)
+        .map(
+          (item) => `
+        <tr>
+          <td>${item.categoria}</td>
+          <td style="text-align: center; font-weight: bold;">${item.quantidade}</td>
+          <td>${item.dataExecucao}</td>
+        </tr>
+      `
+        )
+        .join("");
+      return `
+        <h3 class="subsection-title">${executanteName} (Matrícula: ${matricula}) — Total: ${totalExecutante}</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Quantidade</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${linhas}
+          </tbody>
+        </table>
+      `;
+    })
     .join("");
 
   return `
@@ -123,6 +193,22 @@ function generateReportHTML(data: ProductionReportData): string {
             margin-bottom: 15px;
             border-bottom: 1px solid #e5e7eb;
             padding-bottom: 10px;
+          }
+          .subsection-title {
+            color: #11181c;
+            font-size: 13px;
+            font-weight: bold;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            background-color: #eef4f7;
+            padding: 6px 10px;
+            border-radius: 4px;
+          }
+          .categoria-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
           }
           table {
             width: 100%;
@@ -201,39 +287,21 @@ function generateReportHTML(data: ProductionReportData): string {
             <div class="label">Total de Modelos</div>
           </div>
           <div class="summary-box">
-            <div class="number">${data.executanteResumo.length}</div>
+            <div class="number">${totalExecutantes}</div>
             <div class="label">Total de Executantes</div>
           </div>
         </div>
 
-        <h2 class="section-title">RESUMO POR MODELO</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Modelo</th>
-              <th>Quantidade</th>
-              <th>Data</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${modeloRows}
-          </tbody>
-        </table>
+        <h2 class="section-title">RESUMO POR CATEGORIA</h2>
+        <div class="categoria-summary">
+          ${categoriaBoxes}
+        </div>
 
-        <h2 class="section-title">RESUMO POR EXECUTANTE</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Executante</th>
-              <th>Matricula</th>
-              <th>Quantidade</th>
-              <th>Data</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${executanteRows}
-          </tbody>
-        </table>
+        <h2 class="section-title">RESUMO POR MODELO</h2>
+        ${modeloSecoes}
+
+        <h2 class="section-title">PRODUCAO POR EXECUTANTE</h2>
+        ${executanteSecoes}
 
         <div class="footer">
           <p>Este relatorio foi gerado automaticamente pelo sistema de checklists MRS.</p>

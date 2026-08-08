@@ -6,6 +6,7 @@ import { useReports } from "@/lib/reports-context";
 import { useState, useMemo } from "react";
 import { ScrollView, View, Text, TextInput, TouchableOpacity, Modal, Alert, ActivityIndicator } from "react-native";
 import { ModeloResumo, ExecutanteResumoAgrupado, ModeloDetalhes, ExecutanteDetalhes, DateFilterType, DateRange } from "@/lib/reports-types";
+import { CategoriaResumo, ExecutanteCategoriaResumo } from "@/lib/reports-types";
 import { generateProductionReportPDF } from "@/lib/production-report-pdf";
 import * as Sharing from "expo-sharing";
 import { Calendar } from "react-native-calendars";
@@ -227,6 +228,46 @@ export default function ReportsScreen() {
     return Array.from(map.values()).sort((a, b) => b.quantidadeTotal - a.quantidadeTotal);
   }, [filteredChecklists]);
 
+  // Total por categoria, independente do modelo (ex: Triângulo: 50, Lateral: 30)
+  const categoriaResumo = useMemo((): CategoriaResumo[] => {
+    const map = new Map<string, number>();
+    filteredChecklists.forEach((record) => {
+      map.set(record.categoria, (map.get(record.categoria) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([categoria, quantidade]) => ({ categoria, quantidade }))
+      .sort((a, b) => b.quantidade - a.quantidade);
+  }, [filteredChecklists]);
+
+  // Produção por executante, agrupada por categoria (sem entrar no modelo) -
+  // ex: Alex fez 15 Laterais e 8 Triângulos
+  const executanteCategoriaResumo = useMemo((): ExecutanteCategoriaResumo[] => {
+    const map = new Map<string, { executanteName: string; executanteMatricula: string; categoria: string; quantidade: number; dataExecucao: string }>();
+    filteredChecklists.forEach((record) => {
+      const key = `${record.executanteName}:::${record.categoria}`;
+      if (map.has(key)) {
+        const existing = map.get(key)!;
+        existing.quantidade += 1;
+        const existingDate = new Date(existing.dataExecucao);
+        const recordDate = new Date(record.dataRecuperacao);
+        if (recordDate > existingDate) {
+          existing.dataExecucao = record.dataRecuperacao;
+        }
+      } else {
+        map.set(key, {
+          executanteName: record.executanteName,
+          executanteMatricula: record.executanteMatricula,
+          categoria: record.categoria,
+          quantidade: 1,
+          dataExecucao: record.dataRecuperacao,
+        });
+      }
+    });
+    return Array.from(map.values()).sort(
+      (a, b) => a.executanteName.localeCompare(b.executanteName) || b.quantidade - a.quantidade
+    );
+  }, [filteredChecklists]);
+
   // Obter detalhes de um executante (quais modelos fez)
   const getExecutanteDetalhes = (executanteName: string): ExecutanteDetalhes => {
     const records = filteredChecklists.filter((r) => r.executanteName === executanteName);
@@ -386,8 +427,9 @@ export default function ReportsScreen() {
       const pdfPath = await generateProductionReportPDF({
         periodo: dateRange.label,
         dataGeracao: new Date().toLocaleDateString("pt-BR"),
+        categoriaResumo,
         modeloResumo,
-        executanteResumo,
+        executanteCategoriaResumo,
         totalChecklists: filteredChecklists.length,
       });
 
