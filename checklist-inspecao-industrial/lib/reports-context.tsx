@@ -528,6 +528,24 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [pendingPdfQueue.length, pendingDeleteQueue.length, completedChecklists]);
 
+  // O intervalo de 20s acima só funciona com a aba/app em primeiro plano -
+  // navegador (principalmente no tablet, com a tela bloqueando sozinha
+  // entre um checklist e outro) suspende temporizadores de aba em segundo
+  // plano, então a internet pode voltar sem nenhuma tentativa automática
+  // rodar enquanto isso. Complementa tentando de novo assim que a aba
+  // volta a ficar visível, sem esperar os próximos 20s.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const aoFicarVisivel = () => {
+      if (document.visibilityState !== "visible") return;
+      syncPendingChecklists();
+      retryPendingPdfGenerations();
+      retryPendingDeletes();
+    };
+    document.addEventListener("visibilitychange", aoFicarVisivel);
+    return () => document.removeEventListener("visibilitychange", aoFicarVisivel);
+  }, [pendingPdfQueue.length, pendingDeleteQueue.length, completedChecklists]);
+
   const idsNaFilaDePdf = new Set(pendingPdfQueue.map((item) => item.localId));
   const pendingSyncCount = completedChecklists.filter(
     (c) => isPendingSync(c) && !idsNaFilaDePdf.has(c.id)
