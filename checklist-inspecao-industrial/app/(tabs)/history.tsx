@@ -25,6 +25,8 @@ import { getApiBaseUrl } from "@/constants/oauth";
 import { Calendar } from "react-native-calendars";
 import { resolveLocalPdfPath, downloadUrlOnWeb, buildZipBlobUrlOnWeb } from "@/lib/pdf-local-cache";
 import { alertar, confirmar } from "@/lib/alert";
+import { useAdminConfig } from "@/lib/admin-config-context";
+import { trpcVanilla } from "@/lib/trpc-vanilla";
 
 
 function HistoryItemCard({
@@ -106,6 +108,7 @@ export default function HistoryScreen() {
   const colors = useColors();
   const router = useRouter();
   const { createNewChecklist } = useChecklist();
+  const adminConfig = useAdminConfig();
   const {
     completedChecklists,
     deleteCompletedChecklists,
@@ -309,6 +312,73 @@ export default function HistoryScreen() {
   }, [completedChecklists]);
 
   // Compartilhar PDFs selecionados por email
+  // Envia os checklists selecionados direto pelo servidor, com o(s) PDF(s)
+  // já anexado(s) de verdade - substitui o antigo caminho de "baixa o
+  // arquivo e abre o cliente de email pro usuário anexar na mão", que
+  // dependia do usuário lembrar de anexar (e o Outlook nem sempre é o
+  // padrão configurado no Windows, então às vezes nem abria o certo).
+  const enviarChecklistsPorEmailWeb = async (selecionados: CompletedChecklistRecord[]) => {
+    const smtp = adminConfig.config?.smtp;
+    if (!smtp?.email || !smtp?.servidor || !smtp?.porta || !smtp?.senha) {
+      alertar(
+        "Configure o e-mail primeiro",
+        'Vá em Configurações e preencha o e-mail, servidor e senha (SMTP) antes de enviar checklists por e-mail.'
+      );
+      return;
+    }
+
+    const files = selecionados
+      .filter((c) => c.pdfFileName && /^https?:\/\//i.test(c.pdfFileName))
+      .map((c) => ({
+        url: c.pdfFileName!,
+        filename: c.pdfFileName!.split("/").pop() || `${c.checklistCode}.pdf`,
+      }));
+
+    if (files.length === 0) {
+      alertar("Erro", "Nenhum PDF válido encontrado para enviar.");
+      return;
+    }
+
+    const destinatariosPadrao = (adminConfig.config?.emailsRecebimento || []).join(", ");
+    const destino = window.prompt(
+      "Enviar checklist(s) para qual e-mail? (separe vários endereços por vírgula)",
+      destinatariosPadrao
+    );
+    if (destino === null) return; // usuário cancelou
+
+    const to = destino
+      .split(",")
+      .map((email) => email.trim())
+      .filter(Boolean);
+    if (to.length === 0) {
+      alertar("Erro", "Informe pelo menos um e-mail de destino.");
+      return;
+    }
+
+    const startDate = selecionados[0].dataRecuperacao;
+    const endDate = selecionados[selecionados.length - 1].dataRecuperacao;
+    const subject = `Checklist ${startDate} a ${endDate}`;
+
+    const result = await trpcVanilla.email.sendChecklistFiles.mutate({
+      to,
+      subject,
+      files,
+      smtpEmail: smtp.email,
+      smtpServidor: smtp.servidor,
+      smtpPorta: smtp.porta,
+      smtpSenha: smtp.senha,
+    });
+
+    if (result.success) {
+      alertar(
+        "Enviado!",
+        `${files.length} checklist${files.length > 1 ? "s" : ""} enviado${files.length > 1 ? "s" : ""} para ${to.join(", ")}.`
+      );
+    } else {
+      alertar("Erro ao enviar", result.message);
+    }
+  };
+
   const handleShareByEmail = async () => {
     if (selectedChecklistIds.size === 0) {
       alertar("Aviso", "Selecione pelo menos um checklist para compartilhar.");
@@ -322,23 +392,15 @@ export default function HistoryScreen() {
         selectedArray.includes(c.id)
       );
 
+      if (Platform.OS === "web") {
+        await enviarChecklistsPorEmailWeb(selectedChecklists);
+        return;
+      }
+
       if (selectedArray.length === 1) {
         // Compartilhar um único PDF
         const checklist = selectedChecklists[0];
         if (checklist.pdfFileName) {
-          if (Platform.OS === "web" && /^https?:\/\//i.test(checklist.pdfFileName)) {
-            // Navegadores não permitem anexar arquivo via mailto: - baixa o
-            // PDF e abre o cliente de email para o usuário anexar na mão.
-            const nomeArquivo = `${checklist.checklistCode}.pdf`;
-            downloadUrlOnWeb(checklist.pdfFileName, nomeArquivo);
-            alertar(
-              "PDF baixado",
-              `O arquivo "${nomeArquivo}" foi salvo na pasta Downloads do computador. No e-mail que vai abrir a seguir, clique em anexar arquivo e escolha esse PDF na pasta Downloads antes de enviar.`
-            );
-            window.location.href = `mailto:?subject=${encodeURIComponent(`Checklist ${checklist.checklistCode}`)}&body=${encodeURIComponent("PDF baixado - anexe o arquivo a este email antes de enviar.")}`;
-            return;
-          }
-
           const localPath = await resolveLocalPdfPath(checklist.pdfFileName);
           if (!localPath) {
             alertar("Erro", "PDF não encontrado ou corrompido.");
@@ -350,38 +412,6 @@ export default function HistoryScreen() {
             mimeType: "application/pdf",
           });
         }
-      } else if (Platform.OS === "web") {
-        const startDate = selectedChecklists[0].dataRecuperacao;
-        const endDate = selectedChecklists[selectedChecklists.length - 1].dataRecuperacao;
-        const subject = `Checklist ${startDate} a ${endDate}`;
-
-        const files = selectedChecklists
-          .filter((c) => c.pdfFileName && /^https?:\/\//i.test(c.pdfFileName))
-          .map((c) => ({
-            url: c.pdfFileName!,
-            name: c.pdfFileName!.split("/").pop() || `${c.checklistCode}.pdf`,
-          }));
-
-        if (files.length === 0) {
-          alertar("Erro", "Nenhum PDF válido encontrado para compartilhar.");
-          return;
-        }
-
-        const zipBlobUrl = await buildZipBlobUrlOnWeb(files);
-        const nomeZip = `checklists_${Date.now()}.zip`;
-        downloadUrlOnWeb(zipBlobUrl, nomeZip);
-        // downloadUrlOnWeb adia o clique real pro próximo tick (setTimeout 0) -
-        // revogar a blob: URL na hora, de forma síncrona logo em seguida,
-        // apagava o arquivo da memória antes desse clique adiado acontecer,
-        // e o download falhava silenciosamente (o e-mail abria, mas sem
-        // nenhum ZIP baixado pra anexar). Dá tempo de verdade antes de revogar.
-        setTimeout(() => URL.revokeObjectURL(zipBlobUrl), 10000);
-        alertar(
-          "ZIP baixado",
-          `O arquivo "${nomeZip}" foi salvo na pasta Downloads do computador. No e-mail que vai abrir a seguir, clique em anexar arquivo e escolha esse ZIP na pasta Downloads antes de enviar.`
-        );
-        window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent("ZIP baixado - anexe o arquivo a este email antes de enviar.")}`;
-        return;
       } else {
         // Compartilhar múltiplos PDFs em ZIP
         const zip = new JSZip();

@@ -554,6 +554,77 @@ export const appRouter = router({
           };
         }
       }),
+
+    // Envia um ou mais PDFs de checklist já anexados de verdade - usado
+    // pela aba Histórico pra compartilhar por e-mail sem depender do
+    // usuário baixar o arquivo e anexar na mão num cliente de e-mail
+    // (mailto: não permite anexo nenhum, por restrição do navegador).
+    // Recebe as URLs públicas (já no Supabase Storage) em vez do binário
+    // do PDF - o próprio servidor busca o conteúdo, evitando ida e volta
+    // grande de dados pelo aparelho do usuário.
+    sendChecklistFiles: publicProcedure
+      .input(
+        z.object({
+          to: z.array(z.string().email()).min(1),
+          subject: z.string(),
+          files: z.array(z.object({ url: z.string().url(), filename: z.string() })).min(1),
+          // Configuracao SMTP do app
+          smtpEmail: z.string().email(),
+          smtpServidor: z.string(),
+          smtpPorta: z.string(),
+          smtpSenha: z.string(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const attachments = await Promise.all(
+            input.files.map(async (file) => {
+              const response = await fetch(file.url);
+              if (!response.ok) {
+                throw new Error(`Falha ao baixar ${file.filename} (HTTP ${response.status})`);
+              }
+              const arrayBuffer = await response.arrayBuffer();
+              return {
+                filename: file.filename,
+                content: Buffer.from(arrayBuffer),
+                contentType: "application/pdf",
+              };
+            })
+          );
+
+          const transporter = nodemailer.createTransport({
+            host: input.smtpServidor,
+            port: parseInt(input.smtpPorta),
+            secure: input.smtpPorta === "465",
+            auth: {
+              user: input.smtpEmail,
+              pass: input.smtpSenha,
+            },
+          });
+
+          const plural = input.files.length > 1;
+          const result = await transporter.sendMail({
+            from: input.smtpEmail,
+            to: input.to,
+            subject: input.subject,
+            text: `Segue${plural ? "m" : ""} em anexo ${input.files.length} checklist${plural ? "s" : ""}.`,
+            attachments,
+          });
+
+          console.log("[Email] Checklists enviados com sucesso:", result.messageId);
+
+          return {
+            success: true,
+            message: "Email enviado com sucesso",
+          };
+        } catch (error) {
+          console.error("[Email Router] Erro ao enviar checklists:", error);
+          return {
+            success: false,
+            message: `Falha ao enviar email: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+          };
+        }
+      }),
   }),
 });
 
