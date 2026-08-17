@@ -329,7 +329,12 @@ export default function HistoryScreen() {
           if (Platform.OS === "web" && /^https?:\/\//i.test(checklist.pdfFileName)) {
             // Navegadores não permitem anexar arquivo via mailto: - baixa o
             // PDF e abre o cliente de email para o usuário anexar na mão.
-            downloadUrlOnWeb(checklist.pdfFileName, `${checklist.checklistCode}.pdf`);
+            const nomeArquivo = `${checklist.checklistCode}.pdf`;
+            downloadUrlOnWeb(checklist.pdfFileName, nomeArquivo);
+            alertar(
+              "PDF baixado",
+              `O arquivo "${nomeArquivo}" foi salvo na pasta Downloads do computador. No e-mail que vai abrir a seguir, clique em anexar arquivo e escolha esse PDF na pasta Downloads antes de enviar.`
+            );
             window.location.href = `mailto:?subject=${encodeURIComponent(`Checklist ${checklist.checklistCode}`)}&body=${encodeURIComponent("PDF baixado - anexe o arquivo a este email antes de enviar.")}`;
             return;
           }
@@ -363,13 +368,18 @@ export default function HistoryScreen() {
         }
 
         const zipBlobUrl = await buildZipBlobUrlOnWeb(files);
-        downloadUrlOnWeb(zipBlobUrl, `checklists_${Date.now()}.zip`);
+        const nomeZip = `checklists_${Date.now()}.zip`;
+        downloadUrlOnWeb(zipBlobUrl, nomeZip);
         // downloadUrlOnWeb adia o clique real pro próximo tick (setTimeout 0) -
         // revogar a blob: URL na hora, de forma síncrona logo em seguida,
         // apagava o arquivo da memória antes desse clique adiado acontecer,
         // e o download falhava silenciosamente (o e-mail abria, mas sem
         // nenhum ZIP baixado pra anexar). Dá tempo de verdade antes de revogar.
         setTimeout(() => URL.revokeObjectURL(zipBlobUrl), 10000);
+        alertar(
+          "ZIP baixado",
+          `O arquivo "${nomeZip}" foi salvo na pasta Downloads do computador. No e-mail que vai abrir a seguir, clique em anexar arquivo e escolha esse ZIP na pasta Downloads antes de enviar.`
+        );
         window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent("ZIP baixado - anexe o arquivo a este email antes de enviar.")}`;
         return;
       } else {
