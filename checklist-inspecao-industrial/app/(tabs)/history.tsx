@@ -364,7 +364,12 @@ export default function HistoryScreen() {
 
         const zipBlobUrl = await buildZipBlobUrlOnWeb(files);
         downloadUrlOnWeb(zipBlobUrl, `checklists_${Date.now()}.zip`);
-        URL.revokeObjectURL(zipBlobUrl);
+        // downloadUrlOnWeb adia o clique real pro próximo tick (setTimeout 0) -
+        // revogar a blob: URL na hora, de forma síncrona logo em seguida,
+        // apagava o arquivo da memória antes desse clique adiado acontecer,
+        // e o download falhava silenciosamente (o e-mail abria, mas sem
+        // nenhum ZIP baixado pra anexar). Dá tempo de verdade antes de revogar.
+        setTimeout(() => URL.revokeObjectURL(zipBlobUrl), 10000);
         window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent("ZIP baixado - anexe o arquivo a este email antes de enviar.")}`;
         return;
       } else {
