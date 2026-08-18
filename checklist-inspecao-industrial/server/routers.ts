@@ -9,6 +9,16 @@ import { buildChecklistPdfDocDefinition } from "../shared/checklist-pdf-content"
 import { renderPdfBuffer } from "./pdf";
 import { getSupabaseAdmin } from "./supabase-admin";
 
+// "Triângulo" -> "TRIANGULO", "Lateral" -> "LATERAL" - maiúsculo, sem
+// acento e só letras/números, pra usar no nome do arquivo do PDF.
+function paraNomeArquivo(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "");
+}
+
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
@@ -363,13 +373,46 @@ export const appRouter = router({
           const pdfBuffer = await renderPdfBuffer(docDefinition);
 
           const dataSemBarras = (input.dataRecuperacao || "sem-data").replace(/\//g, "");
-          const fileName = `${input.numeroSerie || "sem-serie"}-${dataSemBarras}-${Date.now()}.pdf`;
-          const storagePath = `pdfs/${fileName}`;
+          const categoriaArquivo = paraNomeArquivo(input.categoria || "GERAL");
+          const baseFileName = `${input.numeroSerie || "sem-serie"}-${dataSemBarras}-${categoriaArquivo}`;
 
-          const { error: uploadError } = await supabase.storage.from("checklist-pdfs").upload(storagePath, pdfBuffer, {
-            contentType: "application/pdf",
-            upsert: true,
-          });
+          // Nome legível (sem timestamp) - mas dois checklists diferentes
+          // podem coincidir em número de série + data + categoria, então
+          // tenta sem sobrescrever (upsert: false) primeiro, com sufixos
+          // numerados em caso de colisão de verdade. Só usa upsert: true
+          // (com um sufixo garantidamente único) como último recurso, pra
+          // nunca falhar o upload por causa só do nome.
+          let fileName = `${baseFileName}.pdf`;
+          let storagePath = `pdfs/${fileName}`;
+          let uploadError = (
+            await supabase.storage.from("checklist-pdfs").upload(storagePath, pdfBuffer, {
+              contentType: "application/pdf",
+              upsert: false,
+            })
+          ).error;
+
+          for (let tentativa = 2; uploadError && tentativa <= 5; tentativa++) {
+            fileName = `${baseFileName}-${tentativa}.pdf`;
+            storagePath = `pdfs/${fileName}`;
+            uploadError = (
+              await supabase.storage.from("checklist-pdfs").upload(storagePath, pdfBuffer, {
+                contentType: "application/pdf",
+                upsert: false,
+              })
+            ).error;
+          }
+
+          if (uploadError) {
+            fileName = `${baseFileName}-${Date.now()}.pdf`;
+            storagePath = `pdfs/${fileName}`;
+            uploadError = (
+              await supabase.storage.from("checklist-pdfs").upload(storagePath, pdfBuffer, {
+                contentType: "application/pdf",
+                upsert: true,
+              })
+            ).error;
+          }
+
           if (uploadError) {
             console.error("[generateAndUploadPDF] Erro no upload:", uploadError);
             return { success: false, message: `Erro ao enviar PDF para o Supabase Storage: ${uploadError.message}` };
