@@ -707,7 +707,11 @@ router.get("/api/painel-diretoria/dados", async (req: Request, res: Response) =>
         "id, checklist_code, checklist_name, categoria, modelo, resultado, executante_name, data_recuperacao, data_fabricacao, numero_serie, numero_op, pdf_url, timestamp, created_at"
       )
       .order("created_at", { ascending: false })
-      .limit(5000);
+      // Limite defensivo: o painel é uma visão executiva, não uma
+      // exportação completa - 1000 linhas já cobre bem mais que o uso
+      // real, e evita que essa rota sozinha vire um pico de memória
+      // grande no servidor (plano gratuito do Render é bem apertado).
+      .limit(1000);
 
     if (error) throw error;
 
