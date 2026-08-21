@@ -457,7 +457,7 @@ let DB={}, CLIENTES={}, CAPACIDADE={}, allPedidos=[], LISTA_EMBARQUE=[];
 let state={tela:'geral',pedido:null,tag:null,produto:null};
 const hoje=new Date(); hoje.setHours(0,0,0,0);
 let capChart=null;
-const SETORES=['ESTRUTURA','USINAGEM','TAMBOR','ROLOS','BASES ROLETES','REVESTIMENTO','RMF','TECMETAL','CSM'];
+let SETORES=['ESTRUTURA','USINAGEM','TAMBOR','ROLOS','BASES ROLETES','REVESTIMENTO','RMF']; // fallback; a ordem real vem das colunas da aba CAPACIDADE (inclui fornecedores externos como AXION/MECALD)
 // Colunas de Avanço (índices 0-based na linha da aba MICRO): AA..AI
 const AVANCO_COLS=[26,27,28,29,30,31,32,33,34];
 /* Converte valor de célula de etapa em percentual 0-100, ou null se vazio/indefinido */
@@ -699,19 +699,24 @@ async function processarPlanilha(buf){
       });
     }
   }
-  // CAPACIDADE — apenas linha 9 (idx 8)
+  // CAPACIDADE — apenas linha 9 (idx 8). A ordem das colunas (ESTRUTURA...RMF, depois AXION, MECALD...)
+  // define a ordem de exibição no gráfico/tabela de capacidade — setores da MDE seguidos dos fornecedores externos.
   CAPACIDADE={};
   const capn=wb.SheetNames.find(n=>n.trim().toUpperCase()==='CAPACIDADE');
   if(capn){
     const capR=XLSX.utils.sheet_to_json(wb.Sheets[capn],{header:1,defval:null});
     const cols=capR[1]?capR[1].slice(1):[];
     const vals=capR[8]?capR[8].slice(1):[];
+    const ordem=[];
     cols.forEach((c,i)=>{
       if(!c) return;
       const n=String(c).trim().toUpperCase();
+      if(n==='CARGA TOTAL') return; // coluna de total, não é um setor/fornecedor
       const v=typeof vals[i]==='number'?vals[i]:(parseFloat(vals[i])||0);
       if(v>0) CAPACIDADE[n]=v*1000; // converter para kg
+      ordem.push(n);
     });
+    if(ordem.length) SETORES=ordem;
   }
 
   // MICRO
@@ -738,6 +743,7 @@ async function processarPlanilha(buf){
       qtdExpedida:n(r[20]),
       stages,
       produto,
+      fornecedor:r[13]?String(r[13]).trim():'MDE', // coluna N — quem fabrica; vazio = interno MDE
     };
     if(!DB[pedido]) DB[pedido]={};
     if(!DB[pedido][tag]) DB[pedido][tag]={};
@@ -799,24 +805,36 @@ document.addEventListener('touchend', ativarTelaCheiaPrimeiroToque);
 document.addEventListener('keydown', ativarTelaCheiaPrimeiroToque);
 
 /* ── CAPACIDADE ── */
+// Se o FORNECEDOR (col N) da linha não é a MDE nem o próprio setor, o item foi terceirizado:
+// o peso sai da capacidade do setor da MDE e vai para o balde do fornecedor externo (AXION, MECALD, ...).
+function bucketDoItem(setor,fornecedor){
+  const f=(fornecedor||'MDE').trim().toUpperCase();
+  if(f&&f!=='MDE'&&f!==setor) return f;
+  return setor;
+}
 function calcSetores(){
   const s={};
-  SETORES.forEach(k=>{s[k]={cargaProg:0,expedido:0,pesoPendExp:0,cap:CAPACIDADE[k]||0}});
+  const ensure=k=>{ if(!s[k]) s[k]={cargaProg:0,expedido:0,pesoPendExp:0,cap:CAPACIDADE[k]||0}; return s[k]; };
+  SETORES.forEach(ensure); // pré-semeia na ordem da aba CAPACIDADE (setores MDE + fornecedores externos)
   allPedidos.forEach(p=>{
     Object.values(DB[p]).forEach(tags=>{
       Object.entries(tags).forEach(([prod,itens])=>{
         const setor=prod.trim().toUpperCase();
-        if(!s[setor]) return;
         itens.forEach(it=>{
-          s[setor].cargaProg  += it.pesoTotal;               // col H — Peso Total programado
-          s[setor].expedido   += it.expedido;                // col X — Peso Expedido
-          s[setor].pesoPendExp+= Math.max(0,it.pesoPendExp); // col Z — Pend. Exp. (sem negativos)
+          const bucket=bucketDoItem(setor,it.fornecedor);
+          // só cria balde novo quando é redirecionamento pra fornecedor externo (bucket≠setor);
+          // setor fora da aba CAPACIDADE e sem terceirização fica fora do painel, como antes
+          if(!s[bucket]&&bucket===setor) return;
+          const b=ensure(bucket);
+          b.cargaProg  += it.pesoTotal;               // col H — Peso Total programado
+          b.expedido   += it.expedido;                // col X — Peso Expedido
+          b.pesoPendExp+= Math.max(0,it.pesoPendExp); // col Z — Pend. Exp. (sem negativos)
         });
       });
     });
   });
   // Carga Líquida = Carga Programada - Expedido (o que ainda ocupa capacidade)
-  SETORES.forEach(k=>{
+  Object.keys(s).forEach(k=>{
     s[k].cargaLiquida = Math.max(0, s[k].cargaProg - s[k].expedido);
   });
   return s;
@@ -824,7 +842,9 @@ function calcSetores(){
 
 function renderCapacidade(){
   const s=calcSetores();
-  const ativos=SETORES.filter(k=>s[k].cap>0||s[k].pesoTotal>0);
+  // ordem: setores/fornecedores já conhecidos da aba CAPACIDADE, depois qualquer fornecedor novo encontrado nos dados
+  const extras=Object.keys(s).filter(k=>!SETORES.includes(k)).sort();
+  const ativos=SETORES.concat(extras).filter(k=>s[k].cap>0||s[k].cargaProg>0);
   let totCap=0,totProg=0,totExp=0,totPE=0,totLiquida=0;
   ativos.forEach(k=>{
     totCap    +=s[k].cap;
