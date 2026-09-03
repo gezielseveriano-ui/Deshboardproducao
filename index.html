@@ -845,10 +845,11 @@ function renderCapacidade(){
   // ordem: setores/fornecedores já conhecidos da aba CAPACIDADE, depois qualquer fornecedor novo encontrado nos dados
   const extras=Object.keys(s).filter(k=>!SETORES.includes(k)).sort();
   const ativos=SETORES.concat(extras).filter(k=>s[k].cap>0||s[k].cargaProg>0);
-  let totCap=0,totProg=0,totExp=0,totPE=0,totLiquida=0;
+  let totCap=0,totProg=0,totExp=0,totPE=0,totLiquida=0,totCargaProgAtivos=0;
   ativos.forEach(k=>{
     totCap    +=s[k].cap;
     totLiquida+=s[k].cargaLiquida;
+    totCargaProgAtivos+=s[k].cargaProg;
   });
 
   // Totais direto de TODOS os registros da MICRO
@@ -904,14 +905,14 @@ function renderCapacidade(){
     </div>
 
     <div class="cap-chart-box" style="max-width:100%;overflow:hidden">
-      <div class="cap-chart-box-title">Capacidade × Pend. fabricação × Livre × Pend. expedição — por setor (t/mês)</div>
+      <div class="cap-chart-box-title">Capacidade × Carga programada × Expedido × Carga líquida (pend. expedição) — por setor (t/mês)</div>
       <div style="position:relative;width:100%;height:200px"><canvas id="capChart"></canvas></div>
       <div class="cap-legend">
         <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(79,142,247,0.7)"></span>Capacidade mensal</span>
-        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(62,207,142,0.85)"></span>Carga líquida — dentro da capacidade</span>
-        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(255,30,30,0.95)"></span>Carga líquida — acima da capacidade</span>
+        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(245,166,35,0.85)"></span>Carga programada</span>
         <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(45,212,191,0.85)"></span>Expedido</span>
-        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(245,166,35,0.85)"></span>Pend. expedição</span>
+        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(62,207,142,0.85)"></span>Carga líquida — dentro da capacidade <small style="color:var(--text3)">(pend. expedição)</small></span>
+        <span class="cap-leg"><span class="cap-leg-dot" style="background:rgba(255,30,30,0.95)"></span>Carga líquida — acima da capacidade <small style="color:var(--text3)">(pend. expedição)</small></span>
       </div>
     </div>
 
@@ -921,9 +922,9 @@ function renderCapacidade(){
         <thead><tr>
           <th>Setor</th>
           <th class="r">Capacidade (t/mês)</th>
-          <th class="r">Carga líquida (t)</th>
+          <th class="r">Carga programada (t)</th>
           <th class="r">Expedido (t)</th>
-          <th class="r">Pend. exp. (t)</th>
+          <th class="r">Carga líquida (t) <small style="color:var(--text3)">(pend. exp.)</small></th>
           <th class="r">Cap. livre (t)</th>
           <th style="width:130px">Ocupação</th>
           <th>Status</th>
@@ -939,9 +940,9 @@ function renderCapacidade(){
             return `<tr>
               <td><strong style="color:var(--text)">${k}</strong></td>
               <td class="r" style="color:var(--blue)">${ft(d.cap)}</td>
-              <td class="r" style="color:var(--amber)">${ft(d.cargaLiquida)}</td>
+              <td class="r" style="color:var(--amber)">${ft(d.cargaProg)}</td>
               <td class="r" style="color:var(--teal)">${ft(d.expedido)}</td>
-              <td class="r" style="color:var(--red)">${ft(d.pesoPendExp)}</td>
+              <td class="r" style="color:${barCol}">${ft(d.cargaLiquida)}</td>
               <td class="r" style="color:${livre>0?'var(--green)':'var(--red)'};font-weight:700">${ft(livre)}</td>
               <td>
                 <div class="bar-row">
@@ -956,9 +957,9 @@ function renderCapacidade(){
         <tfoot><tr>
           <td>TOTAL</td>
           <td class="r" style="color:var(--blue)">${ft(totCap)}</td>
-          <td class="r" style="color:var(--amber)">${ft(totLiquida)}</td>
+          <td class="r" style="color:var(--amber)">${ft(totCargaProgAtivos)}</td>
           <td class="r" style="color:var(--teal)">${ft(totExp)}</td>
-          <td class="r" style="color:var(--red)">${ft(totPE)}</td>
+          <td class="r" style="color:var(--amber)">${ft(totLiquida)}</td>
           <td class="r" style="color:var(--green)">${ft(totLivre)}</td>
           <td colspan="2"></td>
         </tr></tfoot>
@@ -983,9 +984,9 @@ function renderCapacidade(){
             borderRadius:5,borderSkipped:false
           },
           {
-            label:'Carga programada (líquida)',
-            data:ativos.map(k=>+(s[k].cargaLiquida/1000).toFixed(2)),
-            backgroundColor:ativos.map(k=>s[k].cargaLiquida<=s[k].cap?'rgba(62,207,142,0.85)':'rgba(255,30,30,0.95)'),
+            label:'Carga programada',
+            data:ativos.map(k=>+(s[k].cargaProg/1000).toFixed(2)),
+            backgroundColor:'rgba(245,166,35,0.85)',
             borderRadius:5,borderSkipped:false
           },
           {
@@ -995,9 +996,9 @@ function renderCapacidade(){
             borderRadius:5,borderSkipped:false
           },
           {
-            label:'Pend. expedição',
-            data:ativos.map(k=>+(s[k].pesoPendExp/1000).toFixed(2)),
-            backgroundColor:'rgba(245,166,35,0.85)',
+            label:'Carga líquida (pend. expedição)',
+            data:ativos.map(k=>+(s[k].cargaLiquida/1000).toFixed(2)),
+            backgroundColor:ativos.map(k=>s[k].cargaLiquida<=s[k].cap?'rgba(62,207,142,0.85)':'rgba(255,30,30,0.95)'),
             borderRadius:5,borderSkipped:false
           },
         ]
