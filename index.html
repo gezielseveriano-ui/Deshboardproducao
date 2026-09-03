@@ -427,6 +427,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <button onclick="carregarPlanilha()" style="padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
       <i class="ti ti-refresh" style="font-size:12px;vertical-align:-1px"></i> Atualizar
     </button>
+    <button id="btnArquivados" onclick="irArquivados()" title="Pedidos que você arquivou (entregues ou fora de uso)" style="padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
+      <i class="ti ti-archive" style="font-size:12px;vertical-align:-1px"></i> Pedidos arquivados<span id="badgeArquivados"></span>
+    </button>
     <button id="btnFullscreen" onclick="alternarTelaCheia()" title="Tela cheia" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
       <i class="ti ti-maximize" id="iconFullscreen" style="font-size:14px;vertical-align:-1px"></i>
     </button>
@@ -457,6 +460,44 @@ let DB={}, CLIENTES={}, CAPACIDADE={}, allPedidos=[], LISTA_EMBARQUE=[];
 let state={tela:'geral',pedido:null,tag:null,produto:null};
 const hoje=new Date(); hoje.setHours(0,0,0,0);
 let capChart=null;
+
+/* ── PEDIDOS ARQUIVADOS ──
+   Guardado no localStorage deste navegador (o dashboard é só leitura da
+   planilha, não tem backend pra gravar isso de forma compartilhada). Pedido
+   arquivado sai da lista "Todos os pedidos" e do cálculo de Capacidade de
+   Produção (carga programada/expedido/líquida), mas continua consultável
+   na tela "Pedidos arquivados". */
+const CHAVE_ARQUIVADOS='factoryview_pedidos_arquivados';
+function carregarArquivados(){
+  try{ return new Set(JSON.parse(localStorage.getItem(CHAVE_ARQUIVADOS)||'[]')); }
+  catch(e){ return new Set(); }
+}
+let PEDIDOS_ARQUIVADOS=carregarArquivados();
+function salvarArquivados(){
+  try{ localStorage.setItem(CHAVE_ARQUIVADOS, JSON.stringify([...PEDIDOS_ARQUIVADOS])); }catch(e){}
+}
+function pedidosAtivos(){ return allPedidos.filter(p=>!PEDIDOS_ARQUIVADOS.has(p)); }
+function pedidosArquivadosLista(){ return allPedidos.filter(p=>PEDIDOS_ARQUIVADOS.has(p)); }
+function atualizarBadgeArquivados(){
+  const n=pedidosArquivadosLista().length;
+  const el=document.getElementById('badgeArquivados');
+  if(el) el.textContent=n>0?` (${n})`:'';
+}
+function arquivarPedido(p){
+  if(!confirm(`Arquivar o pedido ${p}?\n\nEle sai da lista "Todos os pedidos" e da Capacidade de Produção, mas continua disponível em "Pedidos arquivados".`)) return;
+  PEDIDOS_ARQUIVADOS.add(p);
+  salvarArquivados();
+  atualizarBadgeArquivados();
+  renderCapacidade();
+  irGeral();
+}
+function desarquivarPedido(p){
+  PEDIDOS_ARQUIVADOS.delete(p);
+  salvarArquivados();
+  atualizarBadgeArquivados();
+  renderCapacidade();
+  renderTela();
+}
 let SETORES=['ESTRUTURA','USINAGEM','TAMBOR','ROLOS','BASES ROLETES','REVESTIMENTO','RMF']; // fallback; a ordem real vem das colunas da aba CAPACIDADE (inclui fornecedores externos como AXION/MECALD)
 // Colunas de Avanço (índices 0-based na linha da aba MICRO): AA..AI
 const AVANCO_COLS=[26,27,28,29,30,31,32,33,34];
@@ -755,6 +796,7 @@ async function processarPlanilha(buf){
   state={tela:'geral',pedido:null,tag:null,produto:null};
   renderCapacidade();
   renderTela();
+  atualizarBadgeArquivados();
   setStatus(`Atualizado: ${nL.toLocaleString('pt-BR')} linhas · ${allPedidos.length} pedidos · ${Object.keys(CLIENTES).length} clientes`);
   const agora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   if(label) label.textContent = 'Atualizado às ' + agora;
@@ -816,7 +858,7 @@ function calcSetores(){
   const s={};
   const ensure=k=>{ if(!s[k]) s[k]={cargaProg:0,expedido:0,pesoPendExp:0,cap:CAPACIDADE[k]||0}; return s[k]; };
   SETORES.forEach(ensure); // pré-semeia na ordem da aba CAPACIDADE (setores MDE + fornecedores externos)
-  allPedidos.forEach(p=>{
+  pedidosAtivos().forEach(p=>{ // pedido arquivado não ocupa mais capacidade da MDE
     Object.values(DB[p]).forEach(tags=>{
       Object.entries(tags).forEach(([prod,itens])=>{
         const setor=prod.trim().toUpperCase();
@@ -852,8 +894,8 @@ function renderCapacidade(){
     totCargaProgAtivos+=s[k].cargaProg;
   });
 
-  // Totais direto de TODOS os registros da MICRO
-  allPedidos.forEach(p=>{
+  // Totais direto de TODOS os registros da MICRO (exceto pedidos arquivados)
+  pedidosAtivos().forEach(p=>{
     Object.values(DB[p]).forEach(tagObj=>{
       Object.entries(tagObj).forEach(([setor,itens])=>{
         itens.forEach(it=>{
@@ -1057,12 +1099,13 @@ function isLate(d){if(!d)return false;const dt=new Date(d);dt.setHours(0,0,0,0);
 
 /* ── ROTEADOR ── */
 function renderTela(){
-  const map={geral:renderGeral,pedido:renderPedido,pendencias:renderPendencias,tag:renderTag,produto:renderProduto,embarque:renderEmbarque};
+  const map={geral:renderGeral,pedido:renderPedido,pendencias:renderPendencias,tag:renderTag,produto:renderProduto,embarque:renderEmbarque,arquivados:renderArquivados};
   const capSec=document.getElementById('capacidadeSection');
   if(capSec) capSec.style.display=(state.tela==='geral')?'block':'none';
   (map[state.tela]||renderGeral)();
   renderNav();
 }
+function irArquivados(){state={tela:'arquivados',pedido:null,tag:null,produto:null};renderTela();}
 function renderNav(){
   const nb=document.getElementById('navBar');
   if(state.tela==='geral'){nb.style.display='none';return;}
@@ -1070,6 +1113,7 @@ function renderNav(){
   const cli=getCli(state.pedido);
   const label=cli&&cli.equip?`${state.pedido} — ${cli.equip}`:state.pedido;
   let h=`<span class="nav-crumb" onclick="irGeral()"><i class="ti ti-layout-dashboard" style="font-size:13px;vertical-align:-1px"></i> Todos os pedidos</span>`;
+  if(state.tela==='arquivados') h+=`<span class="nav-sep">›</span><span class="nav-crumb active">Pedidos arquivados</span>`;
   if(state.pedido){
     h+=`<span class="nav-sep">›</span><span class="nav-crumb ${state.tela==='pedido'?'active':''}" onclick="irPedido()">${label}</span>`;
   }
@@ -1106,19 +1150,19 @@ function renderGeral(){
   </div>`;
 
   let gP=0,gF=0,gE=0,gPE=0;
-  allPedidos.forEach(p=>{const s=resP(p);gP+=s.peso;gF+=s.fab;gE+=s.exp;gPE+=s.pendExp;});
+  pedidosAtivos().forEach(p=>{const s=resP(p);gP+=s.peso;gF+=s.fab;gE+=s.exp;gPE+=s.pendExp;});
   const pF=gP>0?Math.min(100,gF/gP*100):0, pE=gP>0?Math.min(100,gE/gP*100):0;
 
   document.getElementById('mainContent').innerHTML=`
 
   <div class="pedidos-grid" id="pedidosGrid"></div>`;
   filtrarGeral('');
-  setStatus(`${allPedidos.length} pedidos · ${fmt_t(gP)} total`);
+  setStatus(`${pedidosAtivos().length} pedidos · ${fmt_t(gP)} total`);
 }
 
 function filtrarGeral(q){
   const sort=document.getElementById('sortSel')?.value||'num';
-  let lista=allPedidos.filter(p=>{
+  let lista=pedidosAtivos().filter(p=>{
     if(!q) return true;
     const ql=q.toLowerCase();
     const c=getCli(p);
@@ -1139,7 +1183,10 @@ function filtrarGeral(q){
     return `<div class="pedido-card" style="${late?'border-color:var(--red)':''}" onclick="abrirPedido('${esc(p)}')">
       <div class="pc-top">
         <span class="pc-num">${p}${c&&c.cliente?' · '+c.cliente:''}</span>
-        <span class="pc-tags-count">${s.nTags} TAG${s.nTags!==1?'s':''}</span>
+        <span style="display:flex;align-items:center;gap:5px">
+          <span class="pc-tags-count">${s.nTags} TAG${s.nTags!==1?'s':''}</span>
+          <span class="pc-tags-count" style="cursor:pointer" title="Arquivar pedido" onclick="event.stopPropagation();arquivarPedido('${esc(p)}')"><i class="ti ti-archive"></i></span>
+        </span>
       </div>
       <div class="pc-equip ${c&&c.equip?'':'no-info'}">
         ${c&&c.equip?`<i class="ti ti-crane"></i> ${c.equip}`:'Sem equipamento cadastrado'}
@@ -1170,13 +1217,58 @@ function filtrarGeral(q){
   }).join('');
 }
 
+/* ── PEDIDOS ARQUIVADOS ── */
+function renderArquivados(){
+  document.getElementById('headerArea').innerHTML=`
+  <div class="toolbar">
+    <button class="back-btn" onclick="irGeral()"><i class="ti ti-arrow-left" style="font-size:13px"></i> Todos os pedidos</button>
+    <span class="total-badge" id="totalBadge"></span>
+  </div>`;
+
+  const lista=pedidosArquivadosLista().map(p=>({p,s:resP(p),c:getCli(p)})).sort((a,b)=>a.p.localeCompare(b.p));
+  document.getElementById('totalBadge').textContent=`${lista.length} pedido${lista.length!==1?'s':''} arquivado${lista.length!==1?'s':''}`;
+
+  if(!lista.length){
+    document.getElementById('mainContent').innerHTML=`<div class="empty"><i class="ti ti-archive empty-icon"></i>Nenhum pedido arquivado ainda.<br>
+      <span style="font-size:12px;color:var(--text3);margin-top:8px;display:block">Use o ícone <i class="ti ti-archive"></i> no card de um pedido, em "Todos os pedidos", pra arquivar.</span></div>`;
+    setStatus('0 pedidos arquivados');
+    return;
+  }
+
+  document.getElementById('mainContent').innerHTML=`<div class="pedidos-grid">${lista.map(({p,s,c})=>`
+    <div class="pedido-card" style="opacity:.8" onclick="abrirPedido('${esc(p)}')">
+      <div class="pc-top">
+        <span class="pc-num">${p}${c&&c.cliente?' · '+c.cliente:''}</span>
+        <span class="pc-tags-count">${s.nTags} TAG${s.nTags!==1?'s':''}</span>
+      </div>
+      <div class="pc-equip ${c&&c.equip?'':'no-info'}">
+        ${c&&c.equip?`<i class="ti ti-crane"></i> ${c.equip}`:'Sem equipamento cadastrado'}
+      </div>
+      <div class="pc-peso">${fmt_t(s.peso)}</div>
+      <div class="pc-peso-sub">${fmt_kg(s.peso)} kg total</div>
+      <div class="pc-pills">
+        <span class="pill pill-blue"><i class="ti ti-archive"></i>Arquivado</span>
+        ${s.pendExp>0?`<span class="pill pill-red"><i class="ti ti-clock-pause"></i>${fmt_t(s.pendExp)} pend.exp</span>`:''}
+      </div>
+      <button class="btn-print btn-print-imp" style="width:100%;margin-top:10px;justify-content:center" onclick="event.stopPropagation();desarquivarPedido('${esc(p)}')">
+        <i class="ti ti-archive-off"></i> Desarquivar
+      </button>
+    </div>`).join('')}</div>`;
+  setStatus(`${lista.length} pedidos arquivados · ${fmt_t(lista.reduce((t,{s})=>t+s.peso,0))} total`);
+}
+
 function abrirPedido(p){state={tela:'pedido',pedido:p,tag:null,produto:null};renderTela();}
 
 /* ── PEDIDO ── */
 function renderPedido(){
+  const arquivado=PEDIDOS_ARQUIVADOS.has(state.pedido);
   document.getElementById('headerArea').innerHTML=`
   <div class="search-area">
     <button class="back-btn" onclick="irGeral()"><i class="ti ti-arrow-left" style="font-size:13px"></i> Todos os pedidos</button>
+    ${arquivado
+      ?`<span class="pill pill-blue"><i class="ti ti-archive"></i>Arquivado</span>
+         <button class="back-btn" onclick="desarquivarPedido('${esc(state.pedido)}')"><i class="ti ti-archive-off" style="font-size:13px"></i> Desarquivar</button>`
+      :`<button class="back-btn" onclick="arquivarPedido('${esc(state.pedido)}')"><i class="ti ti-archive" style="font-size:13px"></i> Arquivar pedido</button>`}
   </div>`;
 
   const cli=getCli(state.pedido), tags=DB[state.pedido], tk=Object.keys(tags);
@@ -1525,19 +1617,20 @@ function prepararImpressao(){
   const elF = document.getElementById('printDateFooter');
   if(elF) elF.textContent = dtStr;
 
-  // Métricas de resumo
+  // Métricas de resumo (não inclui pedidos arquivados)
   let gP=0,gF=0,gE=0,gPE=0;
-  allPedidos.forEach(p=>{const s=resP(p);gP+=s.peso;gF+=s.fab;gE+=s.exp;gPE+=s.pendExp;});
+  const pedidosImpressos=pedidosAtivos();
+  pedidosImpressos.forEach(p=>{const s=resP(p);gP+=s.peso;gF+=s.fab;gE+=s.exp;gPE+=s.pendExp;});
   const pF=gP>0?Math.min(100,gF/gP*100):0, pE=gP>0?Math.min(100,gE/gP*100):0;
 
   const pm = document.getElementById('printMetrics');
   if(pm) pm.innerHTML = [
-    {label:'Total de Pedidos',    val:allPedidos.length,       sub:'em carteira',         color:'#1a4fa0'},
+    {label:'Total de Pedidos',    val:pedidosImpressos.length, sub:'em carteira',         color:'#1a4fa0'},
     {label:'Peso Total',          val:fmt_t(gP),               sub:fmt_kg(gP)+' kg',      color:'#1a1a2e'},
     {label:'Fabricação',          val:pF.toFixed(1)+'%',       sub:fmt_t(gF)+' fabricado',color:'#166534'},
     {label:'Expedição',           val:pE.toFixed(1)+'%',       sub:fmt_t(gE)+' expedido', color:'#92400e'},
     {label:'Pend. Expedição',     val:fmt_t(gPE),              sub:'a expedir',            color:'#991b1b'},
-    {label:'Pedidos Atrasados',   val:allPedidos.filter(p=>{const c=getCli(p);const s=resP(p);return c&&isLate(c.dataRepr||c.dataPrev)&&(s.pendExp>0||s.pendFab>0);}).length, sub:'com pendência e data vencida', color:'#991b1b'},
+    {label:'Pedidos Atrasados',   val:pedidosImpressos.filter(p=>{const c=getCli(p);const s=resP(p);return c&&isLate(c.dataRepr||c.dataPrev)&&(s.pendExp>0||s.pendFab>0);}).length, sub:'com pendência e data vencida', color:'#991b1b'},
   ].map(m=>`
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;border-top:3px solid ${m.color}">
       <div style="font-size:10px;color:#666;margin-bottom:4px">${m.label}</div>
