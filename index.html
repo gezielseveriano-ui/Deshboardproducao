@@ -541,8 +541,13 @@ function setoresDoPedido(pedido){
   const tags=DB[pedido]||{}; const map={};
   Object.values(tags).forEach(setObj=>{
     Object.entries(setObj).forEach(([setor,itens])=>{
-      if(!map[setor]) map[setor]=[];
-      map[setor]=map[setor].concat(itens);
+      // item terceirizado pra fornecedor externo (col N ≠ MDE e ≠ o próprio setor)
+      // vira o seu próprio "setor" aqui também — mesma lógica da Capacidade de Produção
+      itens.forEach(it=>{
+        const bucket=bucketDoItem(setor,it.fornecedor);
+        if(!map[bucket]) map[bucket]=[];
+        map[bucket].push(it);
+      });
     });
   });
   return map;
