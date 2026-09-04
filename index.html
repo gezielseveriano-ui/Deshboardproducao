@@ -1151,7 +1151,7 @@ function renderGeral(){
     <select class="sort-sel" id="sortSel" onchange="filtrarGeral(document.getElementById('filterInput').value)">
       <option value="num">Ordenar: Número</option>
       <option value="peso">Maior peso</option>
-      <option value="fab">% Fabricação</option>
+      <option value="fab">% Avanço de fabricação</option>
       <option value="exp">% Expedição</option>
       <option value="pend">Maior pendência</option>
       <option value="data">Data prevista</option>
@@ -1217,7 +1217,7 @@ function filtrarGeral(q){
       <div class="pc-peso">${fmt_t(s.peso)}</div>
       <div class="pc-peso-sub">${fmt_kg(s.peso)} kg total</div>
       <div class="pc-prog-row">
-        <div class="pc-prog-label"><span><i class="ti ti-tools" style="font-size:10px"></i> Fabricação</span><span style="font-weight:700;color:var(--blue)">${s.pctFab.toFixed(1)}%</span></div>
+        <div class="pc-prog-label"><span><i class="ti ti-tools" style="font-size:10px"></i> Avanço de fabricação</span><span style="font-weight:700;color:var(--blue)">${s.pctFab.toFixed(1)}%</span></div>
         <div class="pc-prog-bar"><div class="pc-prog-fill" style="width:${s.pctFab.toFixed(1)}%;background:linear-gradient(90deg,var(--blue),var(--purple))"></div></div>
       </div>
       <div class="pc-prog-row">
@@ -1322,7 +1322,7 @@ function renderPedido(){
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:nDP+' desenhos',color:'var(--red)'},
     {label:'TAGs',             val:tk.length,  sub:'no pedido'},
   ]);
-  h+=prHTML(pF,pE);
+  h+=prHTML(avancoPedido||0,pE);
   h+=`<div class="pend-bar">
     <span style="font-size:12px;color:var(--text2)">
       <i class="ti ti-alert-circle" style="color:var(--red);font-size:14px;vertical-align:-2px"></i>
@@ -1522,7 +1522,7 @@ function renderTag(){
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:'a expedir',color:'var(--red)'},
     {label:'Setores',          val:pk.length,  sub:'clique para detalhar'},
   ]);
-  h+=prHTML(pF,pE);
+  h+=prHTML(avancoTag||0,pE);
   h+=`<div class="section"><div class="section-title">Setores da TAG ${state.tag} — carga programada, expedido, pendente e avanço</div>${setorTableHTML(prods,'abrirProduto')}</div>`;
   h+=setorQtdTableHTML(prods);
   document.getElementById('mainContent').innerHTML=h;
@@ -1546,7 +1546,7 @@ function renderProduto(){
     {label:'Pend. expedição',  val:fmt_t(tPE), sub:ip.length+' desenhos',color:'var(--red)'},
     {label:'Itens',            val:itens.length,sub:'neste setor'},
   ]);
-  h+=prHTML(pF,pE);
+  h+=prHTML(avancoSetor||0,pE);
   if(ehSetorQtd){
     const q=qtdAgg(itens);
     h+=mHTML([
@@ -1682,8 +1682,10 @@ function imprimirRelatorio(){
 
 function resP(p){
   const tags=DB[p]; let peso=0,fab=0,exp=0,pF=0,pE=0,nTags=Object.keys(tags).length;
-  Object.values(tags).forEach(t=>Object.values(t).forEach(it=>it.forEach(i=>{peso+=i.pesoTotal;fab+=i.fabricado;exp+=i.expedido;pF+=Math.max(0,i.pendFab);pE+=Math.max(0,i.pesoPendExp);})));
-  return{peso,fab,exp,pendFab:pF,pendExp:pE,nTags,pctFab:peso>0?Math.min(100,fab/peso*100):0,pctExp:peso>0?Math.min(100,exp/peso*100):0};
+  const itens=[];
+  Object.values(tags).forEach(t=>Object.values(t).forEach(it=>it.forEach(i=>{peso+=i.pesoTotal;fab+=i.fabricado;exp+=i.expedido;pF+=Math.max(0,i.pendFab);pE+=Math.max(0,i.pesoPendExp);itens.push(i);})));
+  // pctFab = Avanço de fabricação ponderado por etapa (ver AVANCO_ETAPAS), não peso pronto/peso total
+  return{peso,fab,exp,pendFab:pF,pendExp:pE,nTags,pctFab:calcAvanco(itens)||0,pctExp:peso>0?Math.min(100,exp/peso*100):0};
 }
 function sumTag(o,c){return Object.values(o).reduce((s,i)=>s+sI(i,c),0);}
 function sumTagF(o,c){return Object.values(o).reduce((s,i)=>s+i.reduce((a,it)=>a+Math.max(0,it[c]),0),0);}
@@ -1695,7 +1697,7 @@ function esc(s){return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 function setStatus(m){document.getElementById('statusBar').textContent=m;}
 function mHTML(items){return `<div class="metrics">${items.map(m=>`<div class="metric"><div class="metric-label">${m.label}</div><div class="metric-value" style="${m.color?'color:'+m.color:''}">${m.val}</div>${m.sub?`<div class="metric-sub">${m.sub}</div>`:''}</div>`).join('')}</div>`;}
 function prHTML(pF,pE){return `<div class="prog-wrap">
-  <div class="prog-row"><span class="prog-label">Fabricação</span><div class="prog-bar"><div class="prog-fill" style="width:${pF.toFixed(1)}%;background:linear-gradient(90deg,var(--blue),var(--purple))"></div></div><span class="prog-pct" style="color:var(--blue)">${pF.toFixed(0)}%</span></div>
+  <div class="prog-row"><span class="prog-label">Avanço de fabricação</span><div class="prog-bar"><div class="prog-fill" style="width:${pF.toFixed(1)}%;background:linear-gradient(90deg,var(--blue),var(--purple))"></div></div><span class="prog-pct" style="color:var(--blue)">${pF.toFixed(0)}%</span></div>
   <div class="prog-row"><span class="prog-label">Expedição</span><div class="prog-bar"><div class="prog-fill" style="width:${pE.toFixed(1)}%;background:linear-gradient(90deg,var(--green),var(--teal))"></div></div><span class="prog-pct" style="color:var(--green)">${pE.toFixed(0)}%</span></div>
 </div>`;}
 </script>
