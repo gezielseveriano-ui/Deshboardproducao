@@ -499,8 +499,18 @@ function desarquivarPedido(p){
   renderTela();
 }
 let SETORES=['ESTRUTURA','USINAGEM','TAMBOR','ROLOS','BASES ROLETES','REVESTIMENTO','RMF']; // fallback; a ordem real vem das colunas da aba CAPACIDADE (inclui fornecedores externos como AXION/MECALD)
-// Colunas de Avanço (índices 0-based na linha da aba MICRO): AA..AI
-const AVANCO_COLS=[26,27,28,29,30,31,32,33,34];
+// Etapas de Avanço (índice 0-based na linha da aba MICRO + peso de cada uma no
+// avanço do projeto). Definido pela empresa: Matéria prima 25% + Preparação 25%
+// + Caldeiraria 22,5% + Solda 22,5% + Acabamento 5% = 100%. RELATORIO (AB),
+// PRONTO ACABADO (AG), EXPEDIÇÃO (AH) e FINALIZADO (AI) não entram na conta —
+// são marcadores posteriores ao acabamento, não etapas de produção com peso próprio.
+const AVANCO_ETAPAS=[
+  {idx:26, peso:25,   nome:'Matéria prima'},  // AA
+  {idx:28, peso:25,   nome:'Preparação'},     // AC
+  {idx:29, peso:22.5, nome:'Caldeiraria'},    // AD
+  {idx:30, peso:22.5, nome:'Solda'},          // AE
+  {idx:31, peso:5,    nome:'Acabamento'},     // AF
+];
 /* Converte valor de célula de etapa em percentual 0-100, ou null se vazio/indefinido */
 function parsePct(v){
   // Vazio/nulo = etapa NÃO iniciada = 0% (deve entrar no denominador)
@@ -517,15 +527,16 @@ function parsePct(v){
   }
   return 0;
 }
-/* Percentual médio de avanço, calculado sobre TODOS os valores de etapa presentes num conjunto de itens */
+/* Percentual médio de avanço, ponderado pelo peso de cada etapa (ver AVANCO_ETAPAS).
+   Etapa vazia = 0% naquela etapa (não ignora, entra no cálculo). */
 function calcAvanco(items){
-  // Sempre divide por 9 etapas × nº de itens. Vazio = 0% (não ignora).
-  const N=AVANCO_COLS.length; // 9
   let soma=0,total=0;
   items.forEach(it=>{
     if(!it.stages||!it.stages.length) return;
-    it.stages.forEach(v=>{ soma+=(v||0); });
-    total+=N;
+    let avancoItem=0;
+    it.stages.forEach((v,i)=>{ avancoItem+=(v||0)*AVANCO_ETAPAS[i].peso/100; });
+    soma+=avancoItem;
+    total+=1;
   });
   if(!total) return null;
   return soma/total; // 0-100
@@ -777,7 +788,7 @@ async function processarPlanilha(buf){
     const tag=r[9]?String(r[9]).trim():'SEM TAG';
     const produto=r[10]?String(r[10]).trim():'SEM PRODUTO';
     const n=v=>typeof v==='number'?v:(parseFloat(v)||0);
-    const stages=AVANCO_COLS.map(idx=>parsePct(r[idx]));
+    const stages=AVANCO_ETAPAS.map(e=>parsePct(r[e.idx]));
 
     const yRaw=n(r[24]); // coluna Y — valores negativos = pendência, positivos = excedente (não é pendência)
     const item={
