@@ -64,6 +64,34 @@ const PENDING_DELETE_QUEUE_KEY = 'pending_delete_queue';
 // de AsyncStorage abaixo.
 const DEVICE_ID_KEY = 'device_id';
 
+// Guarda em disco só os mais recentes - o histórico completo de verdade
+// sempre vem do Supabase de novo na próxima carga (loadCompletedChecklists),
+// então não precisa acumular pra sempre em disco. Um registro ainda
+// pendente de sincronizar (id provisório) é sempre mantido, não importa
+// a idade, senão um checklist feito offline há muito tempo se perderia.
+const MAX_CONFIRMADOS_NO_CACHE_LOCAL = 500;
+
+// Nunca deixa uma escrita no cache local travar quem chamou: no web, isso
+// é localStorage, que tem uma cota bem menor do que parece (alguns
+// navegadores/aparelhos Android dão só uns poucos MB por site) - com
+// muitos meses de checklists acumulados, dá pra estourar essa cota e o
+// setItem lança uma exceção de verdade. Sem esse try/catch, isso já
+// travou a finalização do checklist inteiro (nem local nem no servidor
+// chegava a salvar) só porque a cópia em disco falhou.
+async function salvarCacheLocal(registros: CompletedChecklistRecord[]): Promise<void> {
+  const pendentes = registros.filter(isPendingSync);
+  const confirmados = registros
+    .filter((r) => !isPendingSync(r))
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, MAX_CONFIRMADOS_NO_CACHE_LOCAL);
+
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...pendentes, ...confirmados]));
+  } catch (error) {
+    console.error('[Reports] Falha ao salvar cache local (provavelmente sem espaço/cota do navegador):', error);
+  }
+}
+
 /**
  * Gerar ou carregar ID único do dispositivo
  */
@@ -231,7 +259,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         const podado = merged.filter((c) => isPendingSync(c) || idsNoSupabase.has(c.id));
 
         setCompletedChecklists(podado);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(podado));
+        await salvarCacheLocal(podado);
         console.log('[Reports] ✓ Sincronização com Supabase concluída');
 
         // Aproveita e já tenta mandar pro servidor qualquer checklist
@@ -256,8 +284,8 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       // Adicionar o novo registro
       const updated = [...filtered, record];
       setCompletedChecklists(updated);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      
+      await salvarCacheLocal(updated);
+
       // Se online, sincronizar com Supabase
       if (isOnline && deviceId) {
         try {
@@ -271,7 +299,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
           if (saved?.id && saved.id !== record.id) {
             setCompletedChecklists((prev) => {
               const fixed = prev.map((c) => (c.id === record.id ? { ...c, id: saved.id } : c));
-              AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(fixed));
+              salvarCacheLocal(fixed);
               return fixed;
             });
           }
@@ -293,7 +321,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     const filtered = completedChecklists.filter((c) => c.id !== record.id);
     const updated = [...filtered, record];
     setCompletedChecklists(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    await salvarCacheLocal(updated);
   };
 
   // Depois que o servidor confirma que gerou o PDF e salvou a linha de
@@ -307,7 +335,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       const fixed = prev.map((c) =>
         c.id === localId ? { ...c, id: result.id, pdfFileName: result.pdfUrl } : c
       );
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(fixed));
+      salvarCacheLocal(fixed);
       return fixed;
     });
   };
@@ -393,7 +421,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       const updated = completedChecklists.filter((c) => !idsSet.has(c.id));
       setCompletedChecklists(updated);
       completedChecklistsRef.current = updated;
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      await salvarCacheLocal(updated);
 
       // Não deixa uma entrada zumbi na fila de PDF pendente tentando gerar
       // PDF pra um checklist que acabou de ser excluído.
@@ -486,7 +514,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
 
       if (synced > 0) {
         setCompletedChecklists(atual);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(atual));
+        await salvarCacheLocal(atual);
       }
 
       console.log('[Reports] Sincronização de pendentes concluída:', { synced, failed });
