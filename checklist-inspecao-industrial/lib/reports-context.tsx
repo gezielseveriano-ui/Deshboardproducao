@@ -342,7 +342,11 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
 
   const persistPendingPdfQueue = async (queue: PendingPdfItem[]) => {
     setPendingPdfQueue(queue);
-    await AsyncStorage.setItem(PENDING_PDF_QUEUE_KEY, JSON.stringify(queue));
+    try {
+      await AsyncStorage.setItem(PENDING_PDF_QUEUE_KEY, JSON.stringify(queue));
+    } catch (error) {
+      console.error('[Reports] Falha ao salvar fila de PDF pendente (provavelmente sem espaço/cota do navegador):', error);
+    }
   };
 
   // Guarda os dados completos do checklist (todas as etapas, assinaturas,
@@ -400,7 +404,11 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   const persistPendingDeleteQueue = async (queue: PendingDeleteItem[]) => {
     setPendingDeleteQueue(queue);
     pendingDeleteQueueRef.current = queue;
-    await AsyncStorage.setItem(PENDING_DELETE_QUEUE_KEY, JSON.stringify(queue));
+    try {
+      await AsyncStorage.setItem(PENDING_DELETE_QUEUE_KEY, JSON.stringify(queue));
+    } catch (error) {
+      console.error('[Reports] Falha ao salvar fila de exclusão pendente (provavelmente sem espaço/cota do navegador):', error);
+    }
   };
 
   // Exclui da lista local IMEDIATAMENTE (antes de qualquer chamada de rede) -
