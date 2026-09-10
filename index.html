@@ -430,6 +430,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
     <button id="btnArquivados" onclick="irArquivados()" title="Pedidos que você arquivou (entregues ou fora de uso)" style="padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
       <i class="ti ti-archive" style="font-size:12px;vertical-align:-1px"></i> Pedidos arquivados<span id="badgeArquivados"></span>
     </button>
+    <button id="btnTokenGh" onclick="configurarToken()" title="Configurar o token do GitHub que permite arquivar/desarquivar pedidos" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
+      <i class="ti ti-key" style="font-size:12px;vertical-align:-1px"></i>
+    </button>
     <button id="btnFullscreen" onclick="alternarTelaCheia()" title="Tela cheia" style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
       <i class="ti ti-maximize" id="iconFullscreen" style="font-size:14px;vertical-align:-1px"></i>
     </button>
@@ -462,19 +465,66 @@ const hoje=new Date(); hoje.setHours(0,0,0,0);
 let capChart=null;
 
 /* ── PEDIDOS ARQUIVADOS ──
-   Guardado no localStorage deste navegador (o dashboard é só leitura da
-   planilha, não tem backend pra gravar isso de forma compartilhada). Pedido
-   arquivado sai da lista "Todos os pedidos" e do cálculo de Capacidade de
-   Produção (carga programada/expedido/líquida), mas continua consultável
-   na tela "Pedidos arquivados". */
-const CHAVE_ARQUIVADOS='factoryview_pedidos_arquivados';
-function carregarArquivados(){
-  try{ return new Set(JSON.parse(localStorage.getItem(CHAVE_ARQUIVADOS)||'[]')); }
-  catch(e){ return new Set(); }
+   Lido de arquivados.json no GitHub (leitura pública, igual à planilha) —
+   por isso qualquer pessoa que abrir o dashboard já vê os mesmos pedidos
+   arquivados, sem precisar configurar nada. Só ARQUIVAR/DESARQUIVAR precisa
+   de um token do GitHub (escopado só a este repositório), configurado uma
+   vez por quem for mexer nisso, guardado no localStorage do navegador dela.
+   Pedido arquivado sai da lista "Todos os pedidos" e do cálculo de
+   Capacidade de Produção, mas continua consultável em "Pedidos arquivados". */
+const GITHUB_OWNER='gezielseveriano-ui', GITHUB_REPO='Deshboardproducao', ARQUIVADOS_PATH='arquivados.json';
+const CHAVE_TOKEN='factoryview_gh_token';
+let PEDIDOS_ARQUIVADOS=new Set();
+function getGhToken(){ try{ return localStorage.getItem(CHAVE_TOKEN)||''; }catch(e){ return ''; } }
+function setGhToken(t){ try{ if(t) localStorage.setItem(CHAVE_TOKEN,t); else localStorage.removeItem(CHAVE_TOKEN); }catch(e){} }
+function configurarToken(){
+  const atual=getGhToken();
+  const t=prompt(
+    atual
+      ? 'Token do GitHub já configurado neste navegador.\n\nCole um novo pra substituir, ou apague o campo e confirme pra remover.'
+      : 'Cole aqui o token do GitHub (fine-grained, escopado só ao repositório Deshboardproducao, permissão Contents: Read and write).\n\nEsse token fica salvo só neste navegador — nunca é enviado pra mim nem pra mais ninguém.',
+    ''
+  );
+  if(t===null) return; // cancelou
+  setGhToken(t.trim());
+  setStatus(t.trim()?'Token salvo neste navegador.':'Token removido deste navegador.');
 }
-let PEDIDOS_ARQUIVADOS=carregarArquivados();
-function salvarArquivados(){
-  try{ localStorage.setItem(CHAVE_ARQUIVADOS, JSON.stringify([...PEDIDOS_ARQUIVADOS])); }catch(e){}
+async function carregarArquivadosRemoto(){
+  try{
+    const resp=await fetch(`https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/main/${ARQUIVADOS_PATH}?t=`+Date.now());
+    if(!resp.ok) return new Set();
+    const arr=await resp.json();
+    return new Set(Array.isArray(arr)?arr:[]);
+  }catch(e){ return new Set(); }
+}
+/* Grava a lista no GitHub (com um retry se outra pessoa gravou entre a
+   leitura do sha e o PUT). `mudar(set)` aplica a alteração (add/delete) em
+   cima da versão mais recente lida do GitHub, pra nunca perder uma edição
+   feita por outra pessoa entre a hora que você abriu a tela e clicou. */
+async function salvarArquivadosRemoto(mudar,tentativas){
+  const token=getGhToken();
+  if(!token){ configurarToken(); throw new Error('SEM_TOKEN'); }
+  const apiUrl=`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${ARQUIVADOS_PATH}`;
+  const headers={Authorization:'Bearer '+token, Accept:'application/vnd.github+json'};
+  let sha, listaAtual=[];
+  const getResp=await fetch(apiUrl,{headers});
+  if(getResp.ok){
+    const j=await getResp.json();
+    sha=j.sha;
+    try{ listaAtual=JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,''))))); }catch(e){ listaAtual=[]; }
+  } else if(getResp.status!==404){
+    throw new Error('Erro ao consultar arquivo atual: HTTP '+getResp.status);
+  }
+  const novaLista=mudar(new Set(listaAtual));
+  const conteudo=JSON.stringify([...novaLista].sort(),null,2);
+  const body={ message:'Atualiza pedidos arquivados', content:btoa(unescape(encodeURIComponent(conteudo))), branch:'main' };
+  if(sha) body.sha=sha;
+  const putResp=await fetch(apiUrl,{method:'PUT',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(putResp.ok) return novaLista;
+  if(putResp.status===409&&tentativas>0) return salvarArquivadosRemoto(mudar,tentativas-1); // alguém gravou junto — tenta de novo
+  if(putResp.status===401||putResp.status===403){ throw new Error('Token inválido, expirado ou sem permissão nesse repositório.'); }
+  const errBody=await putResp.json().catch(()=>({}));
+  throw new Error(errBody.message||('HTTP '+putResp.status));
 }
 function pedidosAtivos(){ return allPedidos.filter(p=>!PEDIDOS_ARQUIVADOS.has(p)); }
 function pedidosArquivadosLista(){ return allPedidos.filter(p=>PEDIDOS_ARQUIVADOS.has(p)); }
@@ -483,20 +533,28 @@ function atualizarBadgeArquivados(){
   const el=document.getElementById('badgeArquivados');
   if(el) el.textContent=n>0?` (${n})`:'';
 }
-function arquivarPedido(p){
-  if(!confirm(`Arquivar o pedido ${p}?\n\nEle sai da lista "Todos os pedidos" e da Capacidade de Produção, mas continua disponível em "Pedidos arquivados".`)) return;
-  PEDIDOS_ARQUIVADOS.add(p);
-  salvarArquivados();
-  atualizarBadgeArquivados();
-  renderCapacidade();
-  irGeral();
+async function arquivarPedido(p){
+  if(!confirm(`Arquivar o pedido ${p}?\n\nEle sai da lista "Todos os pedidos" e da Capacidade de Produção, mas continua disponível em "Pedidos arquivados" — pra qualquer pessoa que abrir o dashboard.`)) return;
+  try{
+    const nova=await salvarArquivadosRemoto(set=>{ set.add(p); return set; },1);
+    PEDIDOS_ARQUIVADOS=nova;
+    atualizarBadgeArquivados();
+    renderCapacidade();
+    irGeral();
+  }catch(e){
+    if(e.message!=='SEM_TOKEN') alert('Não consegui arquivar: '+e.message);
+  }
 }
-function desarquivarPedido(p){
-  PEDIDOS_ARQUIVADOS.delete(p);
-  salvarArquivados();
-  atualizarBadgeArquivados();
-  renderCapacidade();
-  renderTela();
+async function desarquivarPedido(p){
+  try{
+    const nova=await salvarArquivadosRemoto(set=>{ set.delete(p); return set; },1);
+    PEDIDOS_ARQUIVADOS=nova;
+    atualizarBadgeArquivados();
+    renderCapacidade();
+    renderTela();
+  }catch(e){
+    if(e.message!=='SEM_TOKEN') alert('Não consegui desarquivar: '+e.message);
+  }
 }
 let SETORES=['ESTRUTURA','USINAGEM','TAMBOR','ROLOS','BASES ROLETES','REVESTIMENTO','RMF']; // fallback; a ordem real vem das colunas da aba CAPACIDADE (inclui fornecedores externos como AXION/MECALD)
 // Etapas de Avanço (índice 0-based na linha da aba MICRO + peso de cada uma no
@@ -809,6 +867,7 @@ async function processarPlanilha(buf){
     nL++;
   }
   allPedidos=Object.keys(DB).sort();
+  PEDIDOS_ARQUIVADOS=await carregarArquivadosRemoto();
   state={tela:'geral',pedido:null,tag:null,produto:null};
   renderCapacidade();
   renderTela();
