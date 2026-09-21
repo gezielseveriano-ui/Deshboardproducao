@@ -375,10 +375,13 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
   .pill-green { background:#dcfce7 !important; color:#166534 !important; }
   #printHeader { display:block !important; }
   #printFooter { display:block !important; }
+  body.imprimindo-pedido #mainContent { display:none !important; }
+  body.imprimindo-pedido #printPedidoReport { display:block !important; }
 }
 
 #printHeader { display:none; }
 #printFooter { display:none; }
+#printPedidoReport { display:none; }
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 </style>
 </head>
@@ -395,7 +398,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
           <div style="font-size:11px;color:#666">Dashboard Industrial · Planejamento e Expedição</div>
         </div>
       </div>
-      <div style="font-size:20px;font-weight:600;color:#1a4fa0;margin-top:10px">Relatório Geral de Pedidos</div>
+      <div id="printTitulo" style="font-size:20px;font-weight:600;color:#1a4fa0;margin-top:10px">Relatório Geral de Pedidos</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:11px;color:#666">Gerado em</div>
@@ -408,10 +411,13 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 <!-- RODAPÉ DE IMPRESSÃO -->
 <div id="printFooter" style="display:none;position:fixed;bottom:0;left:0;right:0;padding:8px 24px;border-top:1px solid #ccc;display:flex;justify-content:space-between;align-items:center;background:#fff;font-size:10px;color:#666">
-  <span>FactoryView · Relatório Geral de Pedidos</span>
+  <span id="printTituloFooter">FactoryView · Relatório Geral de Pedidos</span>
   <span id="printPage">Página 1</span>
   <span id="printDateFooter"></span>
 </div>
+
+<!-- CORPO DO RELATÓRIO DE UM PEDIDO (claro) — preenchido por prepararImpressaoPedido() -->
+<div id="printPedidoReport" style="display:none;padding:0 24px"></div>
 
 <div class="top-bar">
   <div class="top-bar-brand">
@@ -1344,6 +1350,7 @@ function renderPedido(){
       ?`<span class="pill pill-blue"><i class="ti ti-archive"></i>Arquivado</span>
          <button class="back-btn" onclick="desarquivarPedido('${esc(state.pedido)}')"><i class="ti ti-archive-off" style="font-size:13px"></i> Desarquivar</button>`
       :`<button class="back-btn" onclick="arquivarPedido('${esc(state.pedido)}')"><i class="ti ti-archive" style="font-size:13px"></i> Arquivar pedido</button>`}
+    <button class="btn-print btn-print-pdf" style="margin-left:auto" onclick="gerarPDFPedido()"><i class="ti ti-file-type-pdf"></i> Gerar PDF do pedido</button>
   </div>`;
 
   const cli=getCli(state.pedido), tags=DB[state.pedido], tk=Object.keys(tags);
@@ -1691,6 +1698,10 @@ function prepararImpressao(){
   if(el) el.textContent = dtStr;
   const elF = document.getElementById('printDateFooter');
   if(elF) elF.textContent = dtStr;
+  const tit=document.getElementById('printTitulo'); if(tit) tit.textContent='Relatório Geral de Pedidos';
+  const titF=document.getElementById('printTituloFooter'); if(titF) titF.textContent='FactoryView · Relatório Geral de Pedidos';
+  document.body.classList.remove('imprimindo-pedido');
+  document.getElementById('printPedidoReport').style.display='none';
 
   // Métricas de resumo (não inclui pedidos arquivados)
   let gP=0,gF=0,gE=0,gPE=0;
@@ -1728,6 +1739,184 @@ function gerarPDF(){
   setTimeout(()=>{
     window.print();
     setTimeout(restaurarTela, 1000);
+  }, 300);
+}
+
+/* ── RELATÓRIO CLARO DE UM PEDIDO (PDF pra enviar ao cliente) ──
+   Mesma informação da tela (peso/avanço/expedição/setores), só que em
+   cores claras — pedido no topo, um bloco igual por TAG logo abaixo. */
+function blocoResumoImpressaoClaro(o){
+  const ft=kg=>(kg/1000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const setores=Object.keys(o.mapaSetores).sort();
+  let totCarga=0,totExp=0,totPend=0;
+  const linhasSetor=setores.map(setor=>{
+    const a=setorAgg(o.mapaSetores[setor]);
+    totCarga+=a.cargaProg; totExp+=a.expedido; totPend+=a.pendExp;
+    const av=a.avanco, avPct=av!==null?Math.min(100,Math.max(0,av)):0;
+    const barCol=avPct>=100?'#166534':(avPct>=50?'#92400e':'#991b1b');
+    return `<tr>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb"><strong style="color:#1a1a2e">${setor}</strong></td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#92400e">${ft(a.cargaProg)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#0e7490">${ft(a.expedido)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#991b1b">${ft(a.pendExp)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;min-width:50px"><div style="height:100%;width:${avPct.toFixed(1)}%;background:${barCol}"></div></div>
+          <span style="font-size:10px;width:32px;text-align:right;color:#666">${av!==null?av.toFixed(0)+'%':'—'}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const setoresQtd=setores.filter(s=>SETORES_QTD.includes(s.trim().toUpperCase()));
+  let blocoQtd='';
+  if(setoresQtd.length){
+    let tPq=0,tEq=0,tNq=0;
+    const linhasQtd=setoresQtd.map(setor=>{
+      const q=qtdAgg(o.mapaSetores[setor]);
+      tPq+=q.qtdProd; tEq+=q.qtdExp; tNq+=q.qtdNaEmpresa;
+      return `<tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb"><strong style="color:#1a1a2e">${setor}</strong></td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#1a4fa0">${q.qtdProd.toLocaleString('pt-BR')}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#0e7490">${q.qtdExp.toLocaleString('pt-BR')}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:${q.qtdNaEmpresa>0?'#92400e':'#888'};font-weight:700">${q.qtdNaEmpresa.toLocaleString('pt-BR')}</td>
+      </tr>`;
+    }).join('');
+    blocoQtd = `
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#666;margin:14px 0 6px">Controle de quantidade — peças (un.)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:#f1f5f9">
+          <th style="padding:6px 10px;text-align:left;color:#666">Setor</th>
+          <th style="padding:6px 10px;text-align:right;color:#666">Qtde produção</th>
+          <th style="padding:6px 10px;text-align:right;color:#666">Qtde expedida</th>
+          <th style="padding:6px 10px;text-align:right;color:#666">Qtde na empresa</th>
+        </tr></thead>
+        <tbody>${linhasQtd}</tbody>
+        <tfoot><tr style="font-weight:700;background:#f8fafc">
+          <td style="padding:6px 10px">TOTAL</td>
+          <td style="padding:6px 10px;text-align:right;color:#1a4fa0">${tPq.toLocaleString('pt-BR')}</td>
+          <td style="padding:6px 10px;text-align:right;color:#0e7490">${tEq.toLocaleString('pt-BR')}</td>
+          <td style="padding:6px 10px;text-align:right;color:#92400e">${tNq.toLocaleString('pt-BR')}</td>
+        </tr></tfoot>
+      </table>`;
+  }
+
+  return `
+  <div style="page-break-inside:avoid;margin-bottom:22px;padding-bottom:18px;border-bottom:2px solid #e5e7eb">
+    <div style="font-size:16px;font-weight:700;color:#1a4fa0;margin-bottom:2px">${o.titulo}</div>
+    ${o.subtitulo?`<div style="font-size:12px;color:#666;margin-bottom:10px">${o.subtitulo}</div>`:'<div style="margin-bottom:10px"></div>'}
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">
+      ${o.metrics.map(m=>`
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px">
+          <div style="font-size:9px;color:#666;margin-bottom:3px">${m.label}</div>
+          <div style="font-size:15px;font-weight:700;color:${m.color||'#1a1a2e'}">${m.val}</div>
+          ${m.sub?`<div style="font-size:9px;color:#888;margin-top:1px">${m.sub}</div>`:''}
+        </div>`).join('')}
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+        <span style="font-size:10px;color:#666;width:120px;flex-shrink:0">Avanço de fabricação</span>
+        <div style="flex:1;height:7px;background:#e5e7eb;border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100,o.avancoPct).toFixed(1)}%;background:#1a4fa0"></div></div>
+        <span style="font-size:11px;font-weight:700;color:#1a4fa0;width:34px;text-align:right">${o.avancoPct.toFixed(0)}%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;color:#666;width:120px;flex-shrink:0">Expedição</span>
+        <div style="flex:1;height:7px;background:#e5e7eb;border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100,o.expPct).toFixed(1)}%;background:#166534"></div></div>
+        <span style="font-size:11px;font-weight:700;color:#166534;width:34px;text-align:right">${o.expPct.toFixed(0)}%</span>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:#f1f5f9">
+        <th style="padding:6px 10px;text-align:left;color:#666">Setor</th>
+        <th style="padding:6px 10px;text-align:right;color:#666">Carga programada (t)</th>
+        <th style="padding:6px 10px;text-align:right;color:#666">Expedido (t)</th>
+        <th style="padding:6px 10px;text-align:right;color:#666">Pend. exp. (t)</th>
+        <th style="padding:6px 10px;text-align:left;color:#666;width:140px">Avanço</th>
+      </tr></thead>
+      <tbody>${linhasSetor}</tbody>
+      <tfoot><tr style="font-weight:700;background:#f8fafc">
+        <td style="padding:6px 10px">TOTAL</td>
+        <td style="padding:6px 10px;text-align:right;color:#92400e">${ft(totCarga)}</td>
+        <td style="padding:6px 10px;text-align:right;color:#0e7490">${ft(totExp)}</td>
+        <td style="padding:6px 10px;text-align:right;color:#991b1b">${ft(totPend)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+    ${blocoQtd}
+  </div>`;
+}
+
+function construirRelatorioPedidoClaro(pedido){
+  const cli=getCli(pedido);
+  const tags=DB[pedido], tk=Object.keys(tags).sort();
+  let tP=0,tF=0,tE=0,tPE=0;
+  tk.forEach(t=>Object.values(tags[t]).forEach(itens=>itens.forEach(it=>{tP+=it.pesoTotal;tF+=it.fabricado;tE+=it.expedido;tPE+=Math.max(0,it.pesoPendExp);})));
+  const mapaSetoresPedido=setoresDoPedido(pedido);
+  const avancoPedido=calcAvanco(itensFlat(mapaSetoresPedido))||0;
+  const pEpedido=tP>0?Math.min(100,tE/tP*100):0;
+
+  let html=blocoResumoImpressaoClaro({
+    titulo:`Pedido ${pedido}${cli&&cli.cliente?' · '+cli.cliente:''}`,
+    subtitulo:cli&&cli.equip?cli.equip:'',
+    metrics:[
+      {label:'Peso total',      val:fmt_t(tP),  sub:fmt_kg(tP)+' kg'},
+      {label:'Fabricado',       val:fmt_t(tF),  sub:(tP>0?(tF/tP*100).toFixed(1):'0.0')+'%', color:'#166534'},
+      {label:'Expedido',        val:fmt_t(tE),  sub:pEpedido.toFixed(1)+'%', color:'#92400e'},
+      {label:'Pend. expedição', val:fmt_t(tPE), color:'#991b1b'},
+      {label:'TAGs',            val:tk.length,  sub:'no pedido'},
+    ],
+    avancoPct:avancoPedido, expPct:pEpedido,
+    mapaSetores:mapaSetoresPedido,
+  });
+
+  tk.forEach(tag=>{
+    const prods=tags[tag];
+    let ttP=0,ttF=0,ttE=0,ttPE=0;
+    Object.values(prods).forEach(itens=>itens.forEach(it=>{ttP+=it.pesoTotal;ttF+=it.fabricado;ttE+=it.expedido;ttPE+=Math.max(0,it.pesoPendExp);}));
+    const avancoTag=calcAvanco(itensFlat(prods))||0;
+    const ttPEpct=ttP>0?Math.min(100,ttE/ttP*100):0;
+    html+=blocoResumoImpressaoClaro({
+      titulo:`TAG ${tag}`,
+      subtitulo:'',
+      metrics:[
+        {label:'Peso total TAG',  val:fmt_t(ttP),  sub:fmt_kg(ttP)+' kg'},
+        {label:'Fabricado',       val:fmt_t(ttF),  sub:(ttP>0?(ttF/ttP*100).toFixed(1):'0.0')+'%', color:'#166534'},
+        {label:'Expedido',        val:fmt_t(ttE),  sub:ttPEpct.toFixed(1)+'%', color:'#92400e'},
+        {label:'Pend. expedição', val:fmt_t(ttPE), color:'#991b1b'},
+        {label:'Setores',         val:Object.keys(prods).length, sub:'na TAG'},
+      ],
+      avancoPct:avancoTag, expPct:ttPEpct,
+      mapaSetores:prods,
+    });
+  });
+  return html;
+}
+
+function prepararImpressaoPedido(){
+  const agora=new Date();
+  const dtStr=agora.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'})+' às '+agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('printDate').textContent=dtStr;
+  document.getElementById('printDateFooter').textContent=dtStr;
+  document.getElementById('printTitulo').textContent=`Relatório do Pedido ${state.pedido}`;
+  document.getElementById('printTituloFooter').textContent=`FactoryView · Relatório do Pedido ${state.pedido}`;
+  const pm=document.getElementById('printMetrics'); if(pm) pm.innerHTML='';
+  document.getElementById('printPedidoReport').innerHTML=construirRelatorioPedidoClaro(state.pedido);
+  document.getElementById('printHeader').style.display='block';
+  document.getElementById('printFooter').style.display='flex';
+  document.getElementById('printPedidoReport').style.display='block';
+  document.body.classList.add('imprimindo-pedido');
+}
+function restaurarTelaPedido(){
+  document.getElementById('printHeader').style.display='none';
+  document.getElementById('printFooter').style.display='none';
+  document.getElementById('printPedidoReport').style.display='none';
+  document.body.classList.remove('imprimindo-pedido');
+}
+function gerarPDFPedido(){
+  prepararImpressaoPedido();
+  setTimeout(()=>{
+    window.print();
+    setTimeout(restaurarTelaPedido, 1000);
   }, 300);
 }
 
