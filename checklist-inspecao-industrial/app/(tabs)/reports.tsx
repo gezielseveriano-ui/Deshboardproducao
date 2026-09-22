@@ -13,7 +13,6 @@ import { Calendar } from "react-native-calendars";
 import { PieChart } from "@/components/charts/pie-chart";
 import { HorizontalBarChart } from "@/components/charts/horizontal-bar-chart";
 import { VerticalBarChart } from "@/components/charts/bar-chart";
-import { ComparisonChart } from "@/components/charts/comparison-chart";
 // Exportação em Excel removida - usar Dashboard web para Excel
 
 export default function ReportsScreen() {
@@ -61,28 +60,6 @@ export default function ReportsScreen() {
     const date = new Date(year, month - 1, day);
     date.setHours(0, 0, 0, 0);
     return date;
-  };
-
-  // Calcular dados de comparação
-  const getComparisonData = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStart = new Date(today);
-    const todayEnd = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-    const todayCount = completedChecklists.filter(
-      (c) => getRecordDate(c) >= todayStart && getRecordDate(c) < todayEnd
-    ).length;
-    const lastWeekStart = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
-    const lastWeekEnd = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const lastWeekCount = completedChecklists.filter(
-      (c) => getRecordDate(c) >= lastWeekStart && getRecordDate(c) < lastWeekEnd
-    ).length;
-    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastMonthCount = completedChecklists.filter(
-      (c) => getRecordDate(c) >= lastMonthStart && getRecordDate(c) < lastMonthEnd
-    ).length;
-    return { today: todayCount, lastWeek: lastWeekCount, lastMonth: lastMonthCount };
   };
 
   // Calcular range de datas baseado no filtro
@@ -618,13 +595,6 @@ export default function ReportsScreen() {
         {/* Seção: Gráficos */}
         {modeloResumo.length > 0 && (
           <View className="px-6 py-4 gap-6">
-            {/* Gráfico Comparativo */}
-            <ComparisonChart
-              data={getComparisonData()}
-              title="Comparação de Produção"
-              unit="checklists"
-            />
-
             {/* Gráficos de Barras Horizontais - Distribuição por Modelo, um por categoria */}
             {modeloChartDataPorCategoria.map(({ categoria, data }) => (
               <View key={`modelo-${categoria}`} className="bg-surface rounded-lg p-4 border border-border">
