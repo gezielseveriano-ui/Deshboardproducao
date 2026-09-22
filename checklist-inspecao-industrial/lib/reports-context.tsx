@@ -574,6 +574,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     if (typeof document === "undefined") return;
     const aoFicarVisivel = () => {
       if (document.visibilityState !== "visible") return;
+      loadCompletedChecklists();
       syncPendingChecklists();
       retryPendingPdfGenerations();
       retryPendingDeletes();
@@ -581,6 +582,20 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener("visibilitychange", aoFicarVisivel);
     return () => document.removeEventListener("visibilitychange", aoFicarVisivel);
   }, [pendingPdfQueue.length, pendingDeleteQueue.length, completedChecklists]);
+
+  // Vários aparelhos podem estar com o app aberto ao mesmo tempo - sem
+  // isso, um checklist feito (ou excluído) num aparelho só aparecia nos
+  // outros depois de alguém lembrar de recarregar a página manualmente,
+  // o que já causou telas diferentes mostrando informações diferentes.
+  // Busca a lista completa de novo a cada minuto; loadCompletedChecklists
+  // já mescla preservando o que ainda estiver pendente só neste aparelho
+  // e remove o que foi excluído em outro, sem perder nada.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadCompletedChecklists();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const idsNaFilaDePdf = new Set(pendingPdfQueue.map((item) => item.localId));
   const pendingSyncCount = completedChecklists.filter(
