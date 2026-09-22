@@ -2,6 +2,7 @@ import { ScrollView, Text, View, TouchableOpacity, StyleSheet } from "react-nati
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
+import { RefreshButton } from "@/components/refresh-button";
 
 const CHECKLISTS = [
   {
@@ -76,8 +77,13 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
         {/* Header */}
         <View className="px-6 pt-6 pb-4 bg-background">
-          <Text className="text-4xl font-bold text-foreground">CHECKLISTS DE</Text>
-          <Text className="text-4xl font-bold text-foreground">INSPEÇÃO</Text>
+          <View className="flex-row items-start justify-between">
+            <View>
+              <Text className="text-4xl font-bold text-foreground">CHECKLISTS DE</Text>
+              <Text className="text-4xl font-bold text-foreground">INSPEÇÃO</Text>
+            </View>
+            <RefreshButton color={colors.foreground} />
+          </View>
           <Text className="text-base text-muted mt-2">MRS – Manutenção de Vagões</Text>
         </View>
 

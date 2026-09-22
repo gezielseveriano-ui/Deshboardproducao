@@ -1,6 +1,7 @@
 import React from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
+import { RefreshButton } from "@/components/refresh-button";
 import { useColors } from "@/hooks/use-colors";
 import { useReports } from "@/lib/reports-context";
 import { useState, useMemo } from "react";
@@ -502,8 +503,13 @@ export default function ReportsScreen() {
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-background">
         {/* Header */}
         <View className="bg-primary px-6 py-4">
-          <Text className="text-2xl font-bold text-white">Relatórios</Text>
-          <Text className="text-sm text-white/80 mt-1">Controle de Checklists Completados</Text>
+          <View className="flex-row items-center justify-between">
+            <View>
+              <Text className="text-2xl font-bold text-white">Relatórios</Text>
+              <Text className="text-sm text-white/80 mt-1">Controle de Checklists Completados</Text>
+            </View>
+            <RefreshButton />
+          </View>
         </View>
 
         {/* Filtros de Data */}
