@@ -9,6 +9,7 @@ import { comTentativas } from './retry';
 import { trpcVanilla } from './trpc-vanilla';
 import type { inferRouterInputs } from '@trpc/server';
 import type { AppRouter } from '@/server/routers';
+import { usePathname } from 'expo-router';
 
 type GerarPdfInput = inferRouterInputs<AppRouter>['checklist']['generateAndUploadPDF'];
 
@@ -123,6 +124,15 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [deviceId, setDeviceId] = useState<string>('');
+
+  // Nunca deixa uma sincronização em segundo plano (a cada 60s, ao
+  // reconectar, ao voltar a ficar visível) atrapalhar quem está no meio do
+  // preenchimento de um checklist - usa ref (não state) pra checar dentro
+  // dos intervalos/listeners sem precisar recriá-los a cada troca de tela.
+  const pathname = usePathname();
+  const pathnameRef = React.useRef(pathname);
+  pathnameRef.current = pathname;
+  const estaPreenchendoChecklist = () => pathnameRef.current?.startsWith('/checklist') ?? false;
 
   // Sempre reflete o completedChecklists mais atual, mesmo dentro de uma
   // função assíncrona de vida longa (como retryPendingPdfGenerations, que
@@ -537,7 +547,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   // tocar em "Sincronizar Agora".
   const wasOnlineRef = React.useRef(isOnline);
   useEffect(() => {
-    if (isOnline && !wasOnlineRef.current) {
+    if (isOnline && !wasOnlineRef.current && !estaPreenchendoChecklist()) {
       syncPendingChecklists();
       retryPendingPdfGenerations();
       retryPendingDeletes();
@@ -557,6 +567,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       pendingPdfQueue.length > 0 || pendingDeleteQueue.length > 0 || completedChecklists.some(isPendingSync);
     if (!temPendente) return;
     const interval = setInterval(() => {
+      if (estaPreenchendoChecklist()) return;
       syncPendingChecklists();
       retryPendingPdfGenerations();
       retryPendingDeletes();
@@ -574,6 +585,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     if (typeof document === "undefined") return;
     const aoFicarVisivel = () => {
       if (document.visibilityState !== "visible") return;
+      if (estaPreenchendoChecklist()) return;
       loadCompletedChecklists();
       syncPendingChecklists();
       retryPendingPdfGenerations();
@@ -592,6 +604,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   // e remove o que foi excluído em outro, sem perder nada.
   useEffect(() => {
     const interval = setInterval(() => {
+      if (estaPreenchendoChecklist()) return;
       loadCompletedChecklists();
     }, 60000);
     return () => clearInterval(interval);
