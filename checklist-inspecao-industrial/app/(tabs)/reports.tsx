@@ -455,47 +455,62 @@ export default function ReportsScreen() {
     '#F97316', // orange
   ];
 
-  // Preparar dados para gráfico de pizza (modelo)
-  const pieChartData = useMemo(() => {
-    const modeloMap: Record<string, string> = {
-      '1': 'Ride Master',
-      '2': 'Ride Control',
-      '3': 'Laterais Usinadas 6,5 x 12',
-      '4': 'Laterais Usinadas 6 x 11',
-      '5': 'BARBER',
-      '6': 'Swing Motion',
-      '7': 'Travessa RM/MC',
-      '8': 'Travessa Swing Motion',
-    };
-    
-    return modeloResumo.slice(0, 8).map((item, index) => {
-      let modeloLabel = String(item.modelo).trim();
-      
-      // Se for um numero, mapear para o nome completo
-      if (modeloMap[modeloLabel]) {
-        modeloLabel = modeloMap[modeloLabel];
-      }
-      
-      // Adicionar prefixo de categoria para diferenciar Lateral vs Travessa
-      const labelComCategoria = `${item.categoria} - ${modeloLabel}`;
-      
-      return {
-        label: labelComCategoria || 'Desconhecido',
+  const MODELO_NOME_MAP: Record<string, string> = {
+    '1': 'Ride Master',
+    '2': 'Ride Control',
+    '3': 'Laterais Usinadas 6,5 x 12',
+    '4': 'Laterais Usinadas 6 x 11',
+    '5': 'BARBER',
+    '6': 'Swing Motion',
+    '7': 'Travessa RM/MC',
+    '8': 'Travessa Swing Motion',
+  };
+
+  const nomeModeloExibicao = (modelo: string): string => {
+    const label = String(modelo).trim();
+    return MODELO_NOME_MAP[label] || label || 'Desconhecido';
+  };
+
+  // Distribuição por Modelo, um gráfico por categoria (Lateral, Triângulo,
+  // Travessa...) em vez de um gráfico só misturando tudo - assim dá pra
+  // comparar os modelos dentro de cada categoria sem uma categoria com mais
+  // peças dominar visualmente as outras.
+  const modeloChartDataPorCategoria = useMemo(() => {
+    const porCategoria = new Map<string, typeof modeloResumo>();
+    modeloResumo.forEach((item) => {
+      if (!porCategoria.has(item.categoria)) porCategoria.set(item.categoria, []);
+      porCategoria.get(item.categoria)!.push(item);
+    });
+    return Array.from(porCategoria.entries()).map(([categoria, itens]) => ({
+      categoria,
+      data: itens.slice(0, 8).map((item, index) => ({
+        label: nomeModeloExibicao(item.modelo),
         value: item.quantidade,
         color: chartColors[index % chartColors.length],
-      };
-    });
+      })),
+    }));
   }, [modeloResumo]);
 
-
-  // Preparar dados para gráfico de barras (executante)
-  const barChartData = useMemo(() => {
-    return executanteResumo.slice(0, 10).map((item, index) => ({
-      label: item.executanteName.substring(0, 10),
-      value: item.quantidadeTotal,
-      color: chartColors[index % chartColors.length],
+  // Quantidade por Executante, também um gráfico por categoria - quanto
+  // cada executante fez de Lateral e quanto fez de Triângulo, separado.
+  const executanteChartDataPorCategoria = useMemo(() => {
+    const porCategoria = new Map<string, typeof executanteCategoriaResumo>();
+    executanteCategoriaResumo.forEach((item) => {
+      if (!porCategoria.has(item.categoria)) porCategoria.set(item.categoria, []);
+      porCategoria.get(item.categoria)!.push(item);
+    });
+    return Array.from(porCategoria.entries()).map(([categoria, itens]) => ({
+      categoria,
+      data: [...itens]
+        .sort((a, b) => b.quantidade - a.quantidade)
+        .slice(0, 10)
+        .map((item, index) => ({
+          label: item.executanteName.substring(0, 10),
+          value: item.quantidade,
+          color: chartColors[index % chartColors.length],
+        })),
     }));
-  }, [executanteResumo]);
+  }, [executanteCategoriaResumo]);
 
   return (
     <ScreenContainer className="p-0">
@@ -610,19 +625,21 @@ export default function ReportsScreen() {
               unit="checklists"
             />
 
-            {/* Gráfico de Barras Horizontais - Distribuição por Modelo */}
-            <View className="bg-surface rounded-lg p-4 border border-border">
-              <Text className="text-base font-bold text-foreground mb-4">Distribuição por Modelo</Text>
-              <HorizontalBarChart data={pieChartData} />
-            </View>
-
-            {/* Gráfico de Barras - Quantidade por Executante */}
-            {executanteResumo.length > 0 && (
-              <View className="bg-surface rounded-lg p-4 border border-border">
-                <Text className="text-base font-bold text-foreground mb-4">Quantidade por Executante</Text>
-                <VerticalBarChart data={barChartData} />
+            {/* Gráficos de Barras Horizontais - Distribuição por Modelo, um por categoria */}
+            {modeloChartDataPorCategoria.map(({ categoria, data }) => (
+              <View key={`modelo-${categoria}`} className="bg-surface rounded-lg p-4 border border-border">
+                <Text className="text-base font-bold text-foreground mb-4">Distribuição por Modelo — {categoria}</Text>
+                <HorizontalBarChart data={data} />
               </View>
-            )}
+            ))}
+
+            {/* Gráficos de Barras - Quantidade por Executante, um por categoria */}
+            {executanteChartDataPorCategoria.map(({ categoria, data }) => (
+              <View key={`executante-${categoria}`} className="bg-surface rounded-lg p-4 border border-border">
+                <Text className="text-base font-bold text-foreground mb-4">Quantidade por Executante — {categoria}</Text>
+                <VerticalBarChart data={data} />
+              </View>
+            ))}
           </View>
         )}
 
