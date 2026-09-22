@@ -3,6 +3,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useReports } from "@/lib/reports-context";
 import { useChecklist } from "@/lib/checklist-context";
 import { useColors } from "@/hooks/use-colors";
+import { RefreshButton } from "@/components/refresh-button";
 import { useState, useMemo, Fragment } from "react";
 import {
   ScrollView,
@@ -541,6 +542,7 @@ export default function HistoryScreen() {
           <Text className="text-2xl font-bold text-foreground flex-1">
             Histórico de Checklists
           </Text>
+          <RefreshButton color={colors.foreground} />
           {selectedChecklistIds.size > 0 && (
             <TouchableOpacity
               className="flex-row items-center bg-red-600 rounded-lg px-3 py-2 ml-2"

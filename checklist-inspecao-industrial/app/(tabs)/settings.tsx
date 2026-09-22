@@ -1,6 +1,7 @@
 import { ScrollView, Text, View, TouchableOpacity, TextInput } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
+import { RefreshButton } from "@/components/refresh-button";
 import { useSignatures } from "@/lib/signatures-context";
 import { useAdminConfig } from "@/lib/admin-config-context";
 import { useAuth } from "@/lib/auth-context";
@@ -208,6 +209,7 @@ export default function SettingsScreen() {
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-3xl font-bold text-foreground">Configurações</Text>
             <View className="flex-row items-center gap-1">
+              <RefreshButton color={colors.primary} />
               <TouchableOpacity
                 onPress={() =>
                   confirmar("Sair", "Deseja sair da sua conta?", () => signOut(), "Sair")
