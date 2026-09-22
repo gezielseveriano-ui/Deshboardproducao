@@ -4,7 +4,7 @@ import { useReports } from "@/lib/reports-context";
 import { useChecklist } from "@/lib/checklist-context";
 import { useColors } from "@/hooks/use-colors";
 import { RefreshButton } from "@/components/refresh-button";
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo, useRef, Fragment } from "react";
 import {
   ScrollView,
   View,
@@ -129,6 +129,7 @@ export default function HistoryScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedChecklistIds, setSelectedChecklistIds] = useState<Set<string>>(new Set());
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const handleViewPDF = async (item: CompletedChecklistRecord) => {
     if (!item.pdfFileName) {
@@ -535,6 +536,7 @@ export default function HistoryScreen() {
   return (
     <ScreenContainer className="bg-background">
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 96 }}
       >
@@ -742,6 +744,53 @@ export default function HistoryScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Botões flutuantes pra pular rápido pro topo/fim da lista - com
+          centenas de checklists, ia até a última linha (onde fica o botão
+          de Email, depois de "Marcar Todos") exigia muito scroll manual. */}
+      <View
+        pointerEvents="box-none"
+        style={{ position: "absolute", right: 16, bottom: 80, gap: 10 }}
+      >
+        <TouchableOpacity
+          onPress={() => scrollViewRef.current?.scrollTo({ y: 0, animated: true })}
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors.primary,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 4,
+            elevation: 4,
+          }}
+          accessibilityLabel="Ir para o topo"
+        >
+          <MaterialIcons name="keyboard-arrow-up" size={28} color="white" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors.primary,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 4,
+            elevation: 4,
+          }}
+          accessibilityLabel="Ir para o fim"
+        >
+          <MaterialIcons name="keyboard-arrow-down" size={28} color="white" />
+        </TouchableOpacity>
+      </View>
 
       {/* Modal de Calendario para Periodo Customizado */}
       <Modal
