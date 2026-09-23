@@ -643,7 +643,7 @@ function agruparPorFornecedorEProduto(map){
   });
   return out;
 }
-function setoresDoPedido(pedido){
+function combinarSetoresDoPedido(pedido){
   const tags=DB[pedido]||{}; const combinado={};
   Object.values(tags).forEach(setObj=>{
     Object.entries(setObj).forEach(([setor,itens])=>{
@@ -651,7 +651,10 @@ function setoresDoPedido(pedido){
       combinado[setor]=combinado[setor].concat(itens);
     });
   });
-  return bucketizarPorFornecedor(combinado);
+  return combinado;
+}
+function setoresDoPedido(pedido){
+  return bucketizarPorFornecedor(combinarSetoresDoPedido(pedido));
 }
 /* Cards de setor — usados na tela de Pedido e na tela de TAG */
 function setorCardsHTML(map,onClickFn){
@@ -1951,8 +1954,8 @@ function construirRelatorioPedidoClaro(pedido){
   const tags=DB[pedido], tk=Object.keys(tags).sort();
   let tP=0,tF=0,tE=0,tPE=0;
   tk.forEach(t=>Object.values(tags[t]).forEach(itens=>itens.forEach(it=>{tP+=it.pesoTotal;tF+=it.fabricado;tE+=it.expedido;tPE+=Math.max(0,it.pesoPendExp);})));
-  const mapaSetoresPedido=setoresDoPedido(pedido);
-  const avancoPedido=calcAvanco(itensFlat(mapaSetoresPedido))||0;
+  const combinadoPedido=combinarSetoresDoPedido(pedido);
+  const avancoPedido=calcAvanco(itensFlat(combinadoPedido))||0;
   const pEpedido=tP>0?Math.min(100,tE/tP*100):0;
 
   let html=blocoResumoImpressaoClaro({
@@ -1966,7 +1969,8 @@ function construirRelatorioPedidoClaro(pedido){
       {label:'TAGs',            val:tk.length,  sub:'no pedido'},
     ],
     avancoPct:avancoPedido, expPct:pEpedido,
-    mapaSetores:mapaSetoresPedido,
+    mapaSetores:combinadoPedido,
+    mapaAgrupado:agruparPorFornecedorEProduto(combinadoPedido),
   });
 
   tk.forEach(tag=>{
