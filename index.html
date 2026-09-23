@@ -612,20 +612,29 @@ function setorAgg(items){
   return {cargaProg,expedido,pendExp,avanco:calcAvanco(items),n:items.length};
 }
 /* Mapa {setor: [itens...]} agregando todas as TAGs de um pedido */
-function setoresDoPedido(pedido){
-  const tags=DB[pedido]||{}; const map={};
-  Object.values(tags).forEach(setObj=>{
-    Object.entries(setObj).forEach(([setor,itens])=>{
-      // item terceirizado pra fornecedor externo (col N ≠ MDE e ≠ o próprio setor)
-      // vira o seu próprio "setor" aqui também — mesma lógica da Capacidade de Produção
-      itens.forEach(it=>{
-        const bucket=bucketDoItem(setor,it.fornecedor);
-        if(!map[bucket]) map[bucket]=[];
-        map[bucket].push(it);
-      });
+/* Reagrupa um mapa {setor:[itens]} roteando cada item pelo fornecedor —
+   item terceirizado pra fornecedor externo (col N ≠ MDE e ≠ o próprio setor)
+   vira o seu próprio "balde" aqui também, igual na Capacidade de Produção. */
+function bucketizarPorFornecedor(map){
+  const out={};
+  Object.entries(map).forEach(([setor,itens])=>{
+    itens.forEach(it=>{
+      const bucket=bucketDoItem(setor,it.fornecedor);
+      if(!out[bucket]) out[bucket]=[];
+      out[bucket].push(it);
     });
   });
-  return map;
+  return out;
+}
+function setoresDoPedido(pedido){
+  const tags=DB[pedido]||{}; const combinado={};
+  Object.values(tags).forEach(setObj=>{
+    Object.entries(setObj).forEach(([setor,itens])=>{
+      if(!combinado[setor]) combinado[setor]=[];
+      combinado[setor]=combinado[setor].concat(itens);
+    });
+  });
+  return bucketizarPorFornecedor(combinado);
 }
 /* Cards de setor — usados na tela de Pedido e na tela de TAG */
 function setorCardsHTML(map,onClickFn){
@@ -1591,6 +1600,11 @@ function renderTag(){
   h+=prHTML(avancoTag||0,pE);
   h+=`<div class="section"><div class="section-title">Setores da TAG ${state.tag} — carga programada, expedido, pendente e avanço</div>${setorTableHTML(prods,'abrirProduto')}</div>`;
   h+=setorQtdTableHTML(prods);
+  // Fornecedor externo (ex: AXION) que está fabricando parte desta TAG — controle por TAG
+  const prodsExternos=Object.fromEntries(Object.entries(bucketizarPorFornecedor(prods)).filter(([k])=>!pk.includes(k)));
+  if(Object.keys(prodsExternos).length){
+    h+=`<div class="section"><div class="section-title"><i class="ti ti-truck-delivery" style="font-size:12px;vertical-align:-1px"></i> Fornecedor externo — carga desta TAG (${state.tag})</div>${setorTableHTML(prodsExternos,null)}</div>`;
+  }
   document.getElementById('mainContent').innerHTML=h;
   setStatus(`${state.pedido} › ${state.tag} · ${pk.length} setores`);
 }
@@ -1745,12 +1759,12 @@ function gerarPDF(){
 /* ── RELATÓRIO CLARO DE UM PEDIDO (PDF pra enviar ao cliente) ──
    Mesma informação da tela (peso/avanço/expedição/setores), só que em
    cores claras — pedido no topo, um bloco igual por TAG logo abaixo. */
-function blocoResumoImpressaoClaro(o){
+function tabelaSetorClaraHTML(mapaSetores){
   const ft=kg=>(kg/1000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const setores=Object.keys(o.mapaSetores).sort();
+  const setores=Object.keys(mapaSetores).sort();
   let totCarga=0,totExp=0,totPend=0;
-  const linhasSetor=setores.map(setor=>{
-    const a=setorAgg(o.mapaSetores[setor]);
+  const linhas=setores.map(setor=>{
+    const a=setorAgg(mapaSetores[setor]);
     totCarga+=a.cargaProg; totExp+=a.expedido; totPend+=a.pendExp;
     const av=a.avanco, avPct=av!==null?Math.min(100,Math.max(0,av)):0;
     const barCol=avPct>=100?'#166534':(avPct>=50?'#92400e':'#991b1b');
@@ -1767,8 +1781,26 @@ function blocoResumoImpressaoClaro(o){
       </td>
     </tr>`;
   }).join('');
-
-  const setoresQtd=setores.filter(s=>SETORES_QTD.includes(s.trim().toUpperCase()));
+  return `<table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead><tr style="background:#f1f5f9">
+      <th style="padding:6px 10px;text-align:left;color:#666">Setor</th>
+      <th style="padding:6px 10px;text-align:right;color:#666">Carga programada (t)</th>
+      <th style="padding:6px 10px;text-align:right;color:#666">Expedido (t)</th>
+      <th style="padding:6px 10px;text-align:right;color:#666">Pend. exp. (t)</th>
+      <th style="padding:6px 10px;text-align:left;color:#666;width:140px">Avanço</th>
+    </tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot><tr style="font-weight:700;background:#f8fafc">
+      <td style="padding:6px 10px">TOTAL</td>
+      <td style="padding:6px 10px;text-align:right;color:#92400e">${ft(totCarga)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#0e7490">${ft(totExp)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#991b1b">${ft(totPend)}</td>
+      <td></td>
+    </tr></tfoot>
+  </table>`;
+}
+function blocoResumoImpressaoClaro(o){
+  const setoresQtd=Object.keys(o.mapaSetores).filter(s=>SETORES_QTD.includes(s.trim().toUpperCase()));
   let blocoQtd='';
   if(setoresQtd.length){
     let tPq=0,tEq=0,tNq=0;
@@ -1825,24 +1857,11 @@ function blocoResumoImpressaoClaro(o){
         <span style="font-size:11px;font-weight:700;color:#166534;width:34px;text-align:right">${o.expPct.toFixed(0)}%</span>
       </div>
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-      <thead><tr style="background:#f1f5f9">
-        <th style="padding:6px 10px;text-align:left;color:#666">Setor</th>
-        <th style="padding:6px 10px;text-align:right;color:#666">Carga programada (t)</th>
-        <th style="padding:6px 10px;text-align:right;color:#666">Expedido (t)</th>
-        <th style="padding:6px 10px;text-align:right;color:#666">Pend. exp. (t)</th>
-        <th style="padding:6px 10px;text-align:left;color:#666;width:140px">Avanço</th>
-      </tr></thead>
-      <tbody>${linhasSetor}</tbody>
-      <tfoot><tr style="font-weight:700;background:#f8fafc">
-        <td style="padding:6px 10px">TOTAL</td>
-        <td style="padding:6px 10px;text-align:right;color:#92400e">${ft(totCarga)}</td>
-        <td style="padding:6px 10px;text-align:right;color:#0e7490">${ft(totExp)}</td>
-        <td style="padding:6px 10px;text-align:right;color:#991b1b">${ft(totPend)}</td>
-        <td></td>
-      </tr></tfoot>
-    </table>
+    ${tabelaSetorClaraHTML(o.mapaSetores)}
     ${blocoQtd}
+    ${o.mapaExternos&&Object.keys(o.mapaExternos).length?`
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#666;margin:14px 0 6px">Fornecedor externo — carga desta TAG</div>
+      ${tabelaSetorClaraHTML(o.mapaExternos)}`:''}
   </div>`;
 }
 
@@ -1875,6 +1894,9 @@ function construirRelatorioPedidoClaro(pedido){
     Object.values(prods).forEach(itens=>itens.forEach(it=>{ttP+=it.pesoTotal;ttF+=it.fabricado;ttE+=it.expedido;ttPE+=Math.max(0,it.pesoPendExp);}));
     const avancoTag=calcAvanco(itensFlat(prods))||0;
     const ttPEpct=ttP>0?Math.min(100,ttE/ttP*100):0;
+    // fornecedor externo (ex: AXION) que está fabricando parte desta TAG
+    const pkTag=Object.keys(prods);
+    const mapaExternosTag=Object.fromEntries(Object.entries(bucketizarPorFornecedor(prods)).filter(([k])=>!pkTag.includes(k)));
     html+=blocoResumoImpressaoClaro({
       titulo:`TAG ${tag}`,
       subtitulo:'',
@@ -1883,10 +1905,11 @@ function construirRelatorioPedidoClaro(pedido){
         {label:'Fabricado',       val:fmt_t(ttF),  sub:(ttP>0?(ttF/ttP*100).toFixed(1):'0.0')+'%', color:'#166534'},
         {label:'Expedido',        val:fmt_t(ttE),  sub:ttPEpct.toFixed(1)+'%', color:'#92400e'},
         {label:'Pend. expedição', val:fmt_t(ttPE), color:'#991b1b'},
-        {label:'Setores',         val:Object.keys(prods).length, sub:'na TAG'},
+        {label:'Setores',         val:pkTag.length, sub:'na TAG'},
       ],
       avancoPct:avancoTag, expPct:ttPEpct,
       mapaSetores:prods,
+      mapaExternos:mapaExternosTag,
     });
   });
   return html;
