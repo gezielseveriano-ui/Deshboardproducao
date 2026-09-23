@@ -626,6 +626,23 @@ function bucketizarPorFornecedor(map){
   });
   return out;
 }
+/* Igual bucketizarPorFornecedor, mas preserva o setor original dentro de cada
+   grupo — vira {grupo:{setor:[itens]}}, grupo = 'MDE' ou o nome do fornecedor
+   externo (ex: AXION). Usado no relatório em PDF pra mostrar cada fornecedor
+   com o(s) setor(es) dele detalhado(s) embaixo. */
+function agruparPorFornecedorEProduto(map){
+  const out={};
+  Object.entries(map).forEach(([setor,itens])=>{
+    itens.forEach(it=>{
+      const forn=(it.fornecedor||'MDE').trim().toUpperCase();
+      const grupo=(!forn||forn==='MDE')?'MDE':forn;
+      if(!out[grupo]) out[grupo]={};
+      if(!out[grupo][setor]) out[grupo][setor]=[];
+      out[grupo][setor].push(it);
+    });
+  });
+  return out;
+}
 function setoresDoPedido(pedido){
   const tags=DB[pedido]||{}; const combinado={};
   Object.values(tags).forEach(setObj=>{
@@ -1799,6 +1816,73 @@ function tabelaSetorClaraHTML(mapaSetores){
     </tr></tfoot>
   </table>`;
 }
+/* Tabela de setor agrupada por fornecedor — fornecedor externo (AXION...)
+   primeiro, MDE por último; cada grupo com uma linha de total e, embaixo,
+   uma linha detalhando cada setor que compõe aquele grupo. */
+function tabelaSetorAgrupadaClaraHTML(mapaAgrupado){
+  const ft=kg=>(kg/1000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const grupos=Object.keys(mapaAgrupado);
+  const externos=grupos.filter(g=>g!=='MDE').sort();
+  const ordem=mapaAgrupado['MDE']?externos.concat(['MDE']):externos;
+
+  let totCargaGeral=0,totExpGeral=0,totPendGeral=0;
+  const linhas=ordem.map(grupo=>{
+    const setoresDoGrupo=Object.keys(mapaAgrupado[grupo]).sort();
+    const itensDoGrupo=setoresDoGrupo.reduce((a,s)=>a.concat(mapaAgrupado[grupo][s]),[]);
+    const g=setorAgg(itensDoGrupo);
+    totCargaGeral+=g.cargaProg; totExpGeral+=g.expedido; totPendGeral+=g.pendExp;
+    const avG=g.avanco, avPctG=avG!==null?Math.min(100,Math.max(0,avG)):0;
+    const corG=avPctG>=100?'#166534':(avPctG>=50?'#92400e':'#991b1b');
+    const linhaGrupo=`<tr style="background:#eef2ff">
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb"><strong style="color:#1a1a2e">${grupo}</strong></td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#92400e">${ft(g.cargaProg)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#0e7490">${ft(g.expedido)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#991b1b">${ft(g.pendExp)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;min-width:50px"><div style="height:100%;width:${avPctG.toFixed(1)}%;background:${corG}"></div></div>
+          <span style="font-size:10px;width:32px;text-align:right;color:#666">${avG!==null?avG.toFixed(0)+'%':'—'}</span>
+        </div>
+      </td>
+    </tr>`;
+    const linhasDetalhe=setoresDoGrupo.map(setor=>{
+      const a=setorAgg(mapaAgrupado[grupo][setor]);
+      const av=a.avanco, avPct=av!==null?Math.min(100,Math.max(0,av)):0;
+      const barCol=avPct>=100?'#166534':(avPct>=50?'#92400e':'#991b1b');
+      return `<tr>
+        <td style="padding:5px 10px 5px 26px;border-bottom:1px solid #e5e7eb;color:#666">${setor}</td>
+        <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#92400e">${ft(a.cargaProg)}</td>
+        <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#0e7490">${ft(a.expedido)}</td>
+        <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#991b1b">${ft(a.pendExp)}</td>
+        <td style="padding:5px 10px;border-bottom:1px solid #e5e7eb">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="flex:1;height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden;min-width:50px"><div style="height:100%;width:${avPct.toFixed(1)}%;background:${barCol}"></div></div>
+            <span style="font-size:9px;width:32px;text-align:right;color:#888">${av!==null?av.toFixed(0)+'%':'—'}</span>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+    return linhaGrupo+linhasDetalhe;
+  }).join('');
+
+  return `<table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead><tr style="background:#f1f5f9">
+      <th style="padding:6px 10px;text-align:left;color:#666">Fornecedor / Setor</th>
+      <th style="padding:6px 10px;text-align:right;color:#666">Carga programada (t)</th>
+      <th style="padding:6px 10px;text-align:right;color:#666">Expedido (t)</th>
+      <th style="padding:6px 10px;text-align:right;color:#666">Pend. exp. (t)</th>
+      <th style="padding:6px 10px;text-align:left;color:#666;width:140px">Avanço</th>
+    </tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot><tr style="font-weight:700;background:#f8fafc">
+      <td style="padding:6px 10px">TOTAL GERAL</td>
+      <td style="padding:6px 10px;text-align:right;color:#92400e">${ft(totCargaGeral)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#0e7490">${ft(totExpGeral)}</td>
+      <td style="padding:6px 10px;text-align:right;color:#991b1b">${ft(totPendGeral)}</td>
+      <td></td>
+    </tr></tfoot>
+  </table>`;
+}
 function blocoResumoImpressaoClaro(o){
   const setoresQtd=Object.keys(o.mapaSetores).filter(s=>SETORES_QTD.includes(s.trim().toUpperCase()));
   let blocoQtd='';
@@ -1857,11 +1941,8 @@ function blocoResumoImpressaoClaro(o){
         <span style="font-size:11px;font-weight:700;color:#166534;width:34px;text-align:right">${o.expPct.toFixed(0)}%</span>
       </div>
     </div>
-    ${tabelaSetorClaraHTML(o.mapaSetores)}
+    ${o.mapaAgrupado?tabelaSetorAgrupadaClaraHTML(o.mapaAgrupado):tabelaSetorClaraHTML(o.mapaSetores)}
     ${blocoQtd}
-    ${o.mapaExternos&&Object.keys(o.mapaExternos).length?`
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#666;margin:14px 0 6px">Fornecedor externo — carga desta TAG</div>
-      ${tabelaSetorClaraHTML(o.mapaExternos)}`:''}
   </div>`;
 }
 
@@ -1896,7 +1977,6 @@ function construirRelatorioPedidoClaro(pedido){
     const ttPEpct=ttP>0?Math.min(100,ttE/ttP*100):0;
     // fornecedor externo (ex: AXION) que está fabricando parte desta TAG
     const pkTag=Object.keys(prods);
-    const mapaExternosTag=Object.fromEntries(Object.entries(bucketizarPorFornecedor(prods)).filter(([k])=>!pkTag.includes(k)));
     html+=blocoResumoImpressaoClaro({
       titulo:`TAG ${tag}`,
       subtitulo:'',
@@ -1909,7 +1989,7 @@ function construirRelatorioPedidoClaro(pedido){
       ],
       avancoPct:avancoTag, expPct:ttPEpct,
       mapaSetores:prods,
-      mapaExternos:mapaExternosTag,
+      mapaAgrupado:agruparPorFornecedorEProduto(prods),
     });
   });
   return html;
