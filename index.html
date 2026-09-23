@@ -653,9 +653,6 @@ function combinarSetoresDoPedido(pedido){
   });
   return combinado;
 }
-function setoresDoPedido(pedido){
-  return bucketizarPorFornecedor(combinarSetoresDoPedido(pedido));
-}
 /* Cards de setor — usados na tela de Pedido e na tela de TAG */
 function setorCardsHTML(map,onClickFn){
   const setores=Object.keys(map).sort();
@@ -713,6 +710,81 @@ function setorTableHTML(map,onClickFn){
     <table class="ctbl">
       <thead><tr>
         <th>Setor</th>
+        <th class="r">Carga programada (t)</th>
+        <th class="r">Expedido (t)</th>
+        <th class="r">Pend. exp. (t)</th>
+        <th style="width:150px">Avanço</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td>TOTAL</td>
+        <td class="r" style="color:var(--amber)">${ft(totCarga)}</td>
+        <td class="r" style="color:var(--teal)">${ft(totExp)}</td>
+        <td class="r" style="color:var(--red)">${ft(totPend)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+    </div>
+  </div>`;
+}
+
+/* Tabela de setor agrupada por fornecedor — mesmo modelo do relatório em PDF:
+   grupo (fornecedor externo ou MDE) em linha de destaque com o total, e os
+   setores dele detalhados (indentados) logo abaixo. Fornecedores externos
+   sempre listados antes da MDE. */
+function setorTableAgrupadaHTML(mapaAgrupado,onClickFn){
+  const ft=kg=>(kg/1000).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const grupos=Object.keys(mapaAgrupado);
+  const externos=grupos.filter(g=>g!=='MDE').sort();
+  const ordem=mapaAgrupado['MDE']?externos.concat(['MDE']):externos;
+
+  let totCarga=0,totExp=0,totPend=0;
+  const rows=ordem.map(grupo=>{
+    const setoresDoGrupo=Object.keys(mapaAgrupado[grupo]).sort();
+    const itensDoGrupo=setoresDoGrupo.reduce((a,s)=>a.concat(mapaAgrupado[grupo][s]),[]);
+    const g=setorAgg(itensDoGrupo);
+    totCarga+=g.cargaProg; totExp+=g.expedido; totPend+=g.pendExp;
+    const avG=g.avanco, avPctG=avG!==null?Math.min(100,Math.max(0,avG)):0;
+    const corG=avPctG>=100?'var(--green)':(avPctG>=50?'var(--amber)':'var(--red)');
+    const clicavelGrupo=onClickFn&&grupo!=='MDE';
+    const linhaGrupo=`<tr style="background:var(--bg3)"${clicavelGrupo?` onclick="${onClickFn}('${esc(grupo)}')"`:''}>
+      <td${clicavelGrupo?' style="cursor:pointer"':''}><strong style="color:var(--text)">${grupo}</strong></td>
+      <td class="r" style="color:var(--amber);font-weight:700">${ft(g.cargaProg)}</td>
+      <td class="r" style="color:var(--teal);font-weight:700">${ft(g.expedido)}</td>
+      <td class="r" style="color:var(--red);font-weight:700">${ft(g.pendExp)}</td>
+      <td>
+        <div class="bar-row">
+          <div class="bar-bg"><div class="bar-fg" style="width:${avPctG.toFixed(1)}%;background:${corG}"></div></div>
+          <span style="font-size:10px;width:36px;text-align:right;color:var(--text2)">${avG!==null?avG.toFixed(0)+'%':'—'}</span>
+        </div>
+      </td>
+    </tr>`;
+    const linhasDetalhe=setoresDoGrupo.map(setor=>{
+      const a=setorAgg(mapaAgrupado[grupo][setor]);
+      const av=a.avanco, avPct=av!==null?Math.min(100,Math.max(0,av)):0;
+      const barCol=avPct>=100?'var(--green)':(avPct>=50?'var(--amber)':'var(--red)');
+      const clicavel=onClickFn&&grupo==='MDE';
+      return `<tr${clicavel?` style="cursor:pointer" onclick="${onClickFn}('${esc(setor)}')"`:''}>
+        <td style="padding-left:30px;color:var(--text2)">${setor}</td>
+        <td class="r" style="color:var(--amber)">${ft(a.cargaProg)}</td>
+        <td class="r" style="color:var(--teal)">${ft(a.expedido)}</td>
+        <td class="r" style="color:var(--red)">${ft(a.pendExp)}</td>
+        <td>
+          <div class="bar-row">
+            <div class="bar-bg"><div class="bar-fg" style="width:${avPct.toFixed(1)}%;background:${barCol}"></div></div>
+            <span style="font-size:10px;width:36px;text-align:right;color:var(--text2)">${av!==null?av.toFixed(0)+'%':'—'}</span>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+    return linhaGrupo+linhasDetalhe;
+  }).join('');
+
+  return `<div class="cap-table-box">
+    <div style="overflow-x:auto">
+    <table class="ctbl">
+      <thead><tr>
+        <th>Fornecedor / Setor</th>
         <th class="r">Carga programada (t)</th>
         <th class="r">Expedido (t)</th>
         <th class="r">Pend. exp. (t)</th>
@@ -1407,7 +1479,9 @@ function renderPedido(){
     </div>`;
   }
 
-  const mapaSetoresPedido=setoresDoPedido(state.pedido);
+  const combinadoPedido=combinarSetoresDoPedido(state.pedido);
+  const mapaSetoresPedido=bucketizarPorFornecedor(combinadoPedido);
+  const mapaAgrupadoPedido=agruparPorFornecedorEProduto(combinadoPedido);
   const avancoPedido=calcAvanco(itensFlat(mapaSetoresPedido));
 
   h+=mHTML([
@@ -1433,7 +1507,7 @@ function renderPedido(){
   </div>
   <div class="section" style="padding-top:1.25rem">
     <div class="section-title">Setores do pedido ${state.pedido} — carga programada, expedido, pendente e avanço</div>
-    ${setorTableHTML(mapaSetoresPedido,null)}
+    ${setorTableAgrupadaHTML(mapaAgrupadoPedido,null)}
   </div>
   ${setorQtdTableHTML(mapaSetoresPedido)}
   <div class="section">
@@ -1618,13 +1692,9 @@ function renderTag(){
     {label:'Setores',          val:pk.length,  sub:'clique para detalhar'},
   ]);
   h+=prHTML(avancoTag||0,pE);
-  h+=`<div class="section"><div class="section-title">Setores da TAG ${state.tag} — carga programada, expedido, pendente e avanço</div>${setorTableHTML(prods,'abrirProduto')}</div>`;
+  const mapaAgrupadoTag=agruparPorFornecedorEProduto(prods);
+  h+=`<div class="section"><div class="section-title">Setores da TAG ${state.tag} — carga programada, expedido, pendente e avanço</div>${setorTableAgrupadaHTML(mapaAgrupadoTag,'abrirProduto')}</div>`;
   h+=setorQtdTableHTML(prods);
-  // Fornecedor externo (ex: AXION) que está fabricando parte desta TAG — controle por TAG
-  const prodsExternos=Object.fromEntries(Object.entries(bucketizarPorFornecedor(prods)).filter(([k])=>!pk.includes(k)));
-  if(Object.keys(prodsExternos).length){
-    h+=`<div class="section"><div class="section-title"><i class="ti ti-truck-delivery" style="font-size:12px;vertical-align:-1px"></i> Fornecedor externo — carga desta TAG (${state.tag})</div>${setorTableHTML(prodsExternos,'abrirProduto')}</div>`;
-  }
   document.getElementById('mainContent').innerHTML=h;
   setStatus(`${state.pedido} › ${state.tag} · ${pk.length} setores`);
 }
