@@ -1603,7 +1603,7 @@ function renderTag(){
   // Fornecedor externo (ex: AXION) que está fabricando parte desta TAG — controle por TAG
   const prodsExternos=Object.fromEntries(Object.entries(bucketizarPorFornecedor(prods)).filter(([k])=>!pk.includes(k)));
   if(Object.keys(prodsExternos).length){
-    h+=`<div class="section"><div class="section-title"><i class="ti ti-truck-delivery" style="font-size:12px;vertical-align:-1px"></i> Fornecedor externo — carga desta TAG (${state.tag})</div>${setorTableHTML(prodsExternos,null)}</div>`;
+    h+=`<div class="section"><div class="section-title"><i class="ti ti-truck-delivery" style="font-size:12px;vertical-align:-1px"></i> Fornecedor externo — carga desta TAG (${state.tag})</div>${setorTableHTML(prodsExternos,'abrirProduto')}</div>`;
   }
   document.getElementById('mainContent').innerHTML=h;
   setStatus(`${state.pedido} › ${state.tag} · ${pk.length} setores`);
@@ -1612,7 +1612,7 @@ function renderTag(){
 /* ── PRODUTO ── */
 function renderProduto(){
   document.getElementById('headerArea').innerHTML='';
-  const itens=DB[state.pedido][state.tag][state.produto];
+  const itens=bucketizarPorFornecedor(DB[state.pedido][state.tag])[state.produto];
   let tP=0,tF=0,tE=0,tPF=0,tPE=0;
   itens.forEach(it=>{tP+=it.pesoTotal;tF+=it.fabricado;tE+=it.expedido;tPF+=Math.max(0,it.pendFab);tPE+=Math.max(0,it.pesoPendExp);});
   const naE=Math.max(0,tF-tE),pF=tP>0?Math.min(100,tF/tP*100):0,pE=tP>0?Math.min(100,tE/tP*100):0;
