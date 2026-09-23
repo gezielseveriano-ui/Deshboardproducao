@@ -61,6 +61,16 @@ const CHECKLISTS = [
   },
 ];
 
+// Cor do botão "Iniciar Checklist" por categoria, pra identificar o
+// equipamento de relance: Lateral fica azul (cor padrão do app), Triângulo
+// verde, Travessa laranja - antes Lateral e Travessa usavam a mesma cor
+// azul, então não dava pra diferenciar as duas só olhando o botão.
+function corBotaoChecklist(checklist: { nome: string }): string {
+  if (checklist.nome.includes("Triângulo")) return "bg-success";
+  if (checklist.nome.includes("Travessa")) return "bg-warning";
+  return "bg-primary";
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const colors = useColors();
@@ -112,9 +122,7 @@ export default function HomeScreen() {
 
               <TouchableOpacity
                 onPress={() => handleInitiarChecklist(checklist.id)}
-                className={`rounded-lg py-3 items-center ${
-                  checklist.id === "CL-ENG-1066" ? "bg-success" : "bg-primary"
-                }`}
+                className={`rounded-lg py-3 items-center ${corBotaoChecklist(checklist)}`}
               >
                 <Text className="text-white font-semibold">Iniciar Checklist →</Text>
               </TouchableOpacity>
