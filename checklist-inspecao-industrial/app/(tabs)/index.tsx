@@ -1,8 +1,10 @@
 import { ScrollView, Text, View, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { RefreshButton } from "@/components/refresh-button";
+import { useReports } from "@/lib/reports-context";
 
 const CHECKLISTS = [
   {
@@ -71,9 +73,31 @@ function corBotaoChecklist(checklist: { nome: string }): string {
   return "bg-primary";
 }
 
+const MESES_PT = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+
 export default function HomeScreen() {
   const router = useRouter();
   const colors = useColors();
+  const { completedChecklists } = useReports();
+
+  // Data da Recuperação mais antiga entre todos os checklists já salvos -
+  // usada só pra mostrar "em uso desde" pra todo mundo, com base no
+  // checklist mais antigo de verdade, não numa data fixa no código.
+  const emUsoDesde = useMemo(() => {
+    let maisAntiga: Date | null = null;
+    for (const c of completedChecklists) {
+      const partes = c.dataRecuperacao?.split("/");
+      if (partes?.length !== 3) continue;
+      const [dia, mes, ano] = partes.map(Number);
+      if (!dia || !mes || !ano) continue;
+      const data = new Date(ano, mes - 1, dia);
+      if (!maisAntiga || data < maisAntiga) maisAntiga = data;
+    }
+    return maisAntiga ? `${MESES_PT[maisAntiga.getMonth()]} de ${maisAntiga.getFullYear()}` : null;
+  }, [completedChecklists]);
 
   const handleInitiarChecklist = (checklistType: string) => {
     router.push({
@@ -95,6 +119,9 @@ export default function HomeScreen() {
             <RefreshButton color={colors.foreground} />
           </View>
           <Text className="text-base text-muted mt-2">MRS – Manutenção de Vagões</Text>
+          {emUsoDesde && (
+            <Text className="text-xs text-muted mt-1">Em uso desde {emUsoDesde}</Text>
+          )}
         </View>
 
         {/* Checklists Disponíveis */}

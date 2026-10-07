@@ -115,6 +115,7 @@ function paginaDashboard(): string {
     align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
   }
   header h1 { font-size: 20px; margin: 0; }
+  header .em-uso-desde { font-size: 12px; color: #94a3b8; margin: 2px 0 0; }
   header a { color: #cbd5e1; text-decoration: none; font-size: 14px; }
   header a:hover { color: white; }
   main { max-width: 1200px; margin: 0 auto; padding: 24px; }
@@ -230,7 +231,10 @@ function paginaDashboard(): string {
 </head>
 <body>
   <header>
-    <h1>Painel de Diretoria — Checklists de Inspeção</h1>
+    <div>
+      <h1>Painel de Diretoria — Checklists de Inspeção</h1>
+      <p class="em-uso-desde" id="em-uso-desde"></p>
+    </div>
     <a href="/painel-diretoria/sair">Sair</a>
   </header>
   <main>
@@ -296,6 +300,7 @@ function paginaDashboard(): string {
 
   <script>
     const CORES = ['#0a7ea4', '#22C55E', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
+    const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
     let dadosOriginais = [];
     let periodoAtivo = 'semana';
@@ -647,11 +652,26 @@ function paginaDashboard(): string {
 
     document.getElementById('busca').addEventListener('input', () => atualizarTudo());
 
+    // Mostra desde quando existe checklist salvo (o mais antigo de
+    // verdade, não uma data fixa) - pedido pra aparecer tanto aqui quanto
+    // no app principal, pra todo mundo saber desde quando o sistema está
+    // em uso.
+    function atualizarEmUsoDesde() {
+      let maisAntiga = null;
+      dadosOriginais.forEach((c) => {
+        const data = parseDataRecuperacao(c.data_recuperacao);
+        if (data && (!maisAntiga || data < maisAntiga)) maisAntiga = data;
+      });
+      const el = document.getElementById('em-uso-desde');
+      el.textContent = maisAntiga ? \`Em uso desde \${MESES_PT[maisAntiga.getMonth()]} de \${maisAntiga.getFullYear()}\` : '';
+    }
+
     fetch('/api/painel-diretoria/dados')
       .then((r) => r.json())
       .then((json) => {
         if (json.error) throw new Error(json.error);
         dadosOriginais = json.checklists || [];
+        atualizarEmUsoDesde();
         atualizarTudo();
       })
       .catch((err) => {
