@@ -104,19 +104,33 @@ export async function loadChecklistsFromSupabase(): Promise<
   try {
     console.log("[Supabase] Carregando checklists...");
 
-    const { data, error } = await supabase
-      .from("completed_checklists")
-      .select("*")
-      .order("created_at", { ascending: false });
+    // O Supabase (PostgREST) limita cada resposta a 1000 linhas por padrão,
+    // mesmo sem nenhum .limit() explícito - sem paginar, qualquer checklist
+    // além do 1000º mais recente sumia silenciosamente da lista (Histórico,
+    // Relatórios, etc). Busca em páginas de 1000 até esgotar os dados.
+    const PAGE_SIZE = 1000;
+    const allRows: any[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("completed_checklists")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
 
-    if (error) {
-      console.error("[Supabase] Erro ao carregar:", error);
-      throw error;
+      if (error) {
+        console.error("[Supabase] Erro ao carregar:", error);
+        throw error;
+      }
+
+      allRows.push(...(data || []));
+      if (!data || data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
 
-    console.log("[Supabase] ✓ Carregados", data?.length || 0, "checklists");
+    console.log("[Supabase] ✓ Carregados", allRows.length, "checklists");
 
-    return (data || []).map((row: any) => ({
+    return allRows.map((row: any) => ({
       id: row.id,
       checklistCode: row.checklist_code,
       checklistName: row.checklist_name,
