@@ -120,7 +120,8 @@ export default function HistoryScreen() {
   const [searchText, setSearchText] = useState("");
   const [filterModelo, setFilterModelo] = useState<string | null>(null);
   const [filterExecutante, setFilterExecutante] = useState<string | null>(null);
-  const [filterDate, setFilterDate] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [filterDate, setFilterDate] = useState<"year" | "today" | "week" | "month" | "custom">("year");
+  const [filterYear, setFilterYear] = useState<number>(new Date().getFullYear());
   const [isLoadingPDF, setIsLoadingPDF] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateRangeStart, setDateRangeStart] = useState<Date | null>(null);
@@ -205,17 +206,39 @@ export default function HistoryScreen() {
     }
   };
 
+  // Anos com pelo menos um checklist, mais recente primeiro - o ano atual
+  // sempre aparece, mesmo sem nenhum checklist ainda. Usado no lugar de um
+  // botão "Todos": sem isso, o filtro padrão seria carregar/renderizar o
+  // histórico inteiro desde o início, que só vai ficar mais pesado a cada
+  // ano que passar.
+  const anosDisponiveis = useMemo(() => {
+    const anos = new Set<number>();
+    completedChecklists.forEach((item) => {
+      const partes = item.dataRecuperacao?.split("/");
+      const ano = partes?.length === 3 ? parseInt(partes[2], 10) : NaN;
+      if (!isNaN(ano)) anos.add(ano);
+    });
+    anos.add(new Date().getFullYear());
+    return Array.from(anos).sort((a, b) => b - a);
+  }, [completedChecklists]);
+
   // Filtrar checklists baseado na data
   const filteredChecklists = useMemo(() => {
     let filtered = completedChecklists;
 
     // Aplicar filtro de data
-    if (filterDate !== "all") {
+    {
       const now = new Date();
       let startDate = new Date();
       let endDate = new Date();
 
       switch (filterDate) {
+        case "year":
+          startDate = new Date(filterYear, 0, 1);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(filterYear, 11, 31);
+          endDate.setHours(23, 59, 59, 999);
+          break;
         case "today":
           startDate.setHours(0, 0, 0, 0);
           endDate.setHours(23, 59, 59, 999);
@@ -287,6 +310,7 @@ export default function HistoryScreen() {
   }, [
     completedChecklists,
     filterDate,
+    filterYear,
     filterModelo,
     filterExecutante,
     searchText,
@@ -615,7 +639,27 @@ export default function HistoryScreen() {
         {/* Filtros de Período */}
         <Text className="text-sm font-semibold text-foreground mb-2">Período</Text>
         <View className="flex-row gap-2 mb-4 flex-wrap">
-          {["all", "today", "week", "month", "custom"].map((period) => (
+          {anosDisponiveis.map((ano) => (
+            <TouchableOpacity
+              key={`ano-${ano}`}
+              className={`px-4 py-2 rounded-full ${
+                filterDate === "year" && filterYear === ano ? "bg-primary" : "bg-surface border border-border"
+              }`}
+              onPress={() => {
+                setFilterDate("year");
+                setFilterYear(ano);
+              }}
+            >
+              <Text
+                className={`font-semibold ${
+                  filterDate === "year" && filterYear === ano ? "text-background" : "text-foreground"
+                }`}
+              >
+                {ano}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          {["today", "week", "month", "custom"].map((period) => (
             <TouchableOpacity
               key={period}
               className={`px-4 py-2 rounded-full ${
@@ -633,9 +677,7 @@ export default function HistoryScreen() {
                   filterDate === period ? "text-background" : "text-foreground"
                 }`}
               >
-                {period === "all"
-                  ? "Todos"
-                  : period === "today"
+                {period === "today"
                   ? "Hoje"
                   : period === "week"
                   ? "Semana"
