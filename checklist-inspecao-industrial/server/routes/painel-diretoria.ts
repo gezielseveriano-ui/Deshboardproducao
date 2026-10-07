@@ -701,21 +701,35 @@ router.get("/api/painel-diretoria/dados", async (req: Request, res: Response) =>
   }
 
   try {
-    const { data, error } = await supabase
-      .from("completed_checklists")
-      .select(
-        "id, checklist_code, checklist_name, categoria, modelo, resultado, executante_name, data_recuperacao, data_fabricacao, numero_serie, numero_op, pdf_url, timestamp, created_at"
-      )
-      .order("created_at", { ascending: false })
-      // Limite defensivo: o painel é uma visão executiva, não uma
-      // exportação completa - 1000 linhas já cobre bem mais que o uso
-      // real, e evita que essa rota sozinha vire um pico de memória
-      // grande no servidor (plano gratuito do Render é bem apertado).
-      .limit(1000);
+    // O Supabase (PostgREST) limita cada resposta a 1000 linhas por padrão
+    // - acima disso, o painel passava a mostrar só os 1000 checklists mais
+    // recentes, sem avisar que havia mais. Busca em páginas até esgotar os
+    // dados, igual já é feito no app principal (Histórico/Relatórios).
+    const PAGE_SIZE = 1000;
+    // Limite de segurança bem acima do uso real de hoje, só pra nunca essa
+    // rota crescer sem limite nenhum se o banco um dia tiver um problema
+    // real de volume - não é o limite "normal" do dia a dia.
+    const LIMITE_SEGURANCA = 50000;
+    const colunas =
+      "id, checklist_code, checklist_name, categoria, modelo, resultado, executante_name, data_recuperacao, data_fabricacao, numero_serie, numero_op, pdf_url, timestamp, created_at";
 
-    if (error) throw error;
+    const todasLinhas: any[] = [];
+    let from = 0;
+    while (from < LIMITE_SEGURANCA) {
+      const { data, error } = await supabase
+        .from("completed_checklists")
+        .select(colunas)
+        .order("created_at", { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
 
-    res.json({ checklists: data || [] });
+      if (error) throw error;
+
+      todasLinhas.push(...(data || []));
+      if (!data || data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    res.json({ checklists: todasLinhas });
   } catch (error) {
     console.error("[PainelDiretoria] Erro ao buscar dados:", error);
     res.status(500).json({ error: "Erro ao buscar dados do banco" });
