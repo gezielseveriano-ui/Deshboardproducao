@@ -178,8 +178,8 @@ export default function HistoryScreen() {
     setIsSyncing(true);
     try {
       const [
-        { synced, failed },
-        { synced: pdfSynced, failed: pdfFailed },
+        { synced, failed, lastError: lastErrorSync },
+        { synced: pdfSynced, failed: pdfFailed, lastError: lastErrorPdf },
         { deleted: deletesSynced, failed: deletesFailed },
       ] = await Promise.all([
         syncPendingChecklists(),
@@ -188,12 +188,19 @@ export default function HistoryScreen() {
       ]);
       const totalSynced = synced + pdfSynced + deletesSynced;
       const totalFailed = failed + pdfFailed + deletesFailed;
+      // Mostra o motivo real da última falha (ex: erro de validação ou do
+      // servidor), não só "verifique sua conexão" - isso já escondia um
+      // problema de verdade, fazendo o usuário achar que era só falta de
+      // internet quando às vezes era outra coisa.
+      const motivo = lastErrorPdf || lastErrorSync;
       if (totalSynced === 0 && totalFailed === 0) {
         alertar("Tudo certo", "Não há checklists pendentes de sincronização.");
       } else if (totalFailed > 0) {
         alertar(
           "Atenção",
-          `${totalSynced} checklist(s) sincronizado(s). ${totalFailed} ainda não puderam ser enviados - verifique sua conexão.`
+          `${totalSynced} checklist(s) sincronizado(s). ${totalFailed} ainda não puderam ser enviados.${
+            motivo ? `\n\nMotivo: ${motivo}` : " Verifique sua conexão."
+          }`
         );
       } else {
         alertar("Sucesso", `${totalSynced} checklist(s) sincronizado(s) com sucesso!`);

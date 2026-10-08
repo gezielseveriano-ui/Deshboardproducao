@@ -34,7 +34,7 @@ interface ReportsContextType {
     result: { id: string; pdfUrl: string }
   ) => Promise<void>;
   queuePdfGeneration: (localId: string, input: GerarPdfInput) => Promise<void>;
-  retryPendingPdfGenerations: () => Promise<{ synced: number; failed: number }>;
+  retryPendingPdfGenerations: () => Promise<{ synced: number; failed: number; lastError?: string }>;
   pendingPdfCount: number;
   deleteCompletedChecklists: (
     ids: string[]
@@ -42,7 +42,7 @@ interface ReportsContextType {
   retryPendingDeletes: () => Promise<{ deleted: number; failed: number }>;
   pendingDeleteCount: number;
   loadCompletedChecklists: () => Promise<void>;
-  syncPendingChecklists: () => Promise<{ synced: number; failed: number }>;
+  syncPendingChecklists: () => Promise<{ synced: number; failed: number; lastError?: string }>;
   pendingSyncCount: number;
   isSyncing: boolean;
   isOnline: boolean;
@@ -377,6 +377,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     console.log('[Reports] Tentando gerar', pendingPdfQueue.length, 'PDF(s) pendente(s)...');
     let synced = 0;
     let failed = 0;
+    let lastError: string | undefined;
     let filaAtual = pendingPdfQueue;
 
     for (const item of pendingPdfQueue) {
@@ -401,14 +402,19 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         filaAtual = filaAtual.filter((f) => f.localId !== item.localId);
         synced++;
       } catch (error) {
+        // Guarda a mensagem real do erro (não só um log) - sem isso, uma
+        // falha que não é de conexão (ex: um bug no servidor) fica presa
+        // pra sempre mostrando "aguardando conexão" pro usuário, mesmo com
+        // internet normal, sem nenhuma pista de qual é o problema de verdade.
+        lastError = error instanceof Error ? error.message : String(error);
         console.warn('[Reports] Falha ao gerar PDF pendente:', item.localId, error);
         failed++;
       }
     }
 
     await persistPendingPdfQueue(filaAtual);
-    console.log('[Reports] Geração de PDFs pendentes concluída:', { synced, failed });
-    return { synced, failed };
+    console.log('[Reports] Geração de PDFs pendentes concluída:', { synced, failed, lastError });
+    return { synced, failed, lastError };
   };
 
   const persistPendingDeleteQueue = async (queue: PendingDeleteItem[]) => {
@@ -514,6 +520,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
 
     let synced = 0;
     let failed = 0;
+    let lastError: string | undefined;
     let atual = atualInicial;
 
     try {
@@ -525,6 +532,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
           }
           synced++;
         } catch (error) {
+          lastError = error instanceof Error ? error.message : String(error);
           console.warn('[Reports] Falha ao sincronizar checklist pendente:', record.id, error);
           failed++;
         }
@@ -535,8 +543,8 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         await salvarCacheLocal(atual);
       }
 
-      console.log('[Reports] Sincronização de pendentes concluída:', { synced, failed });
-      return { synced, failed };
+      console.log('[Reports] Sincronização de pendentes concluída:', { synced, failed, lastError });
+      return { synced, failed, lastError };
     } finally {
       setIsSyncing(false);
     }
