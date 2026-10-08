@@ -208,13 +208,16 @@ export default function CompletionScreen() {
       } catch (pdfError) {
         // Não é um erro fatal: o checklist já foi contabilizado no passo 1,
         // e a geração do PDF já está enfileirada desde antes dessa tentativa
-        // (acima) - só vai ser tentada de novo sozinha quando a internet
-        // voltar (igual outros checklists pendentes).
+        // (acima) - vai ser tentada de novo automaticamente. Mostra o motivo
+        // real do erro na mensagem - antes era sempre o mesmo texto de "sem
+        // internet", mesmo quando o problema era outro (ex: um erro de
+        // verdade no servidor), o que escondia que aquilo ia continuar
+        // falhando pra sempre em vez de ser resolvido sozinho ao reconectar.
         console.warn("Falha ao gerar PDF agora, ficará pendente:", pdfError);
+        const motivo = pdfError instanceof Error ? pdfError.message : "erro desconhecido";
         setStatusBanner({
           tipo: "aguardando",
-          mensagem:
-            "⏳ Checklist salvo! Sem internet no momento - assim que a conexão voltar, o PDF será gerado sozinho na nuvem.",
+          mensagem: `⏳ Checklist salvo! Não foi possível gerar o PDF agora (${motivo}). Será tentado de novo automaticamente assim que possível - confira em Histórico depois.`,
         });
       }
 
