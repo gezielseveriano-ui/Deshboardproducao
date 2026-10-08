@@ -47,6 +47,8 @@ interface ReportsContextType {
   pendingSyncCount: number;
   isSyncing: boolean;
   isOnline: boolean;
+  storageWarning: string | null;
+  dismissStorageWarning: () => void;
 }
 
 // Um checklist só recebe um id de verdade (uuid) depois de confirmado salvo
@@ -72,6 +74,20 @@ const DEVICE_ID_KEY = 'device_id';
 // pendente de sincronizar (id provisório) é sempre mantido, não importa
 // a idade, senão um checklist feito offline há muito tempo se perderia.
 const MAX_CONFIRMADOS_NO_CACHE_LOCAL = 500;
+
+// Antes, uma falha ao gravar no armazenamento local só ia pro console do
+// navegador - invisível pra quem está usando o app no chão de fábrica, o que
+// já causou checklist "perdido" sem ninguém saber que o aparelho estava sem
+// espaço até dias depois. Esse listener deixa a tela mostrar um aviso de
+// verdade assim que isso acontece. Fica fora do componente (módulo) porque
+// salvarCacheLocal/persistPendingPdfQueue/persistPendingDeleteQueue também
+// são chamadas em contextos sem acesso direto ao estado do React.
+type OuvinteAvisoArmazenamento = (mensagem: string) => void;
+let ouvinteAvisoArmazenamento: OuvinteAvisoArmazenamento | null = null;
+function avisarFalhaDeArmazenamento(mensagem: string, error: unknown) {
+  console.error('[Reports]', mensagem, error);
+  ouvinteAvisoArmazenamento?.(mensagem);
+}
 
 // Nunca deixa uma escrita no cache local travar quem chamou: no web, isso
 // é localStorage, que tem uma cota bem menor do que parece (alguns
@@ -105,7 +121,10 @@ async function salvarCacheLocal(registros: CompletedChecklistRecord[]): Promise<
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pendentes));
     } catch (retryError) {
-      console.error('[Reports] Não foi possível salvar nem só os pendentes no cache local:', retryError);
+      avisarFalhaDeArmazenamento(
+        'O armazenamento deste aparelho está cheio e nem os checklists pendentes de sincronização puderam ser salvos.',
+        retryError
+      );
     }
   }
 }
@@ -141,6 +160,18 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [deviceId, setDeviceId] = useState<string>('');
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
+
+  // Liga o listener module-level (usado pelas funções de gravação local, que
+  // rodam fora de componentes) a um state de verdade, pra virar um aviso
+  // visível na tela em vez de só um log de console que ninguém vê.
+  useEffect(() => {
+    ouvinteAvisoArmazenamento = (mensagem) => setStorageWarning(mensagem);
+    return () => {
+      ouvinteAvisoArmazenamento = null;
+    };
+  }, []);
+  const dismissStorageWarning = () => setStorageWarning(null);
 
   // Nunca deixa uma sincronização em segundo plano (a cada 60s, ao
   // reconectar, ao voltar a ficar visível) atrapalhar quem está no meio do
@@ -381,7 +412,10 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(completedChecklistsRef.current.filter(isPendingSync)));
         await AsyncStorage.setItem(PENDING_PDF_QUEUE_KEY, JSON.stringify(queue));
       } catch (retryError) {
-        console.error('[Reports] Não foi possível salvar a fila de PDF pendente mesmo após liberar espaço:', retryError);
+        avisarFalhaDeArmazenamento(
+          'O armazenamento deste aparelho está cheio e um checklist pendente de gerar PDF não pôde ser salvo.',
+          retryError
+        );
       }
     }
   };
@@ -467,7 +501,10 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(completedChecklistsRef.current.filter(isPendingSync)));
         await AsyncStorage.setItem(PENDING_DELETE_QUEUE_KEY, JSON.stringify(queue));
       } catch (retryError) {
-        console.error('[Reports] Não foi possível salvar a fila de exclusão pendente mesmo após liberar espaço:', retryError);
+        avisarFalhaDeArmazenamento(
+          'O armazenamento deste aparelho está cheio e uma exclusão pendente não pôde ser salva.',
+          retryError
+        );
       }
     }
   };
@@ -681,6 +718,8 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     pendingSyncCount,
     isSyncing,
     isOnline,
+    storageWarning,
+    dismissStorageWarning,
   };
 
   return <ReportsContext.Provider value={value}>{children}</ReportsContext.Provider>;

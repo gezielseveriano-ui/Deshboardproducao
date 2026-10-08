@@ -12,6 +12,7 @@ import { ThemeProvider } from "@/lib/theme-provider";
 import { ChecklistProvider } from "@/lib/checklist-context";
 import { SignaturesProvider } from "@/lib/signatures-context";
 import { ReportsProvider } from "@/lib/reports-context";
+import { StorageWarningBanner } from "@/components/storage-warning-banner";
 import { SyncProvider } from "@/lib/sync-context";
 import { AdminConfigProvider } from "@/lib/admin-config-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
@@ -127,6 +128,7 @@ export default function RootLayout() {
               <ChecklistProvider>
             <trpc.Provider client={trpcClient} queryClient={queryClient}>
               <QueryClientProvider client={queryClient}>
+                <StorageWarningBanner />
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen name="oauth/callback" />
