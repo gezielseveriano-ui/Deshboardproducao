@@ -90,6 +90,22 @@ async function salvarCacheLocal(registros: CompletedChecklistRecord[]): Promise<
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...pendentes, ...confirmados]));
   } catch (error) {
     console.error('[Reports] Falha ao salvar cache local (provavelmente sem espaço/cota do navegador):', error);
+    // Em aparelhos com pouco espaço livre, mesmo a versão reduzida (até 500
+    // confirmados) pode não caber. Os confirmados são só uma cópia de
+    // conveniência - sempre podem ser buscados de novo do Supabase - mas um
+    // registro pendente (checklist feito offline, ainda não sincronizado)
+    // só existe neste aparelho: sacrifica os confirmados por completo pra
+    // garantir que pelo menos os pendentes sejam salvos em disco. Sem isso,
+    // um recarregamento da página antes da sincronização nunca mais
+    // encontraria esse checklist pendente (ficaria só na memória, perdido ao
+    // fechar a aba) - foi essa, aparentemente, a causa de checklists feitos
+    // offline por funcionários nunca sincronizarem mesmo com a internet de
+    // volta, enquanto em testes com o aparelho/cache "limpo" funcionava bem.
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pendentes));
+    } catch (retryError) {
+      console.error('[Reports] Não foi possível salvar nem só os pendentes no cache local:', retryError);
+    }
   }
 }
 
@@ -355,7 +371,17 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     try {
       await AsyncStorage.setItem(PENDING_PDF_QUEUE_KEY, JSON.stringify(queue));
     } catch (error) {
-      console.error('[Reports] Falha ao salvar fila de PDF pendente (provavelmente sem espaço/cota do navegador):', error);
+      console.error('[Reports] Falha ao salvar fila de PDF pendente (provavelmente sem espaço/cota do navegador) - tentando liberar espaço:', error);
+      try {
+        // Essa fila é o que garante que o checklist feito offline não se
+        // perde ao fechar a aba/app antes de sincronizar - prioriza salvar
+        // ela, sacrificando o cache local de confirmados (sempre recuperável
+        // do Supabase) pra abrir espaço.
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(completedChecklistsRef.current.filter(isPendingSync)));
+        await AsyncStorage.setItem(PENDING_PDF_QUEUE_KEY, JSON.stringify(queue));
+      } catch (retryError) {
+        console.error('[Reports] Não foi possível salvar a fila de PDF pendente mesmo após liberar espaço:', retryError);
+      }
     }
   };
 
@@ -423,7 +449,13 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     try {
       await AsyncStorage.setItem(PENDING_DELETE_QUEUE_KEY, JSON.stringify(queue));
     } catch (error) {
-      console.error('[Reports] Falha ao salvar fila de exclusão pendente (provavelmente sem espaço/cota do navegador):', error);
+      console.error('[Reports] Falha ao salvar fila de exclusão pendente (provavelmente sem espaço/cota do navegador) - tentando liberar espaço:', error);
+      try {
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(completedChecklistsRef.current.filter(isPendingSync)));
+        await AsyncStorage.setItem(PENDING_DELETE_QUEUE_KEY, JSON.stringify(queue));
+      } catch (retryError) {
+        console.error('[Reports] Não foi possível salvar a fila de exclusão pendente mesmo após liberar espaço:', retryError);
+      }
     }
   };
 
