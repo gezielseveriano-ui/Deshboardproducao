@@ -34,6 +34,7 @@ interface ReportsContextType {
     result: { id: string; pdfUrl: string }
   ) => Promise<void>;
   queuePdfGeneration: (localId: string, input: GerarPdfInput) => Promise<void>;
+  removePendingPdfItem: (localId: string) => Promise<void>;
   retryPendingPdfGenerations: () => Promise<{ synced: number; failed: number; lastError?: string }>;
   pendingPdfCount: number;
   deleteCompletedChecklists: (
@@ -394,6 +395,18 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     await persistPendingPdfQueue([...semDuplicata, { localId, input }]);
   };
 
+  // Remove da fila um item que acabou de ser confirmado por outro caminho
+  // (ex: a tentativa original de gerar o PDF, na hora de finalizar o
+  // checklist, teve sucesso depois de já ter sido enfileirada como
+  // precaução) - sem isso, retryPendingPdfGenerations tentaria gerar esse
+  // mesmo PDF de novo desnecessariamente na próxima vez que rodar.
+  const removePendingPdfItem = async (localId: string) => {
+    const semEsse = pendingPdfQueue.filter((item) => item.localId !== localId);
+    if (semEsse.length !== pendingPdfQueue.length) {
+      await persistPendingPdfQueue(semEsse);
+    }
+  };
+
   // Tenta gerar de novo o PDF (e salvar no Supabase) de todo checklist que
   // foi finalizado sem internet - roda sozinho quando a conexão volta,
   // igual o syncPendingChecklists faz para os outros checklists.
@@ -531,55 +544,49 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Reenvia pro Supabase todo checklist que ainda não foi confirmado
-  // sincronizado (id local, não-uuid) - é isso que garante que um checklist
-  // feito sem internet realmente chega no banco de dados assim que a
-  // conexão voltar, em vez de ficar preso só no aparelho pra sempre.
+  // sincronizado (id local, não-uuid) e que NÃO tem uma geração de PDF
+  // pendente associada (esses são tratados por retryPendingPdfGenerations,
+  // que faz o insert completo, com PDF, junto com o servidor).
+  //
+  // Um registro cair nessa segunda categoria (pendente de sync, mas sem
+  // entrada na fila de PDF) só deveria acontecer por uma falha rara (ex: o
+  // app fechou bem no instante entre salvar o checklist localmente e
+  // enfileirar a geração do PDF) - e, quando acontece, os dados completos
+  // do checklist (etapas, medidas, assinaturas) já não existem mais neste
+  // aparelho, só o resumo. Por isso essa função NUNCA deve tentar "resolver"
+  // isso criando uma linha no Supabase sem PDF: antes fazia isso (usando
+  // saveChecklistToSupabase, que só manda o resumo) e, ao conseguir, marcava
+  // o registro como sincronizado - só que a linha criada nunca ganhava PDF
+  // depois (nada mais tentava gerar), ficando "Aguardando conexão para
+  // gerar o PDF" pra sempre, só que agora visível em qualquer aparelho (por
+  // já estar no banco) e sem nenhum jeito de corrigir sozinho. Era esse o
+  // bug por trás de checklists "travados" que nenhuma sincronização resolvia
+  // de verdade. Agora só sinaliza a falha, mantendo o registro visivelmente
+  // pendente (em vez de escondido atrás de uma sincronização falsa) até
+  // alguém refazer o checklist.
   const syncPendingChecklists = async (baseRecords?: CompletedChecklistRecord[]) => {
     if (!deviceId) return { synced: 0, failed: 0 };
 
     const idsNaFilaDePdf = new Set(pendingPdfQueue.map((item) => item.localId));
     const atualInicial = baseRecords ?? completedChecklists;
-    // Checklists na fila de geração de PDF são tratados por
-    // retryPendingPdfGenerations (que faz o insert completo, com PDF, junto
-    // com o servidor) - não pelo insert simples daqui, senão duplicaria.
-    const pendentes = atualInicial.filter((c) => isPendingSync(c) && !idsNaFilaDePdf.has(c.id));
-    if (pendentes.length === 0) {
+    const orfaos = atualInicial.filter((c) => isPendingSync(c) && !idsNaFilaDePdf.has(c.id));
+    if (orfaos.length === 0) {
       return { synced: 0, failed: 0 };
     }
 
-    console.log('[Reports] Sincronizando', pendentes.length, 'checklist(s) pendente(s)...');
-    setIsSyncing(true);
-
-    let synced = 0;
-    let failed = 0;
-    let lastError: string | undefined;
-    let atual = atualInicial;
-
-    try {
-      for (const record of pendentes) {
-        try {
-          const saved = await comTentativas(() => SupabaseSync.saveChecklistToSupabase(record, deviceId));
-          if (saved?.id) {
-            atual = atual.map((c) => (c.id === record.id ? { ...c, id: saved.id } : c));
-          }
-          synced++;
-        } catch (error) {
-          lastError = error instanceof Error ? error.message : String(error);
-          console.warn('[Reports] Falha ao sincronizar checklist pendente:', record.id, error);
-          failed++;
-        }
-      }
-
-      if (synced > 0) {
-        setCompletedChecklists(atual);
-        await salvarCacheLocal(atual);
-      }
-
-      console.log('[Reports] Sincronização de pendentes concluída:', { synced, failed, lastError });
-      return { synced, failed, lastError };
-    } finally {
-      setIsSyncing(false);
-    }
+    console.warn(
+      '[Reports]',
+      orfaos.length,
+      'checklist(s) pendente(s) sem os dados completos pra gerar o PDF (provavelmente o app fechou antes de enfileirar) - precisam ser refeitos:',
+      orfaos.map((o) => o.id)
+    );
+    return {
+      synced: 0,
+      failed: orfaos.length,
+      lastError: `${orfaos.length} checklist(s) perderam os dados completos antes de enviar (o app provavelmente fechou no meio do processo) - precisam ser refeitos: ${orfaos
+        .map((o) => `${o.checklistCode} (${o.executanteName || "sem nome"}, ${o.dataRecuperacao || "sem data"})`)
+        .join(", ")}`,
+    };
   };
 
   // Tenta sincronizar pendentes sempre que a conexão volta - sem isso, um
@@ -663,6 +670,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
     addCompletedChecklistLocalOnly,
     confirmChecklistPdf,
     queuePdfGeneration,
+    removePendingPdfItem,
     retryPendingPdfGenerations,
     pendingPdfCount,
     deleteCompletedChecklists,

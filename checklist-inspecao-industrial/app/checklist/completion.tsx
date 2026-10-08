@@ -87,7 +87,7 @@ export default function CompletionScreen() {
   const results = useMemo(() => countResults(), [checklist.etapas]);
   const totalEtapas = checklist.etapas.length;
 
-  const { addCompletedChecklistLocalOnly, confirmChecklistPdf, queuePdfGeneration } = useReports();
+  const { addCompletedChecklistLocalOnly, confirmChecklistPdf, queuePdfGeneration, removePendingPdfItem } = useReports();
   const hasBeenSaved = useRef(false);
 
   // Nota: Salvamento foi movido para handleGerarPDF para evitar contabilização prematura
@@ -146,6 +146,20 @@ export default function CompletionScreen() {
         };
         await addCompletedChecklistLocalOnly(record);
         hasBeenSaved.current = true;
+
+        // Enfileira a geração do PDF ANTES de tentar - não só se a tentativa
+        // abaixo falhar. Se isso só acontecesse dentro do catch (como era
+        // antes) e o app fechasse (aba trocada, tablet apagou a tela,
+        // bateria acabou etc.) bem no meio da tentativa de rede - depois do
+        // checklist já ter sido contabilizado localmente, mas antes do catch
+        // rodar - os dados completos do checklist (etapas, medidas,
+        // assinaturas) nunca chegavam a ser guardados em lugar nenhum. Esse
+        // checklist ficava "pendente" pra sempre sem que nenhuma tentativa de
+        // sincronização automática conseguisse recuperá-lo, porque não havia
+        // mais nada pra reenviar. Enfileirando aqui, antes da tentativa, esse
+        // checklist sempre tem como ser gerado de novo depois, não importa em
+        // que momento o app for fechado.
+        await queuePdfGeneration(checklist.id, input);
       }
 
       // 2. Tenta gerar o PDF de verdade agora (o servidor gera o PDF e já
@@ -160,6 +174,9 @@ export default function CompletionScreen() {
         const pdfUrl = result.pdfUrl;
         console.log("[DEBUG] ✓ PDF gerado e salvo no Supabase:", pdfUrl);
         await confirmChecklistPdf(checklist.id, { id: result.id ?? checklist.id, pdfUrl });
+        // Já deu certo na tentativa direta - não precisa mais da entrada que
+        // foi enfileirada como precaução acima.
+        await removePendingPdfItem(checklist.id);
         setStatusBanner({
           tipo: "sucesso",
           mensagem: "✅ PDF gerado com sucesso! Já está salvo na nuvem e disponível em Histórico.",
@@ -177,11 +194,11 @@ export default function CompletionScreen() {
           });
         }
       } catch (pdfError) {
-        // Não é um erro fatal: o checklist já foi contabilizado no passo 1.
-        // Só a geração do PDF fica pendente, tentada de novo sozinha quando
-        // a internet voltar (igual outros checklists pendentes).
+        // Não é um erro fatal: o checklist já foi contabilizado no passo 1,
+        // e a geração do PDF já está enfileirada desde antes dessa tentativa
+        // (acima) - só vai ser tentada de novo sozinha quando a internet
+        // voltar (igual outros checklists pendentes).
         console.warn("Falha ao gerar PDF agora, ficará pendente:", pdfError);
-        await queuePdfGeneration(checklist.id, input);
         setStatusBanner({
           tipo: "aguardando",
           mensagem:
