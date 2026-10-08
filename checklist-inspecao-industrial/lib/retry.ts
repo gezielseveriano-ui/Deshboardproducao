@@ -19,3 +19,21 @@ export async function comTentativas<T>(fn: () => Promise<T>, tentativas = 3): Pr
   }
   throw ultimoErro;
 }
+
+/**
+ * Sem isso, uma requisição que trava sem nunca resolver nem rejeitar (ex:
+ * servidor "dormindo" no Render e demorando pra acordar, ou uma rede que
+ * nem chega a avisar que caiu) deixa a tela sem nenhuma resposta - nem a
+ * mensagem de sucesso, nem a de "ficou pendente", por tempo indeterminado.
+ * Depois desse prazo, trata como falha (cai no mesmo caminho de "sem
+ * internet, vai tentar de novo depois") mesmo que a requisição original
+ * ainda esteja em andamento por trás - se ela tiver sucesso mais tarde,
+ * a tentativa automática seguinte simplesmente reconhece isso (pelo
+ * clientChecklistId) em vez de duplicar.
+ */
+export async function comTimeout<T>(promise: Promise<T>, ms: number, mensagem: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(mensagem)), ms)),
+  ]);
+}

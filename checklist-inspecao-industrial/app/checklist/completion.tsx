@@ -14,6 +14,14 @@ import { trpc } from "@/lib/trpc";
 import { useEffect } from "react";
 import { resolveLocalPdfPath } from "@/lib/pdf-local-cache";
 import { alertar } from "@/lib/alert";
+import { comTimeout } from "@/lib/retry";
+
+// Tempo máximo esperando o servidor responder antes de desistir e tratar
+// como "ficou pendente" - sem isso, numa rede ruim ou com o servidor
+// demorando pra acordar (Render em plano gratuito), a tela ficava sem
+// nenhuma mensagem (nem sucesso, nem "aguardando") por tempo indefinido,
+// parecendo travada.
+const TIMEOUT_GERAR_PDF_MS = 20000;
 
 
 export default function CompletionScreen() {
@@ -165,7 +173,11 @@ export default function CompletionScreen() {
       // 2. Tenta gerar o PDF de verdade agora (o servidor gera o PDF e já
       // salva a linha completa no Supabase).
       try {
-        const result = await generatePdfMutation.mutateAsync(input);
+        const result = await comTimeout(
+          generatePdfMutation.mutateAsync(input),
+          TIMEOUT_GERAR_PDF_MS,
+          "Tempo esgotado esperando resposta do servidor"
+        );
 
         if (!result.success || !result.pdfUrl) {
           throw new Error(result.message || "Falha ao gerar o PDF no servidor");
