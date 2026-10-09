@@ -12,6 +12,11 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icone-192.png?v=1">
 <link rel="manifest" href="manifest.json">
 <title>Admin. Financeira</title>
+<meta name="description" content="Controle dos gastos do cartão e das contas fixas da família">
+<meta property="og:title" content="Admin. Financeira">
+<meta property="og:description" content="Controle dos gastos do cartão e das contas fixas da família">
+<meta property="og:image" content="https://gezielseveriano-ui.github.io/Deshboardproducao/controle-cartao/icone-512.png">
+<meta property="og:type" content="website">
 <style>
 :root {
   --bg: #f4f5f7;
@@ -913,7 +918,7 @@ function linkConvite() {
 }
 function enviarConvite() {
   const link = linkConvite();
-  const txt = 'Abra este link no seu celular para ver as mesmas anotações do cartão:\n' + link;
+  const txt = 'Admin. Financeira – link de conexão. Abra o app, vá em Ajustes e cole este link:\n' + link;
   if (navigator.share) navigator.share({ text: txt }).catch(() => {});
   else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
 }
