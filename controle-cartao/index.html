@@ -2,6 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#ff7a00">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -73,6 +75,7 @@ header h1 { margin: 0; font-size: 18px; font-weight: 700; }
   width: 40px; height: 36px; border-radius: 10px; font-size: 20px;
 }
 .mes span { font-weight: 600; font-size: 17px; }
+.status { font-size: 12px; opacity: .95; margin-top: 6px; text-align: center; }
 main { padding: 12px 16px; max-width: 640px; margin: 0 auto; }
 .card {
   background: var(--card); border-radius: 14px; padding: 14px;
@@ -168,6 +171,7 @@ nav button.on { color: var(--brand); font-weight: 700; }
     <span id="mesNome"></span>
     <button onclick="mudaMes(1)" aria-label="Próximo mês">›</button>
   </div>
+  <div class="status" id="statusTopo"></div>
 </header>
 
 <main>
@@ -320,6 +324,11 @@ nav button.on { color: var(--brand); font-weight: 700; }
       <input type="file" id="arqImport" accept=".json,application/json" style="display:none" onchange="importar(event)">
       <p class="muted" id="ultBackup"></p>
     </div>
+    <div class="card">
+      <h2>Versão do app</h2>
+      <p class="muted" style="margin-top:0" id="versaoTxt"></p>
+      <button class="btn ghost" onclick="atualizarApp(true)">🔄 Buscar versão nova</button>
+    </div>
   </section>
 </main>
 
@@ -334,6 +343,7 @@ nav button.on { color: var(--brand); font-weight: 700; }
 
 <script>
 const CHAVE = 'controle-cartao-v1';
+const APP_VERSAO = '2026-10-09-1';
 
 const PADRAO = {
   salario: 6500,
@@ -867,6 +877,7 @@ function render() {
      <button class="x" onclick="apagarCat('${c.id}')" aria-label="Remover">🗑</button></div>`
   ).join('');
   renderSync();
+  document.getElementById('versaoTxt').textContent = 'Versão ' + APP_VERSAO;
   document.getElementById('ultBackup').textContent = db.ultimoBackup
     ? 'Última cópia: ' + new Date(db.ultimoBackup).toLocaleString('pt-BR')
     : 'Nenhuma cópia feita ainda.';
@@ -1046,6 +1057,11 @@ async function sincronizar(manual) {
 }
 function renderSync() {
   const ligado = !!syncCfg;
+  document.getElementById('statusTopo').textContent = !ligado
+    ? '⚠️ Este aparelho não está sincronizado (Ajustes)'
+    : syncInfo.erro ? '⚠️ Sem sincronizar agora: ' + (syncInfo.erro === 'sem internet' ? 'sem internet' : 'tentando de novo')
+    : syncInfo.ultimo ? '🔄 Sincronizado às ' + syncInfo.ultimo.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : '🔄 Sincronizando…';
   document.getElementById('syncLigado').style.display = ligado ? '' : 'none';
   document.getElementById('syncDesligado').style.display = ligado ? 'none' : '';
   if (!ligado) return;
@@ -1125,7 +1141,24 @@ function aplicarConvite(codigo) {
   } catch (e) { toast('Link de conexão inválido'); }
 }
 
-document.addEventListener('visibilitychange', () => { if (!document.hidden) sincronizar(); });
+// O iPhone guarda uma cópia do app na tela de início. Ao abrir, confere no
+// GitHub se há versão nova (versao.json) e recarrega se tiver.
+async function atualizarApp(manual) {
+  try {
+    const r = await fetch('versao.json?t=' + Date.now(), { cache: 'no-store' });
+    const v = (await r.json()).versao;
+    if (v && v !== APP_VERSAO) {
+      let tentou = null;
+      try { tentou = sessionStorage.getItem('atualizando'); } catch (e) {}
+      if (tentou === v && !manual) return;
+      try { sessionStorage.setItem('atualizando', v); } catch (e) {}
+      gravar(true);
+      location.replace(location.pathname + '?v=' + encodeURIComponent(v));
+    } else if (manual) toast('✅ O app já está na versão mais nova');
+  } catch (e) { if (manual) toast('Sem internet para buscar a versão nova'); }
+}
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { sincronizar(); atualizarApp(); } });
 setInterval(() => { if (!document.hidden) sincronizar(); }, 20000);
 
 document.getElementById('gData').value = hojeISO();
@@ -1135,6 +1168,7 @@ if (migrarParcelas()) gravar(true);
 lerConvite();
 render();
 (async () => {
+  atualizarApp();
   await sincronizar();
   await importarFaturas();
 })();
