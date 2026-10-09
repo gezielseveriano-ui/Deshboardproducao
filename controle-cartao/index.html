@@ -914,7 +914,7 @@ function salvarCfg(cfg) {
 }
 function linkConvite() {
   const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(syncCfg))));
-  return location.origin + location.pathname + '#conectar=' + encodeURIComponent(b64);
+  return location.origin + location.pathname + '?convite=admin-financeira#conectar=' + encodeURIComponent(b64);
 }
 function enviarConvite() {
   const link = linkConvite();
