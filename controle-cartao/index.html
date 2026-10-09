@@ -257,6 +257,27 @@ nav button.on { color: var(--brand); font-weight: 700; }
       </div>
       <button class="btn sec" onclick="salvarCat()">Adicionar categoria</button>
     </div>
+    <div class="card" id="cardSync">
+      <h2>🔄 Sincronizar com minha esposa</h2>
+      <div id="syncLigado" style="display:none">
+        <p class="muted" style="margin-top:0" id="syncStatus"></p>
+        <button class="btn sec" onclick="sincronizar(true)">Sincronizar agora</button>
+        <button class="btn" onclick="enviarConvite()">📲 Enviar link de conexão para o outro celular</button>
+        <button class="btn ghost" onclick="desconectar()">Desconectar este celular</button>
+      </div>
+      <div id="syncDesligado">
+        <p class="muted" style="margin-top:0">Para os dois celulares verem as mesmas anotações, conecte uma conta gratuita do Supabase (só precisa fazer uma vez, em um celular).</p>
+        <p class="muted"><b>1.</b> No Supabase, abra seu projeto → <b>SQL Editor</b> → cole o comando abaixo → <b>Run</b>.</p>
+        <button class="btn ghost" onclick="copiarSQL()">📋 Copiar comando SQL</button>
+        <p class="muted"><b>2.</b> Em <b>Project Settings → API</b> (ou <b>API Keys</b>), copie o <b>Project URL</b> e a chave <b>anon / publishable</b> e cole aqui:</p>
+        <label>Project URL</label>
+        <input id="sUrl" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off">
+        <label>Chave anon / publishable</label>
+        <input id="sKey" placeholder="eyJ... ou sb_publishable_..." autocapitalize="off" autocorrect="off">
+        <button class="btn" onclick="conectar()">Conectar</button>
+        <p class="muted"><b>3.</b> Depois toque em "Enviar link de conexão" e mande para sua esposa. Ela abre o link uma vez e pronto.</p>
+      </div>
+    </div>
     <div class="card">
       <h2>Cópia de segurança</h2>
       <p class="muted" style="margin-top:0">Os dados ficam salvos neste celular. Faça uma cópia de vez em quando (e guarde no Google Drive ou mande pra você no WhatsApp). Se trocar de celular, é só restaurar.</p>
@@ -313,10 +334,15 @@ function carregar() {
   } catch (e) {}
   return structuredClone(PADRAO);
 }
-function gravar() {
+function gravar(semSync) {
   try { localStorage.setItem(CHAVE, JSON.stringify(db)); }
   catch (e) { toast('Não consegui salvar neste navegador!'); }
+  if (!semSync) agendarSync();
 }
+// Cada alteração guarda o horário (db.mod) e cada exclusão deixa uma marca
+// (db.apagados). É isso que permite juntar o que os dois celulares fizeram.
+function marca(chave) { db.mod = db.mod || {}; db.mod[chave] = Date.now(); }
+function apaga(chave) { db.apagados = db.apagados || {}; db.apagados[chave] = Date.now(); }
 
 // ---------- utilidades ----------
 function hojeISO() {
@@ -401,7 +427,9 @@ function salvarGasto() {
   const desc = document.getElementById('gDesc').value.trim();
   if (!catSel) return toast('Escolha a categoria');
   if (!(valor > 0)) return toast('Informe o valor');
-  db.gastos.push({ id: novoId(), data, cat: catSel, valor, desc });
+  const id = novoId();
+  db.gastos.push({ id, data, cat: catSel, valor, desc });
+  marca('g:' + id);
   gravar();
   document.getElementById('gValor').value = '';
   document.getElementById('gDesc').value = '';
@@ -413,6 +441,7 @@ function apagarGasto(id) {
   const g = db.gastos.find(x => x.id === id);
   if (!g || !confirm('Apagar ' + cat(g.cat).nome + ' de ' + brl(g.valor) + '?')) return;
   db.gastos = db.gastos.filter(x => x.id !== id);
+  apaga('g:' + id);
   gravar(); render();
 }
 function salvarFixa() {
@@ -420,7 +449,9 @@ function salvarFixa() {
   const prev = numero(document.getElementById('fPrev').value);
   if (!nome) return toast('Informe o nome da conta');
   if (!(prev >= 0)) return toast('Informe o valor previsto');
-  db.fixas.push({ id: novoId(), nome, previsto: prev });
+  const id = novoId();
+  db.fixas.push({ id, nome, previsto: prev });
+  marca('f:' + id);
   gravar();
   document.getElementById('fNome').value = '';
   document.getElementById('fPrev').value = '';
@@ -437,11 +468,13 @@ function pagarFixa(id) {
   if (!(v >= 0)) return toast('Valor inválido');
   db.pagamentos[mesAtual] = db.pagamentos[mesAtual] || {};
   db.pagamentos[mesAtual][id] = v;
+  marca('p:' + mesAtual + ':' + id);
   gravar(); render();
   if (v > f.previsto) toast('⚠️ ' + f.nome + ' veio ' + brl(v - f.previsto) + ' acima do previsto');
 }
 function desfazerPagamento(id) {
   if (db.pagamentos[mesAtual]) delete db.pagamentos[mesAtual][id];
+  apaga('p:' + mesAtual + ':' + id);
   gravar(); render();
 }
 function editarPrevisto(id) {
@@ -450,24 +483,27 @@ function editarPrevisto(id) {
   if (resp === null) return;
   const v = numero(resp);
   if (!(v >= 0)) return toast('Valor inválido');
-  f.previsto = v; gravar(); render();
+  f.previsto = v; marca('f:' + id); gravar(); render();
 }
 function apagarFixa(id) {
   const f = db.fixas.find(x => x.id === id);
   if (!confirm('Remover a conta fixa "' + f.nome + '"?')) return;
   db.fixas = db.fixas.filter(x => x.id !== id);
+  apaga('f:' + id);
   gravar(); render();
 }
 function salvarSalario() {
   const v = numero(document.getElementById('aSal').value);
   if (!(v >= 0)) return toast('Valor inválido');
-  db.salario = v; gravar(); toast('Salário salvo'); render();
+  db.salario = v; marca('salario'); gravar(); toast('Salário salvo'); render();
 }
 function salvarCat() {
   const nome = document.getElementById('cNome').value.trim();
   const icone = document.getElementById('cIcone').value.trim() || '🏷️';
   if (!nome) return toast('Informe o nome da categoria');
-  db.categorias.push({ id: novoId(), nome, icone });
+  const id = novoId();
+  db.categorias.push({ id, nome, icone });
+  marca('c:' + id);
   gravar();
   document.getElementById('cNome').value = '';
   document.getElementById('cIcone').value = '';
@@ -479,6 +515,7 @@ function apagarCat(id) {
   if (usados) return toast('"' + c.nome + '" tem ' + usados + ' gasto(s). Apague-os antes.');
   if (!confirm('Remover a categoria "' + c.nome + '"?')) return;
   db.categorias = db.categorias.filter(x => x.id !== id);
+  apaga('c:' + id);
   if (catSel === id) catSel = db.categorias[0] && db.categorias[0].id;
   gravar(); render();
 }
@@ -652,6 +689,7 @@ function render() {
     `<div class="item"><div class="ic">${esc(c.icone)}</div><div class="info"><div class="t">${esc(c.nome)}</div></div>
      <button class="x" onclick="apagarCat('${c.id}')" aria-label="Remover">🗑</button></div>`
   ).join('');
+  renderSync();
   document.getElementById('ultBackup').textContent = db.ultimoBackup
     ? 'Última cópia: ' + new Date(db.ultimoBackup).toLocaleString('pt-BR')
     : 'Nenhuma cópia feita ainda.';
@@ -695,9 +733,218 @@ async function importarFaturas() {
   }
 }
 
+// ---------- sincronização (Supabase) ----------
+const CHAVE_SYNC = 'controle-cartao-sync';
+const SQL_SETUP = `create table if not exists cartao_familia (
+  codigo text primary key,
+  dados jsonb not null default '{}',
+  versao int not null default 0,
+  atualizado timestamptz not null default now()
+);
+alter table cartao_familia enable row level security;
+
+create or replace function cartao_ler(p_codigo text) returns json
+language sql security definer set search_path = public as $$
+  select json_build_object('dados', dados, 'versao', versao)
+  from cartao_familia where codigo = p_codigo
+$$;
+
+create or replace function cartao_salvar(p_codigo text, p_dados jsonb, p_versao int) returns json
+language plpgsql security definer set search_path = public as $$
+declare v int;
+begin
+  if length(p_codigo) < 20 then raise exception 'codigo invalido'; end if;
+  insert into cartao_familia (codigo, dados, versao) values (p_codigo, p_dados, 1)
+  on conflict (codigo) do update
+    set dados = excluded.dados, versao = cartao_familia.versao + 1, atualizado = now()
+    where cartao_familia.versao = p_versao
+  returning versao into v;
+  return json_build_object('ok', v is not null, 'versao', v);
+end $$;
+
+grant execute on function cartao_ler(text) to anon;
+grant execute on function cartao_salvar(text, jsonb, int) to anon;`;
+
+let syncCfg = null;
+try { syncCfg = JSON.parse(localStorage.getItem(CHAVE_SYNC)); } catch (e) {}
+let syncInfo = { rodando: false, pendente: false, ultimo: null, erro: null };
+
+async function rpc(nome, corpo, cfg) {
+  cfg = cfg || syncCfg;
+  const h = { 'apikey': cfg.k, 'Content-Type': 'application/json' };
+  if (cfg.k.startsWith('eyJ')) h.Authorization = 'Bearer ' + cfg.k;
+  const r = await fetch(cfg.u.replace(/\/+$/, '') + '/rest/v1/rpc/' + nome,
+    { method: 'POST', headers: h, body: JSON.stringify(corpo), cache: 'no-store' });
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200));
+  return r.json();
+}
+
+// Junta os dados dos dois celulares: em cada item vale a alteração mais
+// recente, e o que foi apagado em qualquer um dos lados some dos dois.
+function mesclar(a, b) {
+  const mod = { ...(b.mod || {}) }, apagados = { ...(b.apagados || {}) };
+  for (const [k, t] of Object.entries(a.mod || {})) mod[k] = Math.max(mod[k] || 0, t);
+  for (const [k, t] of Object.entries(a.apagados || {})) apagados[k] = Math.max(apagados[k] || 0, t);
+  const vivo = k => !(apagados[k] && apagados[k] >= (mod[k] || 0));
+  const lista = (la, lb, pre) => {
+    const m = new Map();
+    for (const it of lb || []) m.set(it.id, it);
+    for (const it of la || []) {
+      const k = pre + it.id;
+      if (!m.has(it.id) || ((a.mod || {})[k] || 0) >= ((b.mod || {})[k] || 0)) m.set(it.id, it);
+    }
+    return [...m.values()].filter(it => vivo(pre + it.id));
+  };
+  const pagamentos = {};
+  for (const [lado, outro] of [[b, a], [a, b]]) {
+    for (const [ym, pg] of Object.entries(lado.pagamentos || {})) {
+      for (const [fid, v] of Object.entries(pg)) {
+        const k = 'p:' + ym + ':' + fid;
+        const jaTem = pagamentos[ym] && fid in pagamentos[ym];
+        if (jaTem && ((lado.mod || {})[k] || 0) < ((outro.mod || {})[k] || 0)) continue;
+        (pagamentos[ym] = pagamentos[ym] || {})[fid] = v;
+      }
+    }
+  }
+  for (const ym of Object.keys(pagamentos)) {
+    for (const fid of Object.keys(pagamentos[ym])) if (!vivo('p:' + ym + ':' + fid)) delete pagamentos[ym][fid];
+    if (!Object.keys(pagamentos[ym]).length) delete pagamentos[ym];
+  }
+  return {
+    ...a,
+    salario: ((a.mod || {}).salario || 0) >= ((b.mod || {}).salario || 0) ? a.salario : b.salario,
+    categorias: lista(a.categorias, b.categorias, 'c:'),
+    gastos: lista(a.gastos, b.gastos, 'g:'),
+    fixas: lista(a.fixas, b.fixas, 'f:'),
+    pagamentos, mod, apagados,
+    faturasImportadas: [...new Set([...(a.faturasImportadas || []), ...(b.faturasImportadas || [])])]
+  };
+}
+function compartilhado(d) {
+  const { ultimoBackup, ...resto } = d;
+  return resto;
+}
+function estavel(v) {
+  if (Array.isArray(v)) return '[' + v.map(estavel).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + estavel(v[k])).join(',') + '}';
+  return JSON.stringify(v);
+}
+
+let syncTimer = null;
+function agendarSync() {
+  if (!syncCfg) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => sincronizar(), 800);
+}
+async function sincronizar(manual) {
+  if (!syncCfg) return;
+  if (syncInfo.rodando) { syncInfo.pendente = true; return; }
+  syncInfo.rodando = true;
+  try {
+    for (let tentativa = 0; tentativa < 4; tentativa++) {
+      const r = await rpc('cartao_ler', { p_codigo: syncCfg.c });
+      const remoto = r && r.dados;
+      const versao = (r && r.versao) || 0;
+      const antes = estavel(compartilhado(db));
+      if (remoto) db = mesclar(db, remoto);
+      const depois = compartilhado(db);
+      if (estavel(depois) !== antes) { gravar(true); render(); }
+      if (remoto && estavel(depois) === estavel(remoto)) break;
+      const s = await rpc('cartao_salvar', { p_codigo: syncCfg.c, p_dados: depois, p_versao: versao });
+      if (s && s.ok) break;
+    }
+    syncInfo.ultimo = new Date(); syncInfo.erro = null;
+    if (manual) toast('✅ Sincronizado!');
+  } catch (e) {
+    syncInfo.erro = navigator.onLine === false ? 'sem internet' : String(e.message || e);
+    if (manual) toast('Não consegui sincronizar agora');
+  } finally {
+    syncInfo.rodando = false;
+    renderSync();
+    if (syncInfo.pendente) { syncInfo.pendente = false; agendarSync(); }
+  }
+}
+function renderSync() {
+  const ligado = !!syncCfg;
+  document.getElementById('syncLigado').style.display = ligado ? '' : 'none';
+  document.getElementById('syncDesligado').style.display = ligado ? 'none' : '';
+  if (!ligado) return;
+  document.getElementById('syncStatus').textContent = syncInfo.erro
+    ? '⚠️ Última tentativa falhou (' + syncInfo.erro + '). Suas anotações estão salvas no celular e vão subir quando der.'
+    : syncInfo.ultimo
+      ? '✅ Conectado. Última sincronização: ' + syncInfo.ultimo.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      : 'Conectado. Sincronizando…';
+}
+function codigoNovo() {
+  const b = crypto.getRandomValues(new Uint8Array(24));
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function conectar() {
+  const u = document.getElementById('sUrl').value.trim();
+  const k = document.getElementById('sKey').value.trim();
+  if (!/^https?:\/\/.+/.test(u)) return toast('Cole o Project URL (começa com https://)');
+  if (k.length < 20) return toast('Cole a chave anon / publishable');
+  const cfg = { u, k, c: codigoNovo() };
+  try {
+    await rpc('cartao_ler', { p_codigo: cfg.c }, cfg);
+  } catch (e) {
+    return alert('Não consegui conectar. Confira se rodou o comando SQL e se o URL e a chave estão certos.\n\n' + e.message);
+  }
+  salvarCfg(cfg);
+  toast('Conectado! Agora envie o link para o outro celular.');
+  sincronizar(true);
+}
+function salvarCfg(cfg) {
+  syncCfg = cfg;
+  try {
+    if (cfg) localStorage.setItem(CHAVE_SYNC, JSON.stringify(cfg));
+    else localStorage.removeItem(CHAVE_SYNC);
+  } catch (e) {}
+  renderSync();
+}
+function linkConvite() {
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(syncCfg))));
+  return location.origin + location.pathname + '#conectar=' + encodeURIComponent(b64);
+}
+function enviarConvite() {
+  const link = linkConvite();
+  const txt = 'Abra este link no seu celular para ver as mesmas anotações do cartão:\n' + link;
+  if (navigator.share) navigator.share({ text: txt }).catch(() => {});
+  else window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+}
+function desconectar() {
+  if (!confirm('Desconectar este celular? As anotações continuam aqui, só param de sincronizar.')) return;
+  salvarCfg(null);
+}
+function copiarSQL() {
+  const ok = () => toast('Comando copiado! Cole no SQL Editor do Supabase.');
+  if (navigator.clipboard) navigator.clipboard.writeText(SQL_SETUP).then(ok, () => prompt('Copie o comando:', SQL_SETUP));
+  else prompt('Copie o comando:', SQL_SETUP);
+}
+function lerConvite() {
+  const m = location.hash.match(/conectar=([^&]+)/);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const cfg = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+    if (!cfg.u || !cfg.k || !cfg.c) throw 0;
+    if (syncCfg && syncCfg.c === cfg.c) return toast('Este celular já está conectado');
+    if (!confirm('Conectar este celular às anotações da família?\nO que já foi anotado aqui vai ser juntado com o outro celular.')) return;
+    salvarCfg(cfg);
+    toast('Conectado! Juntando as anotações…');
+  } catch (e) { toast('Link de conexão inválido'); }
+}
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sincronizar(); });
+setInterval(() => { if (!document.hidden) sincronizar(); }, 20000);
+
 document.getElementById('gData').value = hojeISO();
+lerConvite();
 render();
-importarFaturas();
+(async () => {
+  await sincronizar();
+  await importarFaturas();
+})();
 </script>
 </body>
 </html>
