@@ -266,6 +266,11 @@ nav button.on { color: var(--brand); font-weight: 700; }
         <button class="btn ghost" onclick="desconectar()">Desconectar este celular</button>
       </div>
       <div id="syncDesligado">
+        <p class="muted" style="margin-top:0"><b>Recebeu um link de conexão?</b> Copie o link inteiro e cole aqui:</p>
+        <input id="sLink" placeholder="Cole aqui o link de conexão" autocapitalize="off" autocorrect="off">
+        <button class="btn" onclick="conectarComLink()">Conectar com o link</button>
+        <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+        <p class="muted" style="margin-top:0"><b>Primeira vez?</b> Configure abaixo (só em um aparelho).</p>
         <p class="muted" style="margin-top:0">Para os dois celulares verem as mesmas anotações, conecte uma conta gratuita do Supabase (só precisa fazer uma vez, em um celular).</p>
         <p class="muted"><b>1.</b> No Supabase, abra seu projeto → <b>SQL Editor</b> → cole o comando abaixo → <b>Run</b>.</p>
         <button class="btn ghost" onclick="copiarSQL()">📋 Copiar comando SQL</button>
@@ -921,12 +926,22 @@ function copiarSQL() {
   if (navigator.clipboard) navigator.clipboard.writeText(SQL_SETUP).then(ok, () => prompt('Copie o comando:', SQL_SETUP));
   else prompt('Copie o comando:', SQL_SETUP);
 }
+function conectarComLink() {
+  const txt = document.getElementById('sLink').value.trim();
+  const m = txt.match(/conectar=([^&\s]+)/);
+  if (!m) return toast('Esse não parece o link de conexão');
+  aplicarConvite(m[1]);
+  if (syncCfg) { document.getElementById('sLink').value = ''; sincronizar(true); }
+}
 function lerConvite() {
   const m = location.hash.match(/conectar=([^&]+)/);
   if (!m) return;
   history.replaceState(null, '', location.pathname);
+  aplicarConvite(m[1]);
+}
+function aplicarConvite(codigo) {
   try {
-    const cfg = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+    const cfg = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(codigo)))));
     if (!cfg.u || !cfg.k || !cfg.c) throw 0;
     if (syncCfg && syncCfg.c === cfg.c) return toast('Este celular já está conectado');
     if (!confirm('Conectar este celular às anotações da família?\nO que já foi anotado aqui vai ser juntado com o outro celular.')) return;
