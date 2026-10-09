@@ -1,0 +1,660 @@
+{
+ "nome": "Fatura Inter – outubro/2026",
+ "categorias": [
+  {
+   "id": "casa",
+   "nome": "Casa",
+   "icone": "🏠"
+  },
+  {
+   "id": "combustivel",
+   "nome": "Combustível",
+   "icone": "⛽"
+  },
+  {
+   "id": "compras",
+   "nome": "Compras online",
+   "icone": "🛍️"
+  },
+  {
+   "id": "construcao",
+   "nome": "Construção",
+   "icone": "🧱"
+  },
+  {
+   "id": "farmacia",
+   "nome": "Farmácia",
+   "icone": "💊"
+  },
+  {
+   "id": "juros",
+   "nome": "Juros e IOF",
+   "icone": "💸"
+  },
+  {
+   "id": "mercado",
+   "nome": "Supermercado",
+   "icone": "🛒"
+  },
+  {
+   "id": "outros",
+   "nome": "Outros",
+   "icone": "📦"
+  },
+  {
+   "id": "pet",
+   "nome": "Pet Shop",
+   "icone": "🐶"
+  },
+  {
+   "id": "restaurante",
+   "nome": "Restaurante / Lanche",
+   "icone": "🍔"
+  },
+  {
+   "id": "roupas",
+   "nome": "Roupas",
+   "icone": "👕"
+  },
+  {
+   "id": "servicos",
+   "nome": "Serviços",
+   "icone": "🛠️"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-out26-01",
+   "data": "2026-05-10",
+   "cat": "roupas",
+   "valor": 6.48,
+   "desc": "SHOPEE RubyCloset · parc. 5 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 5,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-02",
+   "data": "2026-06-30",
+   "cat": "outros",
+   "valor": 35.37,
+   "desc": "PIX CRED PARCELADO P TELECOM · parc. 4 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 4,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-03",
+   "data": "2026-07-01",
+   "cat": "outros",
+   "valor": 30.17,
+   "desc": "PIX CRED PARCELADO D LUIZ SIQUEIR · parc. 4 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 4,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-04",
+   "data": "2026-07-03",
+   "cat": "outros",
+   "valor": 18.12,
+   "desc": "PIX CRED PARCELADO LE DA CONCEICA · parc. 4 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 4,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-05",
+   "data": "2026-07-28",
+   "cat": "compras",
+   "valor": 20.5,
+   "desc": "SHOPEE marqueteutilid · parc. 3 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 3,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-06",
+   "data": "2026-08-05",
+   "cat": "farmacia",
+   "valor": 155.83,
+   "desc": "RAIA (Droga Raia) · parc. 2 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-07",
+   "data": "2026-08-05",
+   "cat": "farmacia",
+   "valor": 29.4,
+   "desc": "SHOPEE BIONUTRISUPLEM · parc. 2 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-08",
+   "data": "2026-08-06",
+   "cat": "construcao",
+   "valor": 13.5,
+   "desc": "SHOPEE VSAFERRAGENS · parc. 2 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-09",
+   "data": "2026-08-06",
+   "cat": "pet",
+   "valor": 25.47,
+   "desc": "SHOPEE Agrofal · parc. 2 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-10",
+   "data": "2026-08-07",
+   "cat": "servicos",
+   "valor": 15.68,
+   "desc": "SHOPEE SHPSTECNOLOGIA · parc. 2 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-11",
+   "data": "2026-08-07",
+   "cat": "servicos",
+   "valor": 23.39,
+   "desc": "SHOPEE SHPSTECNOLOGIA · parc. 2 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-12",
+   "data": "2026-08-08",
+   "cat": "compras",
+   "valor": 28.96,
+   "desc": "SHOPEE dwcommerce · parc. 2 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-13",
+   "data": "2026-08-08",
+   "cat": "servicos",
+   "valor": 16.4,
+   "desc": "SHOPEE SHPSTECNOLOGIA · parc. 2 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-14",
+   "data": "2026-08-13",
+   "cat": "farmacia",
+   "valor": 27.29,
+   "desc": "SHOPEE BionutriSuplem · parc. 2 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-15",
+   "data": "2026-08-13",
+   "cat": "compras",
+   "valor": 9.84,
+   "desc": "SHOPEE ReisEmpire · parc. 2 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-16",
+   "data": "2026-08-15",
+   "cat": "outros",
+   "valor": 15.52,
+   "desc": "SHOPEE PANOTEX · parc. 2 de 5",
+   "fatura": "2026-10",
+   "parcelas": 5,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-17",
+   "data": "2026-08-15",
+   "cat": "roupas",
+   "valor": 29.27,
+   "desc": "SHOPEE BotinasUniao · parc. 2 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-18",
+   "data": "2026-08-16",
+   "cat": "roupas",
+   "valor": 10.27,
+   "desc": "SHOPEE Marisastore · parc. 2 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-19",
+   "data": "2026-08-18",
+   "cat": "casa",
+   "valor": 10.11,
+   "desc": "SHOPEE vipcasa · parc. 2 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-20",
+   "data": "2026-08-23",
+   "cat": "servicos",
+   "valor": 13.74,
+   "desc": "SHOPEE QueroObra · parc. 2 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-21",
+   "data": "2026-08-24",
+   "cat": "outros",
+   "valor": 30.86,
+   "desc": "PIX CRED PARCELADO CLAUDIO ANSELMO FERN · parc. 2 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-22",
+   "data": "2026-08-27",
+   "cat": "outros",
+   "valor": 10.68,
+   "desc": "SHOPEE JLIGHTIluminac · parc. 2 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-23",
+   "data": "2026-08-29",
+   "cat": "compras",
+   "valor": 8.76,
+   "desc": "SHOPEE AAZyy · parc. 2 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 2,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-24",
+   "data": "2026-09-03",
+   "cat": "compras",
+   "valor": 11.9,
+   "desc": "SHOPEE LSFCENTERLTDA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-25",
+   "data": "2026-09-03",
+   "cat": "mercado",
+   "valor": 40.66,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-26",
+   "data": "2026-09-04",
+   "cat": "mercado",
+   "valor": 35.96,
+   "desc": "SUPERMERCADO BARAO CEN",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-27",
+   "data": "2026-09-05",
+   "cat": "mercado",
+   "valor": 1214.68,
+   "desc": "MART MINAS",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-28",
+   "data": "2026-09-05",
+   "cat": "outros",
+   "valor": 210.0,
+   "desc": "Voxel",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-29",
+   "data": "2026-09-05",
+   "cat": "outros",
+   "valor": 39.0,
+   "desc": "JIM.COM WENDERSON AR",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-30",
+   "data": "2026-09-06",
+   "cat": "mercado",
+   "valor": 10.94,
+   "desc": "PAO DA LAPA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-31",
+   "data": "2026-09-06",
+   "cat": "combustivel",
+   "valor": 100.0,
+   "desc": "AUTO POSTO SAO JOSE DA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-32",
+   "data": "2026-09-08",
+   "cat": "restaurante",
+   "valor": 7.95,
+   "desc": "IFOOD CLUB",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-33",
+   "data": "2026-09-11",
+   "cat": "mercado",
+   "valor": 45.0,
+   "desc": "PAO DA LAPA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-34",
+   "data": "2026-09-12",
+   "cat": "servicos",
+   "valor": 96.98,
+   "desc": "AQUABEAT",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-35",
+   "data": "2026-09-12",
+   "cat": "servicos",
+   "valor": 29.9,
+   "desc": "AQUABEAT",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-36",
+   "data": "2026-09-12",
+   "cat": "servicos",
+   "valor": 15.0,
+   "desc": "AQUABEAT",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-37",
+   "data": "2026-09-12",
+   "cat": "servicos",
+   "valor": 56.63,
+   "desc": "AQUABEAT",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-38",
+   "data": "2026-09-12",
+   "cat": "mercado",
+   "valor": 38.1,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-39",
+   "data": "2026-09-14",
+   "cat": "combustivel",
+   "valor": 100.0,
+   "desc": "POSTO LAPENSE LTDA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-40",
+   "data": "2026-09-15",
+   "cat": "juros",
+   "valor": 3.04,
+   "desc": "IOF CREDITO PARCELADO",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-41",
+   "data": "2026-09-15",
+   "cat": "outros",
+   "valor": 95.16,
+   "desc": "PIX CRED PARC CEMIG (luz no Pix parcelado) · parc. 1 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 1,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-42",
+   "data": "2026-09-15",
+   "cat": "roupas",
+   "valor": 33.97,
+   "desc": "SHOPEE LCVest2ModaInt",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-43",
+   "data": "2026-09-17",
+   "cat": "roupas",
+   "valor": 16.18,
+   "desc": "SHOPEE FabioGomes · parc. 1 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 1,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-44",
+   "data": "2026-09-17",
+   "cat": "mercado",
+   "valor": 72.5,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-45",
+   "data": "2026-09-18",
+   "cat": "mercado",
+   "valor": 13.58,
+   "desc": "PAO DA LAPA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-46",
+   "data": "2026-09-18",
+   "cat": "mercado",
+   "valor": 10.99,
+   "desc": "MERCEARIA DO TONINHO",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-47",
+   "data": "2026-09-18",
+   "cat": "farmacia",
+   "valor": 52.5,
+   "desc": "MP MAISAUDE",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-48",
+   "data": "2026-09-18",
+   "cat": "combustivel",
+   "valor": 100.0,
+   "desc": "AUTO POSTO SAO JOSE DA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-49",
+   "data": "2026-09-19",
+   "cat": "mercado",
+   "valor": 120.34,
+   "desc": "HORTIFRUTI FAMILIA SIL",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-50",
+   "data": "2026-09-19",
+   "cat": "servicos",
+   "valor": 14.99,
+   "desc": "GOOGLE (assinatura)",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-51",
+   "data": "2026-09-22",
+   "cat": "mercado",
+   "valor": 133.36,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-52",
+   "data": "2026-09-24",
+   "cat": "mercado",
+   "valor": 10.99,
+   "desc": "MERCEARIA DO TONINHO",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-53",
+   "data": "2026-09-25",
+   "cat": "combustivel",
+   "valor": 100.0,
+   "desc": "POSTO LAPA DOURADA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-54",
+   "data": "2026-09-26",
+   "cat": "mercado",
+   "valor": 150.0,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-55",
+   "data": "2026-09-28",
+   "cat": "mercado",
+   "valor": 155.0,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-56",
+   "data": "2026-09-29",
+   "cat": "farmacia",
+   "valor": 34.38,
+   "desc": "DROGARIA LUCENA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-57",
+   "data": "2026-09-30",
+   "cat": "outros",
+   "valor": 117.2,
+   "desc": "PIX CRED A VISTA TVIP TELECOM",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-58",
+   "data": "2026-09-30",
+   "cat": "juros",
+   "valor": 5.77,
+   "desc": "JUROS PIX CREDITO",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-59",
+   "data": "2026-10-01",
+   "cat": "combustivel",
+   "valor": 100.0,
+   "desc": "POSTO LAPENSE LTDA",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-60",
+   "data": "2026-10-03",
+   "cat": "juros",
+   "valor": 1.31,
+   "desc": "IOF",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-61",
+   "data": "2026-07-17",
+   "cat": "servicos",
+   "valor": 141.45,
+   "desc": "AQUABEAT (cartão final 2183) · parc. 3 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 3,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-62",
+   "data": "2026-09-26",
+   "cat": "mercado",
+   "valor": 32.36,
+   "desc": "APP ALWAYSFIT (cartão final 2183) · parc. 1 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 1,
+   "fim": "2026-10"
+  },
+  {
+   "id": "inter-out26-63",
+   "data": "2026-09-26",
+   "cat": "outros",
+   "valor": 149.12,
+   "desc": "PIX CRED A VISTA RECEITA FEDERAL (cartão final 2183)",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "inter-out26-64",
+   "data": "2026-09-26",
+   "cat": "juros",
+   "valor": 10.28,
+   "desc": "JUROS PIX CREDITO (cartão final 2183)",
+   "fatura": "2026-10"
+  }
+ ]
+}
