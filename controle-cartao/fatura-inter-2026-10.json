@@ -1,0 +1,174 @@
+{
+ "nome": "Fatura Inter – outubro/2026",
+ "categorias": [
+  {
+   "id": "pet",
+   "nome": "Pet Shop",
+   "icone": "🐶"
+  },
+  {
+   "id": "construcao",
+   "nome": "Construção",
+   "icone": "🧱"
+  },
+  {
+   "id": "servicos",
+   "nome": "Serviços",
+   "icone": "🛠️"
+  },
+  {
+   "id": "compras",
+   "nome": "Compras online",
+   "icone": "🛍️"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-2026-10-01",
+   "data": "2026-10-06",
+   "cat": "mercado",
+   "valor": 63.07,
+   "desc": "SUPERMERCADOS BH (data aproximada)"
+  },
+  {
+   "id": "inter-2026-10-02",
+   "data": "2026-10-05",
+   "cat": "restaurante",
+   "valor": 57.0,
+   "desc": "FACEBURGUER DELIVERY"
+  },
+  {
+   "id": "inter-2026-10-03",
+   "data": "2026-10-04",
+   "cat": "mercado",
+   "valor": 73.49,
+   "desc": "MP SABORDACASA"
+  },
+  {
+   "id": "inter-2026-10-04",
+   "data": "2026-10-03",
+   "cat": "mercado",
+   "valor": 97.0,
+   "desc": "SUPERMERCADOS BH"
+  },
+  {
+   "id": "inter-2026-10-05",
+   "data": "2026-10-03",
+   "cat": "mercado",
+   "valor": 16.22,
+   "desc": "PAO DA LAPA"
+  },
+  {
+   "id": "inter-2026-10-06",
+   "data": "2026-10-01",
+   "cat": "mercado",
+   "valor": 21.59,
+   "desc": "PADARIA E CONFEITARIA (data aproximada) · compra em 30/09"
+  },
+  {
+   "id": "inter-2026-10-07",
+   "data": "2026-10-01",
+   "cat": "mercado",
+   "valor": 32.33,
+   "desc": "APP ALWAYSFIT · parcela 2/4 · compra em 26/09"
+  },
+  {
+   "id": "inter-2026-10-08",
+   "data": "2026-10-01",
+   "cat": "roupas",
+   "valor": 16.17,
+   "desc": "SHOPEE FABIOGOMES · parcela 2/2 · compra em 17/09"
+  },
+  {
+   "id": "inter-2026-10-09",
+   "data": "2026-10-01",
+   "cat": "outros",
+   "valor": 95.16,
+   "desc": "PIX CRED PARC CEMIG (luz no Pix parcelado) · parcela 2/4 · compra em 15/09"
+  },
+  {
+   "id": "inter-2026-10-10",
+   "data": "2026-10-01",
+   "cat": "outros",
+   "valor": 10.68,
+   "desc": "SHOPEE JLIGHTILUMINAC (data aproximada) · parcela 3/3 · compra em 25/08"
+  },
+  {
+   "id": "inter-2026-10-11",
+   "data": "2026-10-01",
+   "cat": "outros",
+   "valor": 30.86,
+   "desc": "PIX CRED PARC CLAUDIO ANSELMO FERN · parcela 3/4 · compra em 24/08"
+  },
+  {
+   "id": "inter-2026-10-12",
+   "data": "2026-10-01",
+   "cat": "servicos",
+   "valor": 13.74,
+   "desc": "SHOPEE QUEROOBRA · parcela 3/4 · compra em 23/08"
+  },
+  {
+   "id": "inter-2026-10-13",
+   "data": "2026-10-01",
+   "cat": "roupas",
+   "valor": 29.27,
+   "desc": "SHOPEE BOTINASUNIAO · parcela 3/3 · compra em 15/08"
+  },
+  {
+   "id": "inter-2026-10-14",
+   "data": "2026-10-01",
+   "cat": "outros",
+   "valor": 15.52,
+   "desc": "SHOPEE PANOTEX (data aproximada) · parcela 3/5 · compra em 15/08"
+  },
+  {
+   "id": "inter-2026-10-15",
+   "data": "2026-10-01",
+   "cat": "compras",
+   "valor": 9.84,
+   "desc": "SHOPEE REISEMPIRE · parcela 3/3 · compra em 13/08"
+  },
+  {
+   "id": "inter-2026-10-16",
+   "data": "2026-10-01",
+   "cat": "compras",
+   "valor": 28.96,
+   "desc": "SHOPEE DWCOMMERCE · parcela 3/12 · compra em 08/08"
+  },
+  {
+   "id": "inter-2026-10-17",
+   "data": "2026-10-01",
+   "cat": "servicos",
+   "valor": 23.39,
+   "desc": "SHOPEE SHPSTECNOLOGIA · parcela 3/4 · compra em 07/08"
+  },
+  {
+   "id": "inter-2026-10-18",
+   "data": "2026-10-01",
+   "cat": "pet",
+   "valor": 25.47,
+   "desc": "SHOPEE Agrofal · parcela 3/3 · compra em 06/08"
+  },
+  {
+   "id": "inter-2026-10-19",
+   "data": "2026-10-01",
+   "cat": "construcao",
+   "valor": 13.5,
+   "desc": "SHOPEE VSAFERRAGENS · parcela 3/3 · compra em 06/08"
+  },
+  {
+   "id": "inter-2026-10-20",
+   "data": "2026-10-01",
+   "cat": "servicos",
+   "valor": 141.45,
+   "desc": "AQUABEAT · parcela 4/4 · compra em 17/07"
+  },
+  {
+   "id": "inter-2026-10-21",
+   "data": "2026-10-01",
+   "cat": "roupas",
+   "valor": 6.48,
+   "desc": "SHOPEE RUBYCLOSET · parcela 6/12 · compra em 10/05"
+  }
+ ]
+}
