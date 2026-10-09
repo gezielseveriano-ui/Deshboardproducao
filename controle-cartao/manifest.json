@@ -1,6 +1,6 @@
 {
-  "name": "Controle do Cartão",
-  "short_name": "Cartão",
+  "name": "Admin. Financeira",
+  "short_name": "Admin. Financeira",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
