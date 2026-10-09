@@ -142,6 +142,15 @@ nav button b { display: block; font-size: 22px; font-weight: normal; }
 nav button.on { color: var(--brand); font-weight: 700; }
 .tab { display: none; }
 .tab.on { display: block; }
+.alerta { border-left: 6px solid var(--ok); }
+.alerta.amarelo { border-left-color: #e0a100; }
+.alerta.vermelho { border-left-color: var(--bad); background: var(--bad-soft); }
+.alerta .tit { font-weight: 800; font-size: 16px; }
+.alerta .bar { height: 14px; background: var(--bg); }
+.alerta .bar > div { background: var(--ok); }
+.alerta.amarelo .bar > div { background: #e0a100; }
+.alerta.vermelho .bar > div { background: var(--bad); }
+.tag.parc { background: var(--brand-soft); color: var(--brand); }
 .toast {
   position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
   background: #1d2330; color: #fff; padding: 10px 16px; border-radius: 10px;
@@ -162,6 +171,7 @@ nav button.on { color: var(--brand); font-weight: 700; }
 </header>
 
 <main>
+  <div class="card alerta" id="alerta"></div>
   <!-- ===== LANÇAR ===== -->
   <section class="tab on" id="tab-lancar">
     <div class="card">
@@ -170,14 +180,17 @@ nav button.on { color: var(--brand); font-weight: 700; }
       <div class="chips" id="chipsCat"></div>
       <div class="row">
         <div>
-          <label>Valor (R$)</label>
-          <input id="gValor" inputmode="decimal" placeholder="150,00">
+          <label>Valor total (R$)</label>
+          <input id="gValor" inputmode="decimal" placeholder="150,00" oninput="previaParcelas()">
         </div>
         <div>
-          <label>Data</label>
-          <input id="gData" type="date">
+          <label>Parcelas</label>
+          <select id="gParc" onchange="previaParcelas()"></select>
         </div>
       </div>
+      <div class="muted" id="gPrevia" style="margin-top:6px"></div>
+      <label>Data da compra</label>
+      <input id="gData" type="date" onchange="previaParcelas()">
       <label>Observação (opcional)</label>
       <input id="gDesc" placeholder="Ex.: Atacadão, compra do mês">
       <button class="btn" onclick="salvarGasto()">Anotar gasto</button>
@@ -234,6 +247,14 @@ nav button.on { color: var(--brand); font-weight: 700; }
       <div id="rCats"></div>
     </div>
     <div class="card">
+      <h2>💳 Compras parceladas: quanto falta</h2>
+      <div id="rParc"></div>
+    </div>
+    <div class="card">
+      <h2>📅 Parcelas já comprometidas nos próximos meses</h2>
+      <div id="rFuturo"></div>
+    </div>
+    <div class="card">
       <h2>Comparar com o mês anterior</h2>
       <div id="rComp"></div>
     </div>
@@ -245,7 +266,10 @@ nav button.on { color: var(--brand); font-weight: 700; }
     <div class="card">
       <h2>Salário</h2>
       <input id="aSal" inputmode="decimal">
-      <button class="btn sec" onclick="salvarSalario()">Salvar salário</button>
+      <label>Quanto quero guardar por mês (R$)</label>
+      <input id="aMeta" inputmode="decimal" placeholder="0,00">
+      <p class="muted">O limite do cartão é: salário − contas fixas − o que você quer guardar.</p>
+      <button class="btn sec" onclick="salvarSalario()">Salvar</button>
     </div>
     <div class="card">
       <h2>Categorias</h2>
@@ -390,7 +414,44 @@ function toast(msg) {
 }
 
 // ---------- cálculos ----------
-function gastosDoMes(ym) { return db.gastos.filter(g => g.data.slice(0, 7) === ym); }
+function mesesEntre(a, b) {
+  const [ay, am] = a.split('-').map(Number), [by, bm] = b.split('-').map(Number);
+  return (by * 12 + bm) - (ay * 12 + am);
+}
+function abrevMes(ym) {
+  const [a, m] = ym.split('-').map(Number);
+  return new Date(a, m - 1, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(a).slice(2);
+}
+// Compra parcelada: "valor" é o valor de cada parcela, "parcelas" o total de
+// parcelas e "parcelaAtual" qual parcela cai no mês da "data" (1 para compras
+// novas). Parcelas anteriores a essa já tinham sido pagas antes do controle.
+function parcelaNoMes(g, ym) {
+  const n = g.parcelas || 1, k0 = g.parcelaAtual || 1;
+  const k = k0 + mesesEntre(g.data.slice(0, 7), ym);
+  return k >= k0 && k <= n ? k : null;
+}
+function faltamDepois(g, ym) {
+  const n = g.parcelas || 1, k0 = g.parcelaAtual || 1;
+  const k = k0 + mesesEntre(g.data.slice(0, 7), ym);
+  return k < k0 ? n - k0 + 1 : Math.max(0, n - k);
+}
+function gastosDoMes(ym) {
+  const out = [];
+  for (const g of db.gastos) {
+    const k = parcelaNoMes(g, ym);
+    if (k) out.push({ ...g, k });
+  }
+  return out;
+}
+function limiteCartao(ym) {
+  return db.salario - resumoFixas(ym).comprometido - (db.metaSobra || 0);
+}
+function situacao(ym) {
+  const usado = totalCartao(ym), limite = limiteCartao(ym);
+  const pct = limite > 0 ? usado / limite * 100 : (usado > 0 ? 999 : 0);
+  const nivel = pct > 100 ? 'vermelho' : pct >= 75 ? 'amarelo' : 'verde';
+  return { usado, limite, pct, nivel, resta: limite - usado };
+}
 function totalCartao(ym) { return gastosDoMes(ym).reduce((s, g) => s + g.valor, 0); }
 function porCategoria(ym) {
   const m = {};
@@ -435,21 +496,38 @@ function salvarGasto() {
   const valor = numero(document.getElementById('gValor').value);
   const data = document.getElementById('gData').value || hojeISO();
   const desc = document.getElementById('gDesc').value.trim();
+  const n = Number(document.getElementById('gParc').value) || 1;
   if (!catSel) return toast('Escolha a categoria');
   if (!(valor > 0)) return toast('Informe o valor');
+  const nivelAntes = situacao(mesAtual).nivel;
   const id = novoId();
-  db.gastos.push({ id, data, cat: catSel, valor, desc });
+  const g = { id, data, cat: catSel, valor: Math.round(valor / n * 100) / 100, desc };
+  if (n > 1) { g.parcelas = n; g.parcelaAtual = 1; }
+  db.gastos.push(g);
   marca('g:' + id);
+  document.getElementById('gParc').value = '1';
   gravar();
   document.getElementById('gValor').value = '';
   document.getElementById('gDesc').value = '';
   if (data.slice(0, 7) !== mesAtual) mesAtual = data.slice(0, 7);
-  toast(cat(catSel).icone + ' ' + brl(valor) + ' anotado!');
+  toast(cat(catSel).icone + ' ' + (n > 1 ? n + 'x de ' + brl(g.valor) : brl(valor)) + ' anotado!');
   render();
+  previaParcelas();
+  const sit = situacao(mesAtual);
+  if (sit.nivel === 'vermelho' && nivelAntes !== 'vermelho') {
+    alert('🚨 ATENÇÃO!\n\nO cartão de ' + nomeMes(mesAtual) + ' passou do limite em ' + brl(-sit.resta) +
+      '.\n\nCom o salário e as contas fixas, não sobra para esse gasto. Evite usar o cartão até o mês que vem.');
+  } else if (sit.nivel === 'amarelo' && nivelAntes === 'verde') {
+    alert('⚠️ Cuidado: o cartão já usou ' + sit.pct.toFixed(0) + '% do limite deste mês.\nSó restam ' + brl(sit.resta) + '.');
+  }
 }
 function apagarGasto(id) {
   const g = db.gastos.find(x => x.id === id);
-  if (!g || !confirm('Apagar ' + cat(g.cat).nome + ' de ' + brl(g.valor) + '?')) return;
+  if (!g) return;
+  const pergunta = g.parcelas > 1
+    ? 'Apagar a compra parcelada ' + cat(g.cat).nome + ' (' + g.parcelas + 'x de ' + brl(g.valor) + ')?\nTodas as parcelas saem de todos os meses.'
+    : 'Apagar ' + cat(g.cat).nome + ' de ' + brl(g.valor) + '?';
+  if (!confirm(pergunta)) return;
   db.gastos = db.gastos.filter(x => x.id !== id);
   apaga('g:' + id);
   gravar(); render();
@@ -505,7 +583,11 @@ function apagarFixa(id) {
 function salvarSalario() {
   const v = numero(document.getElementById('aSal').value);
   if (!(v >= 0)) return toast('Valor inválido');
-  db.salario = v; marca('salario'); gravar(); toast('Salário salvo'); render();
+  const meta = numero(document.getElementById('aMeta').value || '0');
+  if (!(meta >= 0)) return toast('Valor a guardar inválido');
+  db.salario = v; marca('salario');
+  db.metaSobra = meta; marca('metaSobra');
+  gravar(); toast('Salário salvo'); render();
 }
 function salvarCat() {
   const nome = document.getElementById('cNome').value.trim();
@@ -580,6 +662,10 @@ function textoResumo() {
   });
   t += '\n💰 Salário: ' + brl(db.salario) + '\n';
   t += (sobra >= 0 ? '✅ Sobra: ' : '🚨 Falta: ') + brl(Math.abs(sobra));
+  const sit = situacao(mesAtual);
+  t += '\n' + (sit.nivel === 'vermelho' ? '🚨 Cartão passou do limite em ' + brl(-sit.resta)
+    : sit.nivel === 'amarelo' ? '⚠️ Cartão em ' + sit.pct.toFixed(0) + '% do limite'
+    : '✅ Cartão em ' + sit.pct.toFixed(0) + '% do limite');
   return t;
 }
 function compartilhar() {
@@ -592,6 +678,82 @@ function compartilhar() {
 }
 
 // ---------- telas ----------
+function renderAlerta() {
+  const s = situacao(mesAtual);
+  const el = document.getElementById('alerta');
+  el.className = 'card alerta ' + s.nivel;
+  const tit = s.nivel === 'vermelho' ? '🚨 Passou do limite em ' + brl(-s.resta) + '!'
+    : s.nivel === 'amarelo' ? '⚠️ Cuidado: restam só ' + brl(s.resta)
+    : '✅ Dentro do limite: ainda pode gastar ' + brl(s.resta);
+  const sub = s.nivel === 'vermelho'
+    ? 'O salário não cobre o cartão + as contas fixas deste mês. Segure os gastos no cartão.'
+    : 'Limite do cartão = salário ' + brl(db.salario) + ' − contas fixas ' + brl(resumoFixas(mesAtual).comprometido) +
+      (db.metaSobra ? ' − guardar ' + brl(db.metaSobra) : '');
+  const prox = mesDeslocado(mesAtual, 1);
+  const jaProx = totalCartao(prox);
+  el.innerHTML = `<div class="tit">${tit}</div>
+    <div class="row" style="margin-top:6px;align-items:baseline">
+      <div class="muted">Cartão: <b>${brl(s.usado)}</b> de ${brl(Math.max(0, s.limite))}</div>
+      <div style="text-align:right;font-weight:700">${Math.min(s.pct, 999).toFixed(0)}%</div>
+    </div>
+    <div class="bar"><div style="width:${Math.min(100, s.pct)}%"></div></div>
+    <div class="muted" style="margin-top:6px">${sub}</div>
+    ${jaProx > 0 ? `<div class="muted" style="margin-top:4px">📅 ${nomeMes(prox)} já começa com <b>${brl(jaProx)}</b> em parcelas.</div>` : ''}`;
+}
+function renderParcelados() {
+  const ativos = db.gastos.filter(g => g.parcelas > 1 && faltamDepois(g, mesAtual) + (parcelaNoMes(g, mesAtual) ? 1 : 0) > 0)
+    .map(g => ({ g, k: parcelaNoMes(g, mesAtual), faltam: faltamDepois(g, mesAtual) }))
+    .sort((a, b) => b.faltam * b.g.valor - a.faltam * a.g.valor);
+  const totalFalta = ativos.reduce((s, x) => s + x.faltam * x.g.valor, 0);
+  document.getElementById('rParc').innerHTML = ativos.length ? ativos.map(({ g, k, faltam }) => {
+    const c = cat(g.cat);
+    const fim = mesDeslocado(g.data.slice(0, 7), g.parcelas - (g.parcelaAtual || 1));
+    const nome = (g.desc || c.nome).replace(/ · parcela \d+\/\d+/, '').replace(/ · compra em .*/, '');
+    return `<div class="item">
+      <div class="ic">${esc(c.icone)}</div>
+      <div class="info"><div class="t">${esc(nome)}</div>
+        <div class="s">${g.parcelas}x de ${brl(g.valor)} · ${k ? 'parcela ' + k + '/' + g.parcelas + ' neste mês' : 'começa depois'} · termina ${abrevMes(fim)}</div></div>
+      <div style="text-align:right"><div class="v">${brl(faltam * g.valor)}</div><div class="muted">${faltam ? 'faltam ' + faltam : 'última!'}</div></div>
+    </div>`;
+  }).join('') + `<div class="item"><div class="info"><div class="t">Total que ainda falta pagar</div><div class="s">depois de ${nomeMes(mesAtual)}</div></div><div class="v neg">${brl(totalFalta)}</div></div>`
+    : '<div class="empty">Nenhuma compra parcelada em andamento.</div>';
+
+  let html = '';
+  for (let i = 1; i <= 6; i++) {
+    const ym = mesDeslocado(mesAtual, i);
+    const v = totalCartao(ym), lim = limiteCartao(ym);
+    if (!v) continue;
+    const pct = lim > 0 ? v / lim * 100 : 999;
+    html += `<div style="margin-bottom:10px">
+      <div class="row" style="align-items:baseline"><div><b>${nomeMes(ym)}</b></div>
+        <div style="text-align:right"><b>${brl(v)}</b> <span class="muted">${pct.toFixed(0)}% do limite</span></div></div>
+      <div class="bar"><div style="width:${Math.min(100, pct)}%;background:${pct > 100 ? 'var(--bad)' : pct >= 75 ? '#e0a100' : 'var(--ok)'}"></div></div>
+    </div>`;
+  }
+  document.getElementById('rFuturo').innerHTML = html || '<div class="empty">Nenhuma parcela para os próximos meses.</div>';
+}
+function previaParcelas() {
+  const n = Number(document.getElementById('gParc').value) || 1;
+  const v = numero(document.getElementById('gValor').value);
+  const el = document.getElementById('gPrevia');
+  if (n <= 1 || !(v > 0)) { el.textContent = ''; return; }
+  const ini = (document.getElementById('gData').value || hojeISO()).slice(0, 7);
+  el.innerHTML = '➡️ <b>' + n + 'x de ' + brl(Math.round(v / n * 100) / 100) + '</b> · de ' + abrevMes(ini) + ' até ' + abrevMes(mesDeslocado(ini, n - 1));
+}
+// Lançamentos importados das faturas trazem "parcela 3/5" na observação:
+// transforma em compra parcelada para contar as parcelas que faltam.
+function migrarParcelas() {
+  let mudou = false;
+  for (const g of db.gastos) {
+    if (g.parcelas || !g.desc) continue;
+    const m = g.desc.match(/parcela (\d+)\/(\d+)/);
+    if (!m) continue;
+    g.parcelas = Number(m[2]); g.parcelaAtual = Number(m[1]);
+    marca('g:' + g.id); mudou = true;
+  }
+  return mudou;
+}
+
 function renderChips() {
   document.getElementById('chipsCat').innerHTML = db.categorias.map(c =>
     `<button class="chip ${c.id === catSel ? 'on' : ''}" onclick="escolherCat('${c.id}')">${esc(c.icone)} ${esc(c.nome)}</button>`
@@ -610,11 +772,14 @@ function render() {
     const dia = g.data.split('-').reverse().slice(0, 2).join('/');
     return `<div class="item">
       <div class="ic">${esc(c.icone)}</div>
-      <div class="info"><div class="t">${esc(c.nome)}</div><div class="s">${dia}${g.desc ? ' · ' + esc(g.desc) : ''}</div></div>
+      <div class="info"><div class="t">${esc(c.nome)} ${g.parcelas > 1 ? `<span class="tag parc">${g.k}/${g.parcelas}</span>` : ''}</div><div class="s">${dia}${g.desc ? ' · ' + esc(g.desc.replace(/ · parcela \d+\/\d+/, '')) : ''}</div></div>
       <div class="v">${brl(g.valor)}</div>
       <button class="x" onclick="apagarGasto('${g.id}')" aria-label="Apagar">✕</button>
     </div>`;
   }).join('') : '<div class="empty">Nenhum gasto anotado neste mês.</div>';
+
+  renderAlerta();
+  renderParcelados();
 
   // Fixas
   const fxs = fixasDoMes(mesAtual);
@@ -695,6 +860,8 @@ function render() {
   // Ajustes
   const aSal = document.getElementById('aSal');
   if (document.activeElement !== aSal) aSal.value = String(db.salario).replace('.', ',');
+  const aMeta = document.getElementById('aMeta');
+  if (document.activeElement !== aMeta) aMeta.value = db.metaSobra ? String(db.metaSobra).replace('.', ',') : '';
   document.getElementById('listaCats').innerHTML = db.categorias.map(c =>
     `<div class="item"><div class="ic">${esc(c.icone)}</div><div class="info"><div class="t">${esc(c.nome)}</div></div>
      <button class="x" onclick="apagarCat('${c.id}')" aria-label="Remover">🗑</button></div>`
@@ -735,6 +902,7 @@ async function importarFaturas() {
     } catch (e) {}
   }
   if (location.search) history.replaceState(null, '', location.pathname);
+  migrarParcelas();
   gravar();
   if (qtd) {
     mesAtual = ultimoMes;
@@ -823,6 +991,7 @@ function mesclar(a, b) {
   return {
     ...a,
     salario: ((a.mod || {}).salario || 0) >= ((b.mod || {}).salario || 0) ? a.salario : b.salario,
+    metaSobra: ((a.mod || {}).metaSobra || 0) >= ((b.mod || {}).metaSobra || 0) ? a.metaSobra : b.metaSobra,
     categorias: lista(a.categorias, b.categorias, 'c:'),
     gastos: lista(a.gastos, b.gastos, 'g:'),
     fixas: lista(a.fixas, b.fixas, 'f:'),
@@ -857,6 +1026,7 @@ async function sincronizar(manual) {
       const versao = (r && r.versao) || 0;
       const antes = estavel(compartilhado(db));
       if (remoto) db = mesclar(db, remoto);
+      migrarParcelas();
       const depois = compartilhado(db);
       if (estavel(depois) !== antes) { gravar(true); render(); }
       if (remoto && estavel(depois) === estavel(remoto)) break;
@@ -959,6 +1129,9 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sinc
 setInterval(() => { if (!document.hidden) sincronizar(); }, 20000);
 
 document.getElementById('gData').value = hojeISO();
+document.getElementById('gParc').innerHTML = '<option value="1">À vista</option>' +
+  Array.from({ length: 23 }, (_, i) => `<option value="${i + 2}">${i + 2}x</option>`).join('');
+if (migrarParcelas()) gravar(true);
 lerConvite();
 render();
 (async () => {
