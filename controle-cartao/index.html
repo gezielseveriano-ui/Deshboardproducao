@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#ff7a00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Controle do Cartão</title>
+<style>
+:root {
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --text: #1d2330;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --brand: #ff7a00;
+  --brand-soft: #fff1e5;
+  --ok: #15803d;
+  --ok-soft: #e8f6ec;
+  --bad: #c62828;
+  --bad-soft: #fdecec;
+  --shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b;
+    --card: #1c2028;
+    --text: #e8eaee;
+    --muted: #9aa1ad;
+    --line: #2c313b;
+    --brand: #ff8f2b;
+    --brand-soft: #3a2614;
+    --ok: #4ade80;
+    --ok-soft: #15291c;
+    --bad: #f87171;
+    --bad-soft: #3a1a1a;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 16px;
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+header {
+  background: var(--brand);
+  color: #fff;
+  padding: 14px 16px 12px;
+  position: sticky; top: 0; z-index: 5;
+}
+header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+.mes {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 8px;
+}
+.mes button {
+  background: rgba(255,255,255,.2); color: #fff; border: 0;
+  width: 40px; height: 36px; border-radius: 10px; font-size: 20px;
+}
+.mes span { font-weight: 600; font-size: 17px; }
+main { padding: 12px 16px; max-width: 640px; margin: 0 auto; }
+.card {
+  background: var(--card); border-radius: 14px; padding: 14px;
+  margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.card h2 { margin: 0 0 10px; font-size: 16px; }
+label { display: block; font-size: 13px; color: var(--muted); margin: 8px 0 4px; }
+input, select, textarea {
+  width: 100%; padding: 12px; font-size: 16px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); color: var(--text);
+}
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1; min-width: 0; }
+.btn {
+  display: block; width: 100%; padding: 14px; border: 0; border-radius: 12px;
+  background: var(--brand); color: #fff; font-size: 16px; font-weight: 700;
+  margin-top: 12px;
+}
+.btn.sec { background: var(--brand-soft); color: var(--brand); }
+.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  border: 1px solid var(--line); background: var(--card); color: var(--text);
+  padding: 10px 12px; border-radius: 999px; font-size: 15px;
+}
+.chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.item:last-child { border-bottom: 0; }
+.item .ic { font-size: 22px; width: 32px; text-align: center; }
+.item .info { flex: 1; min-width: 0; }
+.item .t { font-weight: 600; }
+.item .s { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .v { font-weight: 700; white-space: nowrap; }
+.x {
+  background: transparent; border: 0; color: var(--muted);
+  font-size: 18px; padding: 6px 8px;
+}
+.big { font-size: 26px; font-weight: 800; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kpi { background: var(--bg); border-radius: 12px; padding: 10px; }
+.kpi .l { font-size: 12px; color: var(--muted); }
+.kpi .n { font-size: 18px; font-weight: 700; margin-top: 2px; }
+.pos { color: var(--ok); }
+.neg { color: var(--bad); }
+.bar { height: 10px; background: var(--bg); border-radius: 6px; overflow: hidden; margin-top: 6px; }
+.bar > div { height: 100%; background: var(--brand); border-radius: 6px; }
+.tag { display: inline-block; white-space: nowrap; font-size: 12px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.tag.bad { background: var(--bad-soft); color: var(--bad); }
+.tag.wait { background: var(--bg); color: var(--muted); }
+.empty { color: var(--muted); text-align: center; padding: 16px 0; font-size: 14px; }
+.muted { color: var(--muted); font-size: 13px; }
+nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
+  display: flex; background: var(--card); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+nav button {
+  flex: 1; border: 0; background: transparent; color: var(--muted);
+  padding: 8px 0 10px; font-size: 12px;
+}
+nav button b { display: block; font-size: 22px; font-weight: normal; }
+nav button.on { color: var(--brand); font-weight: 700; }
+.tab { display: none; }
+.tab.on { display: block; }
+.toast {
+  position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+  background: #1d2330; color: #fff; padding: 10px 16px; border-radius: 10px;
+  font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>💳 Controle do Cartão Inter</h1>
+  <div class="mes">
+    <button onclick="mudaMes(-1)" aria-label="Mês anterior">‹</button>
+    <span id="mesNome"></span>
+    <button onclick="mudaMes(1)" aria-label="Próximo mês">›</button>
+  </div>
+</header>
+
+<main>
+  <!-- ===== LANÇAR ===== -->
+  <section class="tab on" id="tab-lancar">
+    <div class="card">
+      <h2>Novo gasto no cartão</h2>
+      <label>Categoria</label>
+      <div class="chips" id="chipsCat"></div>
+      <div class="row">
+        <div>
+          <label>Valor (R$)</label>
+          <input id="gValor" inputmode="decimal" placeholder="150,00">
+        </div>
+        <div>
+          <label>Data</label>
+          <input id="gData" type="date">
+        </div>
+      </div>
+      <label>Observação (opcional)</label>
+      <input id="gDesc" placeholder="Ex.: Atacadão, compra do mês">
+      <button class="btn" onclick="salvarGasto()">Anotar gasto</button>
+    </div>
+
+    <div class="card">
+      <h2>Gastos do mês <span class="muted" id="totalMesLista"></span></h2>
+      <div id="listaGastos"></div>
+    </div>
+  </section>
+
+  <!-- ===== FIXAS ===== -->
+  <section class="tab" id="tab-fixas">
+    <div class="card">
+      <h2>Contas fixas do mês</h2>
+      <p class="muted" style="margin-top:0">Toque em "Pagar" e informe quanto veio. Se passar do previsto, fica vermelho.</p>
+      <div id="listaFixas"></div>
+      <div class="grid2" style="margin-top:10px">
+        <div class="kpi"><div class="l">Previsto</div><div class="n" id="fxPrev"></div></div>
+        <div class="kpi"><div class="l">Pago até agora</div><div class="n" id="fxPago"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Cadastrar conta fixa</h2>
+      <div class="row">
+        <div style="flex:1.4">
+          <label>Nome</label>
+          <input id="fNome" placeholder="Ex.: Luz">
+        </div>
+        <div>
+          <label>Previsto (R$)</label>
+          <input id="fPrev" inputmode="decimal" placeholder="300,00">
+        </div>
+      </div>
+      <button class="btn sec" onclick="salvarFixa()">Adicionar conta fixa</button>
+    </div>
+  </section>
+
+  <!-- ===== RESUMO ===== -->
+  <section class="tab" id="tab-resumo">
+    <div class="card">
+      <h2>Quanto sobra no mês</h2>
+      <div class="big" id="rSobra"></div>
+      <div class="muted" id="rSobraTxt"></div>
+      <div class="grid2" style="margin-top:12px">
+        <div class="kpi"><div class="l">Salário</div><div class="n" id="rSal"></div></div>
+        <div class="kpi"><div class="l">Cartão (gastos)</div><div class="n" id="rCartao"></div></div>
+        <div class="kpi"><div class="l">Contas fixas</div><div class="n" id="rFixas"></div></div>
+        <div class="kpi"><div class="l">Fixas acima do previsto</div><div class="n" id="rEstouro"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Onde foi o dinheiro do cartão</h2>
+      <div id="rCats"></div>
+    </div>
+    <div class="card">
+      <h2>Comparar com o mês anterior</h2>
+      <div id="rComp"></div>
+    </div>
+    <button class="btn" onclick="compartilhar()">📲 Enviar resumo no WhatsApp</button>
+  </section>
+
+  <!-- ===== AJUSTES ===== -->
+  <section class="tab" id="tab-ajustes">
+    <div class="card">
+      <h2>Salário</h2>
+      <input id="aSal" inputmode="decimal">
+      <button class="btn sec" onclick="salvarSalario()">Salvar salário</button>
+    </div>
+    <div class="card">
+      <h2>Categorias</h2>
+      <div id="listaCats"></div>
+      <div class="row" style="margin-top:8px">
+        <div style="flex:0 0 70px">
+          <label>Ícone</label>
+          <input id="cIcone" placeholder="🛒" maxlength="4">
+        </div>
+        <div>
+          <label>Nome</label>
+          <input id="cNome" placeholder="Ex.: Padaria">
+        </div>
+      </div>
+      <button class="btn sec" onclick="salvarCat()">Adicionar categoria</button>
+    </div>
+    <div class="card">
+      <h2>Cópia de segurança</h2>
+      <p class="muted" style="margin-top:0">Os dados ficam salvos neste celular. Faça uma cópia de vez em quando (e guarde no Google Drive ou mande pra você no WhatsApp). Se trocar de celular, é só restaurar.</p>
+      <button class="btn sec" onclick="exportar()">⬇️ Baixar cópia de segurança</button>
+      <button class="btn ghost" onclick="document.getElementById('arqImport').click()">⬆️ Restaurar cópia</button>
+      <input type="file" id="arqImport" accept=".json,application/json" style="display:none" onchange="importar(event)">
+      <p class="muted" id="ultBackup"></p>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button class="on" data-tab="lancar" onclick="aba('lancar')"><b>➕</b>Lançar</button>
+  <button data-tab="fixas" onclick="aba('fixas')"><b>📌</b>Fixas</button>
+  <button data-tab="resumo" onclick="aba('resumo')"><b>📊</b>Resumo</button>
+  <button data-tab="ajustes" onclick="aba('ajustes')"><b>⚙️</b>Ajustes</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CHAVE = 'controle-cartao-v1';
+
+const PADRAO = {
+  salario: 6500,
+  categorias: [
+    { id: 'mercado', nome: 'Supermercado', icone: '🛒' },
+    { id: 'combustivel', nome: 'Combustível', icone: '⛽' },
+    { id: 'farmacia', nome: 'Farmácia', icone: '💊' },
+    { id: 'passeio', nome: 'Passeios', icone: '🎡' },
+    { id: 'restaurante', nome: 'Restaurante / Lanche', icone: '🍔' },
+    { id: 'roupas', nome: 'Roupas', icone: '👕' },
+    { id: 'casa', nome: 'Casa', icone: '🏠' },
+    { id: 'outros', nome: 'Outros', icone: '📦' }
+  ],
+  gastos: [],
+  fixas: [
+    { id: 'luz', nome: 'Luz', previsto: 300 },
+    { id: 'agua', nome: 'Água', previsto: 100 },
+    { id: 'internet', nome: 'Internet', previsto: 100 }
+  ],
+  pagamentos: {},
+  ultimoBackup: null
+};
+
+let db = carregar();
+let mesAtual = hojeISO().slice(0, 7);
+let catSel = db.categorias[0] && db.categorias[0].id;
+
+function carregar() {
+  try {
+    const raw = localStorage.getItem(CHAVE);
+    if (raw) return Object.assign(structuredClone(PADRAO), JSON.parse(raw));
+  } catch (e) {}
+  return structuredClone(PADRAO);
+}
+function gravar() {
+  try { localStorage.setItem(CHAVE, JSON.stringify(db)); }
+  catch (e) { toast('Não consegui salvar neste navegador!'); }
+}
+
+// ---------- utilidades ----------
+function hojeISO() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+function novoId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function brl(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function numero(txt) {
+  txt = String(txt || '').trim().replace(/[R$\s]/g, '');
+  if (txt.includes(',')) txt = txt.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(txt);
+  return isNaN(n) ? NaN : Math.round(n * 100) / 100;
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function nomeMes(ym) {
+  const [a, m] = ym.split('-').map(Number);
+  const t = new Date(a, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function mesDeslocado(ym, delta) {
+  const [a, m] = ym.split('-').map(Number);
+  const d = new Date(a, m - 1 + delta, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function cat(id) {
+  return db.categorias.find(c => c.id === id) || { id, nome: 'Categoria removida', icone: '❔' };
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---------- cálculos ----------
+function gastosDoMes(ym) { return db.gastos.filter(g => g.data.slice(0, 7) === ym); }
+function totalCartao(ym) { return gastosDoMes(ym).reduce((s, g) => s + g.valor, 0); }
+function porCategoria(ym) {
+  const m = {};
+  gastosDoMes(ym).forEach(g => { m[g.cat] = (m[g.cat] || 0) + g.valor; });
+  return m;
+}
+function fixasDoMes(ym) {
+  const pg = db.pagamentos[ym] || {};
+  return db.fixas.map(f => ({ ...f, pago: pg[f.id] }));
+}
+function resumoFixas(ym) {
+  let previsto = 0, pago = 0, estouro = 0, comprometido = 0;
+  fixasDoMes(ym).forEach(f => {
+    previsto += f.previsto;
+    if (f.pago != null) {
+      pago += f.pago;
+      comprometido += f.pago;
+      if (f.pago > f.previsto) estouro += f.pago - f.previsto;
+    } else {
+      comprometido += f.previsto;
+    }
+  });
+  return { previsto, pago, estouro, comprometido };
+}
+
+// ---------- navegação ----------
+function aba(nome) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + nome));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === nome));
+  window.scrollTo(0, 0);
+  render();
+}
+function mudaMes(d) {
+  mesAtual = mesDeslocado(mesAtual, d);
+  const hoje = hojeISO();
+  document.getElementById('gData').value = hoje.slice(0, 7) === mesAtual ? hoje : mesAtual + '-01';
+  render();
+}
+
+// ---------- ações ----------
+function salvarGasto() {
+  const valor = numero(document.getElementById('gValor').value);
+  const data = document.getElementById('gData').value || hojeISO();
+  const desc = document.getElementById('gDesc').value.trim();
+  if (!catSel) return toast('Escolha a categoria');
+  if (!(valor > 0)) return toast('Informe o valor');
+  db.gastos.push({ id: novoId(), data, cat: catSel, valor, desc });
+  gravar();
+  document.getElementById('gValor').value = '';
+  document.getElementById('gDesc').value = '';
+  if (data.slice(0, 7) !== mesAtual) mesAtual = data.slice(0, 7);
+  toast(cat(catSel).icone + ' ' + brl(valor) + ' anotado!');
+  render();
+}
+function apagarGasto(id) {
+  const g = db.gastos.find(x => x.id === id);
+  if (!g || !confirm('Apagar ' + cat(g.cat).nome + ' de ' + brl(g.valor) + '?')) return;
+  db.gastos = db.gastos.filter(x => x.id !== id);
+  gravar(); render();
+}
+function salvarFixa() {
+  const nome = document.getElementById('fNome').value.trim();
+  const prev = numero(document.getElementById('fPrev').value);
+  if (!nome) return toast('Informe o nome da conta');
+  if (!(prev >= 0)) return toast('Informe o valor previsto');
+  db.fixas.push({ id: novoId(), nome, previsto: prev });
+  gravar();
+  document.getElementById('fNome').value = '';
+  document.getElementById('fPrev').value = '';
+  toast('Conta fixa adicionada');
+  render();
+}
+function pagarFixa(id) {
+  const f = db.fixas.find(x => x.id === id);
+  const pg = (db.pagamentos[mesAtual] || {})[id];
+  const resp = prompt('Quanto veio a conta de ' + f.nome + ' em ' + nomeMes(mesAtual) + '?\n(previsto: ' + brl(f.previsto) + ')',
+    String(pg != null ? pg : f.previsto).replace('.', ','));
+  if (resp === null) return;
+  const v = numero(resp);
+  if (!(v >= 0)) return toast('Valor inválido');
+  db.pagamentos[mesAtual] = db.pagamentos[mesAtual] || {};
+  db.pagamentos[mesAtual][id] = v;
+  gravar(); render();
+  if (v > f.previsto) toast('⚠️ ' + f.nome + ' veio ' + brl(v - f.previsto) + ' acima do previsto');
+}
+function desfazerPagamento(id) {
+  if (db.pagamentos[mesAtual]) delete db.pagamentos[mesAtual][id];
+  gravar(); render();
+}
+function editarPrevisto(id) {
+  const f = db.fixas.find(x => x.id === id);
+  const resp = prompt('Novo valor previsto para ' + f.nome + ':', String(f.previsto).replace('.', ','));
+  if (resp === null) return;
+  const v = numero(resp);
+  if (!(v >= 0)) return toast('Valor inválido');
+  f.previsto = v; gravar(); render();
+}
+function apagarFixa(id) {
+  const f = db.fixas.find(x => x.id === id);
+  if (!confirm('Remover a conta fixa "' + f.nome + '"?')) return;
+  db.fixas = db.fixas.filter(x => x.id !== id);
+  gravar(); render();
+}
+function salvarSalario() {
+  const v = numero(document.getElementById('aSal').value);
+  if (!(v >= 0)) return toast('Valor inválido');
+  db.salario = v; gravar(); toast('Salário salvo'); render();
+}
+function salvarCat() {
+  const nome = document.getElementById('cNome').value.trim();
+  const icone = document.getElementById('cIcone').value.trim() || '🏷️';
+  if (!nome) return toast('Informe o nome da categoria');
+  db.categorias.push({ id: novoId(), nome, icone });
+  gravar();
+  document.getElementById('cNome').value = '';
+  document.getElementById('cIcone').value = '';
+  toast('Categoria adicionada'); render();
+}
+function apagarCat(id) {
+  const usados = db.gastos.filter(g => g.cat === id).length;
+  const c = cat(id);
+  if (usados) return toast('"' + c.nome + '" tem ' + usados + ' gasto(s). Apague-os antes.');
+  if (!confirm('Remover a categoria "' + c.nome + '"?')) return;
+  db.categorias = db.categorias.filter(x => x.id !== id);
+  if (catSel === id) catSel = db.categorias[0] && db.categorias[0].id;
+  gravar(); render();
+}
+function escolherCat(id) { catSel = id; renderChips(); }
+
+function exportar() {
+  db.ultimoBackup = new Date().toISOString();
+  gravar();
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'controle-cartao-' + hojeISO() + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  render();
+}
+function importar(ev) {
+  const arq = ev.target.files[0];
+  if (!arq) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const dados = JSON.parse(r.result);
+      if (!Array.isArray(dados.gastos) || !Array.isArray(dados.categorias)) throw 0;
+      if (!confirm('Isso vai substituir os dados deste celular pela cópia. Continuar?')) return;
+      db = Object.assign(structuredClone(PADRAO), dados);
+      gravar(); toast('Cópia restaurada!'); render();
+    } catch (e) { toast('Arquivo inválido'); }
+    ev.target.value = '';
+  };
+  r.readAsText(arq);
+}
+
+function textoResumo() {
+  const pc = porCategoria(mesAtual);
+  const cartao = totalCartao(mesAtual);
+  const fx = resumoFixas(mesAtual);
+  const sobra = db.salario - cartao - fx.comprometido;
+  let t = '*Resumo ' + nomeMes(mesAtual) + '*\n\n';
+  t += '💳 Cartão: ' + brl(cartao) + '\n';
+  Object.entries(pc).sort((a, b) => b[1] - a[1]).forEach(([id, v]) => {
+    t += '  ' + cat(id).icone + ' ' + cat(id).nome + ': ' + brl(v) + '\n';
+  });
+  t += '\n📌 Contas fixas: ' + brl(fx.comprometido) + ' (previsto ' + brl(fx.previsto) + ')\n';
+  fixasDoMes(mesAtual).forEach(f => {
+    if (f.pago != null) {
+      const dif = f.pago - f.previsto;
+      t += '  ' + f.nome + ': ' + brl(f.pago) + (dif > 0 ? ' ⚠️ +' + brl(dif) : dif < 0 ? ' ✅' : '') + '\n';
+    } else {
+      t += '  ' + f.nome + ': a pagar (' + brl(f.previsto) + ')\n';
+    }
+  });
+  t += '\n💰 Salário: ' + brl(db.salario) + '\n';
+  t += (sobra >= 0 ? '✅ Sobra: ' : '🚨 Falta: ') + brl(Math.abs(sobra));
+  return t;
+}
+function compartilhar() {
+  const t = textoResumo();
+  if (navigator.share) {
+    navigator.share({ text: t }).catch(() => {});
+  } else {
+    window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank');
+  }
+}
+
+// ---------- telas ----------
+function renderChips() {
+  document.getElementById('chipsCat').innerHTML = db.categorias.map(c =>
+    `<button class="chip ${c.id === catSel ? 'on' : ''}" onclick="escolherCat('${c.id}')">${esc(c.icone)} ${esc(c.nome)}</button>`
+  ).join('');
+}
+
+function render() {
+  document.getElementById('mesNome').textContent = nomeMes(mesAtual);
+  renderChips();
+
+  // Lista de gastos
+  const gs = gastosDoMes(mesAtual).sort((a, b) => b.data.localeCompare(a.data) || b.id.localeCompare(a.id));
+  document.getElementById('totalMesLista').textContent = '· ' + brl(totalCartao(mesAtual));
+  document.getElementById('listaGastos').innerHTML = gs.length ? gs.map(g => {
+    const c = cat(g.cat);
+    const dia = g.data.split('-').reverse().slice(0, 2).join('/');
+    return `<div class="item">
+      <div class="ic">${esc(c.icone)}</div>
+      <div class="info"><div class="t">${esc(c.nome)}</div><div class="s">${dia}${g.desc ? ' · ' + esc(g.desc) : ''}</div></div>
+      <div class="v">${brl(g.valor)}</div>
+      <button class="x" onclick="apagarGasto('${g.id}')" aria-label="Apagar">✕</button>
+    </div>`;
+  }).join('') : '<div class="empty">Nenhum gasto anotado neste mês.</div>';
+
+  // Fixas
+  const fxs = fixasDoMes(mesAtual);
+  document.getElementById('listaFixas').innerHTML = fxs.length ? fxs.map(f => {
+    let tag, val;
+    if (f.pago == null) {
+      tag = '<span class="tag wait">a pagar</span>';
+      val = `<div class="v">${brl(f.previsto)}</div>`;
+    } else {
+      const dif = f.pago - f.previsto;
+      tag = dif > 0 ? `<span class="tag bad">+${brl(dif)} acima</span>`
+          : dif < 0 ? `<span class="tag ok">${brl(-dif)} abaixo</span>`
+          : '<span class="tag ok">no previsto</span>';
+      val = `<div class="v ${dif > 0 ? 'neg' : 'pos'}">${brl(f.pago)}</div>`;
+    }
+    return `<div class="item">
+      <div class="info">
+        <div class="t">${esc(f.nome)}</div>
+        <div style="margin:2px 0">${tag}</div>
+        <div class="s">Previsto ${brl(f.previsto)} · <a href="#" onclick="editarPrevisto('${f.id}');return false">mudar</a></div>
+      </div>
+      ${val}
+      ${f.pago == null
+        ? `<button class="chip" onclick="pagarFixa('${f.id}')">Pagar</button>`
+        : `<button class="x" onclick="pagarFixa('${f.id}')" aria-label="Editar">✎</button><button class="x" onclick="desfazerPagamento('${f.id}')" aria-label="Desfazer">↺</button>`}
+      <button class="x" onclick="apagarFixa('${f.id}')" aria-label="Remover">🗑</button>
+    </div>`;
+  }).join('') : '<div class="empty">Nenhuma conta fixa cadastrada.</div>';
+  const rf = resumoFixas(mesAtual);
+  document.getElementById('fxPrev').textContent = brl(rf.previsto);
+  document.getElementById('fxPago').textContent = brl(rf.pago);
+
+  // Resumo
+  const cartao = totalCartao(mesAtual);
+  const sobra = db.salario - cartao - rf.comprometido;
+  const elS = document.getElementById('rSobra');
+  elS.textContent = (sobra < 0 ? '- ' : '') + brl(Math.abs(sobra));
+  elS.className = 'big ' + (sobra >= 0 ? 'pos' : 'neg');
+  document.getElementById('rSobraTxt').textContent =
+    'Salário − cartão − contas fixas (as não pagas entram pelo previsto)';
+  document.getElementById('rSal').textContent = brl(db.salario);
+  document.getElementById('rCartao').textContent = brl(cartao);
+  document.getElementById('rFixas').textContent = brl(rf.comprometido);
+  const elE = document.getElementById('rEstouro');
+  elE.textContent = brl(rf.estouro);
+  elE.className = 'n ' + (rf.estouro > 0 ? 'neg' : 'pos');
+
+  const pc = porCategoria(mesAtual);
+  const ordem = Object.entries(pc).sort((a, b) => b[1] - a[1]);
+  document.getElementById('rCats').innerHTML = ordem.length ? ordem.map(([id, v]) => {
+    const c = cat(id);
+    const pct = cartao ? v / cartao * 100 : 0;
+    return `<div style="margin-bottom:12px">
+      <div class="row" style="align-items:baseline">
+        <div>${esc(c.icone)} <b>${esc(c.nome)}</b></div>
+        <div style="text-align:right"><b>${brl(v)}</b> <span class="muted">${pct.toFixed(0)}%</span></div>
+      </div>
+      <div class="bar"><div style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('') : '<div class="empty">Sem gastos no cartão neste mês.</div>';
+
+  const ant = mesDeslocado(mesAtual, -1);
+  const pcAnt = porCategoria(ant);
+  const ids = [...new Set([...Object.keys(pc), ...Object.keys(pcAnt)])];
+  const totAnt = totalCartao(ant);
+  document.getElementById('rComp').innerHTML = ids.length ? (
+    `<div class="muted" style="margin-bottom:6px">${nomeMes(ant)} → ${nomeMes(mesAtual)}</div>` +
+    ids.map(id => {
+      const a = pcAnt[id] || 0, b = pc[id] || 0, d = b - a;
+      return `<div class="item"><div class="ic">${esc(cat(id).icone)}</div>
+        <div class="info"><div class="t">${esc(cat(id).nome)}</div><div class="s">${brl(a)} → ${brl(b)}</div></div>
+        <div class="v ${d > 0 ? 'neg' : 'pos'}">${d > 0 ? '+' : ''}${brl(d)}</div></div>`;
+    }).join('') +
+    `<div class="item"><div class="info"><div class="t">Total do cartão</div><div class="s">${brl(totAnt)} → ${brl(cartao)}</div></div>
+      <div class="v ${cartao - totAnt > 0 ? 'neg' : 'pos'}">${cartao - totAnt > 0 ? '+' : ''}${brl(cartao - totAnt)}</div></div>`
+  ) : '<div class="empty">Ainda sem dados para comparar.</div>';
+
+  // Ajustes
+  const aSal = document.getElementById('aSal');
+  if (document.activeElement !== aSal) aSal.value = String(db.salario).replace('.', ',');
+  document.getElementById('listaCats').innerHTML = db.categorias.map(c =>
+    `<div class="item"><div class="ic">${esc(c.icone)}</div><div class="info"><div class="t">${esc(c.nome)}</div></div>
+     <button class="x" onclick="apagarCat('${c.id}')" aria-label="Remover">🗑</button></div>`
+  ).join('');
+  document.getElementById('ultBackup').textContent = db.ultimoBackup
+    ? 'Última cópia: ' + new Date(db.ultimoBackup).toLocaleString('pt-BR')
+    : 'Nenhuma cópia feita ainda.';
+}
+
+document.getElementById('gData').value = hojeISO();
+render();
+</script>
+</body>
+</html>
