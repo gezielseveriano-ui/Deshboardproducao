@@ -657,39 +657,47 @@ function render() {
     : 'Nenhuma cópia feita ainda.';
 }
 
-// Importação por link: index.html?importar=arquivo.json
-// Junta categorias e gastos novos aos dados do celular, sem apagar nada
-// e sem duplicar (cada gasto importado tem um id fixo).
-async function importarPorLink() {
-  const arq = new URLSearchParams(location.search).get('importar');
-  if (!arq) return;
-  history.replaceState(null, '', location.pathname);
-  if (!/^[\w.-]+\.json$/.test(arq)) return toast('Link de importação inválido');
+// Faturas publicadas no GitHub (lista em faturas.json) entram sozinhas
+// ao abrir o app. Cada fatura é importada uma única vez por celular, então
+// se um lançamento importado for apagado aqui, ele não volta.
+async function importarFaturas() {
+  db.faturasImportadas = db.faturasImportadas || [];
+  let lista;
   try {
-    const r = await fetch(arq, { cache: 'no-store' });
-    if (!r.ok) throw 0;
-    const dados = await r.json();
-    const ids = new Set(db.gastos.map(g => g.id));
-    const novos = (dados.gastos || []).filter(g => !ids.has(g.id));
-    if (!novos.length) return toast('Esses lançamentos já foram importados');
-    const total = novos.reduce((s, g) => s + g.valor, 0);
-    if (!confirm('Importar ' + novos.length + ' lançamentos de "' + (dados.nome || arq) + '"?\nTotal: ' + brl(total))) return;
-    (dados.categorias || []).forEach(c => {
-      if (!db.categorias.some(x => x.id === c.id)) db.categorias.push(c);
-    });
-    db.gastos.push(...novos);
-    gravar();
-    mesAtual = novos[0].data.slice(0, 7);
+    const r = await fetch('faturas.json', { cache: 'no-store' });
+    if (!r.ok) return;
+    lista = await r.json();
+  } catch (e) { return; }
+  let qtd = 0, ultimoMes = null;
+  for (const arq of lista) {
+    if (db.faturasImportadas.includes(arq) || !/^[\w.-]+\.json$/.test(arq)) continue;
+    try {
+      const r = await fetch(arq, { cache: 'no-store' });
+      if (!r.ok) continue;
+      const dados = await r.json();
+      (dados.categorias || []).forEach(c => {
+        if (!db.categorias.some(x => x.id === c.id)) db.categorias.push(c);
+      });
+      const ids = new Set(db.gastos.map(g => g.id));
+      const novos = (dados.gastos || []).filter(g => !ids.has(g.id));
+      db.gastos.push(...novos);
+      db.faturasImportadas.push(arq);
+      qtd += novos.length;
+      if (novos.length) ultimoMes = novos[0].data.slice(0, 7);
+    } catch (e) {}
+  }
+  if (location.search) history.replaceState(null, '', location.pathname);
+  gravar();
+  if (qtd) {
+    mesAtual = ultimoMes;
     render();
-    toast(novos.length + ' lançamentos importados!');
-  } catch (e) {
-    toast('Não consegui importar. Tente de novo com internet.');
+    toast('💳 ' + qtd + ' lançamentos da fatura entraram no app!');
   }
 }
 
 document.getElementById('gData').value = hojeISO();
 render();
-importarPorLink();
+importarFaturas();
 </script>
 </body>
 </html>
