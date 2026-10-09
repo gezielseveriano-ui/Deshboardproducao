@@ -270,7 +270,7 @@ nav button.on { color: var(--brand); font-weight: 700; }
     <div class="card">
       <h2>Salário</h2>
       <input id="aSal" inputmode="decimal">
-      <label>Dia do fechamento da fatura</label>
+      <label>Dia do fechamento da fatura (compras desse dia já vão para a próxima)</label>
       <input id="aCorte" inputmode="numeric" placeholder="3">
       <label>Quanto quero guardar por mês (R$)</label>
       <input id="aMeta" inputmode="decimal" placeholder="0,00">
@@ -326,6 +326,11 @@ nav button.on { color: var(--brand); font-weight: 700; }
       <input type="file" id="arqImport" accept=".json,application/json" style="display:none" onchange="importar(event)">
       <p class="muted" id="ultBackup"></p>
     </div>
+    <div class="card" id="cardDup" style="display:none">
+      <h2>🧹 Duplicados removidos</h2>
+      <p class="muted" style="margin-top:0">Lançamentos feitos à mão que já tinham vindo pela fatura importada. Se algum era um gasto de verdade, toque em "Voltar".</p>
+      <div id="listaDup"></div>
+    </div>
     <div class="card">
       <h2>Versão do app</h2>
       <p class="muted" style="margin-top:0" id="versaoTxt"></p>
@@ -345,7 +350,7 @@ nav button.on { color: var(--brand); font-weight: 700; }
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-09-2';
+const APP_VERSAO = '2026-10-09-3';
 
 const PADRAO = {
   salario: 6500,
@@ -434,13 +439,14 @@ function abrevMes(ym) {
   const [a, m] = ym.split('-').map(Number);
   return new Date(a, m - 1, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(a).slice(2);
 }
-// O controle é por fatura: compra feita até o dia do fechamento entra na
-// fatura do mesmo mês; depois do fechamento, na fatura do mês seguinte.
+// O controle é por fatura: compra feita antes do dia do fechamento entra na
+// fatura do mesmo mês; do dia do fechamento em diante, na do mês seguinte
+// (na fatura do Inter, compras de 03/10 já foram para a de novembro).
 // Ex.: fechamento dia 3 → compra em 09/10 cai na fatura de novembro.
 function mesFatura(data) {
   const corte = db.diaCorte || 3;
   const dia = Number(data.slice(8, 10));
-  return dia <= corte ? data.slice(0, 7) : mesDeslocado(data.slice(0, 7), 1);
+  return dia < corte ? data.slice(0, 7) : mesDeslocado(data.slice(0, 7), 1);
 }
 function mesBase(g) { return g.fatura || mesFatura(g.data); }
 // Compra parcelada: "valor" é o valor de cada parcela, "parcelas" o total de
@@ -769,6 +775,64 @@ function previaParcelas() {
   const ini = mesFatura(document.getElementById('gData').value || hojeISO());
   el.innerHTML = '➡️ <b>' + n + 'x de ' + brl(Math.round(v / n * 100) / 100) + '</b> · de ' + abrevMes(ini) + ' até ' + abrevMes(mesDeslocado(ini, n - 1));
 }
+// Tira lançamentos feitos à mão que repetem um lançamento importado da fatura:
+// mesmo valor e mesma fatura com data próxima ou mesma categoria (ou data
+// próxima numa fatura vizinha, se a data foi digitada perto do fechamento).
+// Só considera lançamentos feitos antes da importação das faturas (CORTE_DUP),
+// para nunca mexer em gastos novos.
+const CORTE_DUP = 1791590224119;
+function removerDuplicados() {
+  const importados = db.gastos.filter(g => g.id.startsWith('inter-'));
+  const usados = new Set();
+  const dias = (a, b) => Math.abs(new Date(a) - new Date(b)) / 86400000;
+  const removidos = [];
+  for (const m of db.gastos) {
+    if (m.id.startsWith('inter-')) continue;
+    const criado = parseInt(m.id.slice(0, -4), 36);
+    if (!(criado <= CORTE_DUP)) continue;
+    const par = importados.find(i => {
+      if (usados.has(i.id) || Math.abs(i.valor - m.valor) >= 0.005) return false;
+      const mesmoMes = mesBase(i) === mesBase(m);
+      const perto = dias(i.data, m.data) <= 3;
+      return (mesmoMes && (perto || i.cat === m.cat)) || (perto && Math.abs(mesesEntre(mesBase(i), mesBase(m))) <= 1);
+    });
+    if (!par) continue;
+    usados.add(par.id);
+    removidos.push({ ...m, igual: (par.desc || cat(par.cat).nome).replace(/ · .*/, '') });
+  }
+  if (!removidos.length) return 0;
+  const ids = new Set(removidos.map(r => r.id));
+  db.gastos = db.gastos.filter(g => !ids.has(g.id));
+  removidos.forEach(r => apaga('g:' + r.id));
+  db.dupRemovidos = [...(db.dupRemovidos || []), ...removidos];
+  gravar();
+  render();
+  alert('🧹 Tirei ' + removidos.length + ' lançamento(s) duplicado(s), que já vieram pela fatura:\n\n' +
+    removidos.map(r => '• ' + cat(r.cat).nome + ' ' + brl(r.valor) + ' (' + nomeMes(mesBase(r)) + ')').join('\n') +
+    '\n\nSe algum era gasto de verdade, dá para voltar em Ajustes → Duplicados removidos.');
+  return removidos.length;
+}
+function voltarDuplicado(id) {
+  const r = (db.dupRemovidos || []).find(x => x.id === id);
+  if (!r) return;
+  const { igual, ...g } = r;
+  db.gastos.push(g);
+  marca('g:' + g.id);
+  db.dupRemovidos = db.dupRemovidos.filter(x => x.id !== id);
+  gravar(); render();
+  toast('Lançamento devolvido');
+}
+function renderDup() {
+  const lista = db.dupRemovidos || [];
+  document.getElementById('cardDup').style.display = lista.length ? '' : 'none';
+  document.getElementById('listaDup').innerHTML = lista.map(r => `<div class="item">
+      <div class="ic">${esc(cat(r.cat).icone)}</div>
+      <div class="info"><div class="t">${esc(cat(r.cat).nome)} · ${brl(r.valor)}</div>
+        <div class="s">${r.data.split('-').reverse().join('/')} · igual a: ${esc(r.igual)}</div></div>
+      <button class="chip" onclick="voltarDuplicado('${r.id}')">Voltar</button>
+    </div>`).join('');
+}
+
 // Lançamentos importados das faturas trazem "parcela 3/5" na observação:
 // transforma em compra parcelada para contar as parcelas que faltam.
 function migrarParcelas() {
@@ -900,6 +964,7 @@ function render() {
      <button class="x" onclick="apagarCat('${c.id}')" aria-label="Remover">🗑</button></div>`
   ).join('');
   renderSync();
+  renderDup();
   document.getElementById('versaoTxt').textContent = 'Versão ' + APP_VERSAO;
   document.getElementById('ultBackup').textContent = db.ultimoBackup
     ? 'Última cópia: ' + new Date(db.ultimoBackup).toLocaleString('pt-BR')
@@ -1031,6 +1096,8 @@ function mesclar(a, b) {
     gastos: lista(a.gastos, b.gastos, 'g:'),
     fixas: lista(a.fixas, b.fixas, 'f:'),
     pagamentos, mod, apagados,
+    dupRemovidos: Object.values(Object.fromEntries([...(b.dupRemovidos || []), ...(a.dupRemovidos || [])].map(r => [r.id, r])))
+      .filter(r => !(a.gastos || []).concat(b.gastos || []).some(g => g.id === r.id && vivo('g:' + r.id))),
     faturasImportadas: [...new Set([...(a.faturasImportadas || []), ...(b.faturasImportadas || [])])]
   };
 }
@@ -1195,6 +1262,7 @@ render();
   atualizarApp();
   await sincronizar();
   await importarFaturas();
+  removerDuplicados();
 })();
 </script>
 </body>
