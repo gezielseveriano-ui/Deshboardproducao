@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffa040"/>
+      <stop offset="1" stop-color="#ff6a00"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b2f3a"/>
+      <stop offset="1" stop-color="#11141a"/>
+    </linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#7a2e00" flood-opacity=".35"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g filter="url(#sh)" transform="rotate(-12 256 250)">
+    <rect x="86" y="140" width="320" height="204" rx="26" fill="url(#card)"/>
+    <rect x="86" y="182" width="320" height="34" fill="#ff8a1f"/>
+    <rect x="116" y="246" width="58" height="42" rx="8" fill="#f5c451"/>
+    <path d="M116 260h58M116 274h58M136 246v42M154 246v42" stroke="#c99a2e" stroke-width="3"/>
+    <circle cx="340" cy="300" r="16" fill="#ff8a1f"/>
+    <circle cx="364" cy="300" r="16" fill="#ffb15e" opacity=".9"/>
+  </g>
+  <g filter="url(#sh)">
+    <circle cx="370" cy="372" r="78" fill="#ffffff"/>
+    <circle cx="370" cy="372" r="64" fill="#22a85a"/>
+    <path d="M338 374l22 22 44-46" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
