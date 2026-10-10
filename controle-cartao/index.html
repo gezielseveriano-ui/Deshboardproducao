@@ -246,8 +246,9 @@ select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; m
       <div class="grid2" style="margin-top:12px">
         <div class="kpi"><div class="l">Salário</div><div class="n" id="rSal"></div></div>
         <div class="kpi"><div class="l">Cartão (gastos)</div><div class="n" id="rCartao"></div></div>
-        <div class="kpi"><div class="l">Contas fixas (fora do cartão)</div><div class="n" id="rFixas"></div></div>
-        <div class="kpi"><div class="l">Fixas acima do previsto</div><div class="n" id="rEstouro"></div></div>
+        <div class="kpi"><div class="l">Contas pagas fora do cartão</div><div class="n" id="rFixas"></div></div>
+        <div class="kpi"><div class="l" id="rReservaL">Ainda reservado no cartão</div><div class="n" id="rReserva"></div></div>
+        <div class="kpi" style="grid-column:1/-1"><div class="l">Fixas acima do previsto</div><div class="n" id="rEstouro"></div></div>
       </div>
     </div>
     <div class="card">
@@ -354,7 +355,7 @@ select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; m
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-10-1';
+const APP_VERSAO = '2026-10-10-2';
 
 const PADRAO = {
   salario: 6500,
@@ -505,12 +506,13 @@ function fixasDoMes(ym) {
 }
 function categoriasDeFixas() { return new Set(db.fixas.filter(f => f.cat).map(f => f.cat)); }
 function resumoFixas(ym) {
-  let previsto = 0, pago = 0, estouro = 0, comprometido = 0;
+  let previsto = 0, pago = 0, estouro = 0, comprometido = 0, reserva = 0, nomesCartao = [];
   fixasDoMes(ym).forEach(f => {
     previsto += f.previsto;
     if (f.noCartao) {
       pago += f.pago;
-      comprometido += Math.max(0, f.previsto - f.pago);
+      reserva += Math.max(0, f.previsto - f.pago);
+      nomesCartao.push(f.nome);
       if (f.pago > f.previsto) estouro += f.pago - f.previsto;
     } else if (f.pago != null) {
       pago += f.pago;
@@ -520,7 +522,9 @@ function resumoFixas(ym) {
       comprometido += f.previsto;
     }
   });
-  return { previsto, pago, estouro, comprometido };
+  // "comprometido" = contas pagas fora do cartão; "reserva" = o que ainda falta
+  // gastar no cartão das fixas que são pagas nele (ex.: Supermercado).
+  return { previsto, pago, estouro, comprometido: comprometido + reserva, fora: comprometido, reserva, nomesCartao };
 }
 
 // ---------- navegação ----------
@@ -600,7 +604,10 @@ function vincularPorNome() {
   for (const f of db.fixas) {
     if (f.cat !== undefined) continue;
     const n = norm(f.nome);
-    const c = db.categorias.find(c => norm(c.nome) === n || (n.includes('mercado') && c.id === 'mercado'));
+    const c = db.categorias.find(c => norm(c.nome) === n ||
+      (/mercado|feira|hortifruti/.test(n) && c.id === 'mercado') ||
+      (/combust|gasolina|posto|etanol|alcool/.test(n) && c.id === 'combustivel') ||
+      (/farmacia|remedio|drogaria/.test(n) && c.id === 'farmacia'));
     if (c) { f.cat = c.id; marca('f:' + f.id); mudou = true; }
   }
   return mudou;
@@ -766,7 +773,7 @@ function renderAlerta() {
     : '✅ Dentro do limite: ainda pode gastar ' + brl(s.resta);
   const sub = s.nivel === 'vermelho'
     ? 'O salário não cobre o cartão + as contas fixas deste mês. Segure os gastos no cartão.'
-    : 'Limite do cartão = salário ' + brl(db.salario) + ' − contas fixas ' + brl(resumoFixas(mesAtual).comprometido) +
+    : 'Limite do cartão = salário ' + brl(db.salario) + ' − contas fora do cartão ' + brl(resumoFixas(mesAtual).fora) + (resumoFixas(mesAtual).reserva ? ' − falta gastar das fixas no cartão ' + brl(resumoFixas(mesAtual).reserva) : '') +
       (db.metaSobra ? ' − guardar ' + brl(db.metaSobra) : '');
   const prox = mesDeslocado(mesAtual, 1);
   const jaProx = totalCartao(prox);
@@ -976,10 +983,13 @@ function render() {
   elS.textContent = (sobra < 0 ? '- ' : '') + brl(Math.abs(sobra));
   elS.className = 'big ' + (sobra >= 0 ? 'pos' : 'neg');
   document.getElementById('rSobraTxt').textContent =
-    'Salário − cartão − contas fixas (as não pagas entram pelo previsto)';
+    'Salário − cartão − contas pagas fora do cartão − o que ainda falta gastar das fixas no cartão';
   document.getElementById('rSal').textContent = brl(db.salario);
   document.getElementById('rCartao').textContent = brl(cartao);
-  document.getElementById('rFixas').textContent = brl(rf.comprometido);
+  document.getElementById('rFixas').textContent = brl(rf.fora);
+  document.getElementById('rReserva').textContent = brl(rf.reserva);
+  document.getElementById('rReservaL').textContent = rf.nomesCartao.length
+    ? 'Falta gastar no cartão (' + rf.nomesCartao.join(', ') + ')' : 'Ainda reservado no cartão';
   const elE = document.getElementById('rEstouro');
   elE.textContent = brl(rf.estouro);
   elE.className = 'n ' + (rf.estouro > 0 ? 'neg' : 'pos');
