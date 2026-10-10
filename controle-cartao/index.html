@@ -153,6 +153,7 @@ nav button.on { color: var(--brand); font-weight: 700; }
 .alerta .bar > div { background: var(--ok); }
 .alerta.amarelo .bar > div { background: #e0a100; }
 .alerta.vermelho .bar > div { background: var(--bad); }
+select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; max-width: 100%; color: var(--muted); }
 .tag.parc { background: var(--brand-soft); color: var(--brand); }
 .toast {
   position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
@@ -229,6 +230,9 @@ nav button.on { color: var(--brand); font-weight: 700; }
           <input id="fPrev" inputmode="decimal" placeholder="300,00">
         </div>
       </div>
+      <label>Como paga?</label>
+      <select id="fCat"></select>
+      <p class="muted">Se essa conta é paga no cartão (ex.: Supermercado), escolha a categoria. Assim o app usa os gastos do cartão e não conta duas vezes.</p>
       <button class="btn sec" onclick="salvarFixa()">Adicionar conta fixa</button>
     </div>
   </section>
@@ -242,7 +246,7 @@ nav button.on { color: var(--brand); font-weight: 700; }
       <div class="grid2" style="margin-top:12px">
         <div class="kpi"><div class="l">Salário</div><div class="n" id="rSal"></div></div>
         <div class="kpi"><div class="l">Cartão (gastos)</div><div class="n" id="rCartao"></div></div>
-        <div class="kpi"><div class="l">Contas fixas</div><div class="n" id="rFixas"></div></div>
+        <div class="kpi"><div class="l">Contas fixas (fora do cartão)</div><div class="n" id="rFixas"></div></div>
         <div class="kpi"><div class="l">Fixas acima do previsto</div><div class="n" id="rEstouro"></div></div>
       </div>
     </div>
@@ -350,7 +354,7 @@ nav button.on { color: var(--brand); font-weight: 700; }
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-09-3';
+const APP_VERSAO = '2026-10-10-1';
 
 const PADRAO = {
   salario: 6500,
@@ -489,15 +493,26 @@ function porCategoria(ym) {
   gastosDoMes(ym).forEach(g => { m[g.cat] = (m[g.cat] || 0) + g.valor; });
   return m;
 }
+// Conta fixa "paga no cartão" (f.cat = categoria do cartão): o valor do mês é
+// o que foi gasto no cartão nessa categoria, então ela não soma de novo. Só
+// fica reservado o que ainda falta para chegar no previsto.
 function fixasDoMes(ym) {
   const pg = db.pagamentos[ym] || {};
-  return db.fixas.map(f => ({ ...f, pago: pg[f.id] }));
+  const pc = porCategoria(ym);
+  return db.fixas.map(f => f.cat
+    ? { ...f, noCartao: true, pago: pc[f.cat] || 0 }
+    : { ...f, pago: pg[f.id] });
 }
+function categoriasDeFixas() { return new Set(db.fixas.filter(f => f.cat).map(f => f.cat)); }
 function resumoFixas(ym) {
   let previsto = 0, pago = 0, estouro = 0, comprometido = 0;
   fixasDoMes(ym).forEach(f => {
     previsto += f.previsto;
-    if (f.pago != null) {
+    if (f.noCartao) {
+      pago += f.pago;
+      comprometido += Math.max(0, f.previsto - f.pago);
+      if (f.pago > f.previsto) estouro += f.pago - f.previsto;
+    } else if (f.pago != null) {
       pago += f.pago;
       comprometido += f.pago;
       if (f.pago > f.previsto) estouro += f.pago - f.previsto;
@@ -565,13 +580,39 @@ function apagarGasto(id) {
   apaga('g:' + id);
   gravar(); render();
 }
+function vincularFixa(id, catId) {
+  const f = db.fixas.find(x => x.id === id);
+  if (!f) return;
+  f.cat = catId;
+  marca('f:' + id);
+  gravar(); render();
+  toast(catId ? '💳 ' + f.nome + ' agora conta pelos gastos de ' + cat(catId).nome + ' no cartão' : f.nome + ' é paga fora do cartão');
+}
+function opcoesCartao(sel) {
+  return '<option value="">Paga fora do cartão</option>' + db.categorias.map(c =>
+    `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>💳 No cartão: ${esc(c.nome)}</option>`).join('');
+}
+// Uma conta fixa com o mesmo nome de uma categoria (ex.: "Supermercado")
+// passa a ser paga no cartão. Só quando ainda não foi escolhido (cat undefined).
+function vincularPorNome() {
+  const norm = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  let mudou = false;
+  for (const f of db.fixas) {
+    if (f.cat !== undefined) continue;
+    const n = norm(f.nome);
+    const c = db.categorias.find(c => norm(c.nome) === n || (n.includes('mercado') && c.id === 'mercado'));
+    if (c) { f.cat = c.id; marca('f:' + f.id); mudou = true; }
+  }
+  return mudou;
+}
 function salvarFixa() {
   const nome = document.getElementById('fNome').value.trim();
   const prev = numero(document.getElementById('fPrev').value);
+  const catId = document.getElementById('fCat').value;
   if (!nome) return toast('Informe o nome da conta');
   if (!(prev >= 0)) return toast('Informe o valor previsto');
   const id = novoId();
-  db.fixas.push({ id, nome, previsto: prev });
+  db.fixas.push({ id, nome, previsto: prev, cat: catId });
   marca('f:' + id);
   gravar();
   document.getElementById('fNome').value = '';
@@ -686,9 +727,12 @@ function textoResumo() {
   Object.entries(pc).sort((a, b) => b[1] - a[1]).forEach(([id, v]) => {
     t += '  ' + cat(id).icone + ' ' + cat(id).nome + ': ' + brl(v) + '\n';
   });
-  t += '\n📌 Contas fixas: ' + brl(fx.comprometido) + ' (previsto ' + brl(fx.previsto) + ')\n';
+  t += '\n📌 Contas fixas: previsto ' + brl(fx.previsto) + '\n';
   fixasDoMes(mesAtual).forEach(f => {
-    if (f.pago != null) {
+    if (f.noCartao) {
+      const dif = f.pago - f.previsto;
+      t += '  ' + f.nome + ' (no cartão): ' + brl(f.pago) + ' de ' + brl(f.previsto) + (dif > 0 ? ' ⚠️ +' + brl(dif) : '') + '\n';
+    } else if (f.pago != null) {
       const dif = f.pago - f.previsto;
       t += '  ' + f.nome + ': ' + brl(f.pago) + (dif > 0 ? ' ⚠️ +' + brl(dif) : dif < 0 ? ' ✅' : '') + '\n';
     } else {
@@ -878,8 +922,25 @@ function render() {
 
   // Fixas
   const fxs = fixasDoMes(mesAtual);
+  const selFCat = document.getElementById('fCat');
+  if (document.activeElement !== selFCat) { const v = selFCat.value; selFCat.innerHTML = opcoesCartao(v); }
   document.getElementById('listaFixas').innerHTML = fxs.length ? fxs.map(f => {
     let tag, val;
+    const seletor = `<select class="mini" onchange="vincularFixa('${f.id}', this.value)">${opcoesCartao(f.cat || '')}</select>`;
+    if (f.noCartao) {
+      const dif = f.pago - f.previsto, pct = f.previsto ? Math.min(100, f.pago / f.previsto * 100) : 100;
+      tag = dif > 0 ? `<span class="tag bad">+${brl(dif)} acima</span>` : `<span class="tag ok">faltam ${brl(-dif)}</span>`;
+      return `<div class="item" style="flex-wrap:wrap">
+        <div class="info">
+          <div class="t">${esc(f.nome)} <span class="tag parc">💳 no cartão</span></div>
+          <div style="margin:2px 0">${tag}</div>
+          <div class="s">Gasto no cartão em ${esc(cat(f.cat).nome)} · previsto ${brl(f.previsto)} · <a href="#" onclick="editarPrevisto('${f.id}');return false">mudar</a></div>
+        </div>
+        <div class="v ${dif > 0 ? 'neg' : ''}">${brl(f.pago)}</div>
+        <button class="x" onclick="apagarFixa('${f.id}')" aria-label="Remover">🗑</button>
+        <div style="flex-basis:100%"><div class="bar"><div style="width:${pct}%;background:${dif > 0 ? 'var(--bad)' : 'var(--ok)'}"></div></div>${seletor}</div>
+      </div>`;
+    }
     if (f.pago == null) {
       tag = '<span class="tag wait">a pagar</span>';
       val = `<div class="v">${brl(f.previsto)}</div>`;
@@ -890,7 +951,7 @@ function render() {
           : '<span class="tag ok">no previsto</span>';
       val = `<div class="v ${dif > 0 ? 'neg' : 'pos'}">${brl(f.pago)}</div>`;
     }
-    return `<div class="item">
+    return `<div class="item" style="flex-wrap:wrap">
       <div class="info">
         <div class="t">${esc(f.nome)}</div>
         <div style="margin:2px 0">${tag}</div>
@@ -901,6 +962,7 @@ function render() {
         ? `<button class="chip" onclick="pagarFixa('${f.id}')">Pagar</button>`
         : `<button class="x" onclick="pagarFixa('${f.id}')" aria-label="Editar">✎</button><button class="x" onclick="desfazerPagamento('${f.id}')" aria-label="Desfazer">↺</button>`}
       <button class="x" onclick="apagarFixa('${f.id}')" aria-label="Remover">🗑</button>
+      <div style="flex-basis:100%">${seletor}</div>
     </div>`;
   }).join('') : '<div class="empty">Nenhuma conta fixa cadastrada.</div>';
   const rf = resumoFixas(mesAtual);
@@ -1129,6 +1191,7 @@ async function sincronizar(manual) {
       const antes = estavel(compartilhado(db));
       if (remoto) db = mesclar(db, remoto);
       migrarParcelas();
+      vincularPorNome();
       const depois = compartilhado(db);
       if (estavel(depois) !== antes) { gravar(true); render(); }
       if (remoto && estavel(depois) === estavel(remoto)) break;
@@ -1255,7 +1318,7 @@ setInterval(() => { if (!document.hidden) sincronizar(); }, 20000);
 document.getElementById('gData').value = hojeISO();
 document.getElementById('gParc').innerHTML = '<option value="1">À vista</option>' +
   Array.from({ length: 23 }, (_, i) => `<option value="${i + 2}">${i + 2}x</option>`).join('');
-if (migrarParcelas()) gravar(true);
+if (migrarParcelas() | vincularPorNome()) gravar(true);
 lerConvite();
 render();
 (async () => {
