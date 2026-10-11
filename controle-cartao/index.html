@@ -354,7 +354,7 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-11-3';
+const APP_VERSAO = '2026-10-11-4';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -362,8 +362,8 @@ const CARTOES = [
   { id: 'mp', nome: 'Cartão Mercado Pago', curto: 'Merc. Pago', cor: '#009ee3', icone: '🔵' }
 ];
 // Dias de fechamento e vencimento conhecidos pelas faturas de cada cartão.
-const FECHA_PADRAO = { inter: 3, bradesco: 28 };
-const VENCE_PADRAO = { inter: 10, bradesco: 10 };
+const FECHA_PADRAO = { inter: 3, bradesco: 28, mp: 6 };
+const VENCE_PADRAO = { inter: 10, bradesco: 10, mp: 13 };
 const ABAS = [
   ...CARTOES.map(c => ({ id: c.id, nome: c.curto, icone: c.icone, cor: c.cor })),
   { id: 'salario', nome: 'Salário', icone: '💰', cor: '#15803d' },
@@ -840,8 +840,8 @@ function ajustarFixas() {
 // próxima numa fatura vizinha, se a data foi digitada perto do fechamento).
 // Só considera lançamentos feitos antes da importação das faturas (CORTE_DUP),
 // para nunca mexer em gastos novos.
-const CORTE_DUP = { inter: 1791590224119, bradesco: 1791741886000 };
-const importado = g => g.id.startsWith('inter-') || g.id.startsWith('brad-');
+const CORTE_DUP = { inter: 1791590224119, bradesco: 1791741886000, mp: 1791743729176 };
+const importado = g => g.id.startsWith('inter-') || g.id.startsWith('brad-') || g.id.startsWith('mp-');
 function removerDuplicados() {
   const importados = db.gastos.filter(importado);
   const usados = new Set();

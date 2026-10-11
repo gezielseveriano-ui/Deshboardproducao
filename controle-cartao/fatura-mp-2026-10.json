@@ -1,0 +1,161 @@
+{
+ "nome": "Fatura Mercado Pago – outubro/2026",
+ "categorias": [
+  {
+   "id": "compras",
+   "nome": "Compras online",
+   "icone": "🛍️"
+  },
+  {
+   "id": "servicos",
+   "nome": "Serviços",
+   "icone": "🛠️"
+  },
+  {
+   "id": "construcao",
+   "nome": "Construção",
+   "icone": "🧱"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "mp-out26-01",
+   "cartao": "mp",
+   "data": "2026-09-10",
+   "cat": "servicos",
+   "valor": 14.99,
+   "desc": "GOOGLE (MP*GOOGLEBRASIL)",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "mp-out26-02",
+   "cartao": "mp",
+   "data": "2026-09-11",
+   "cat": "servicos",
+   "valor": 9.99,
+   "desc": "GOOGLE (MP*GOOGLEBRASIL)",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "mp-out26-03",
+   "cartao": "mp",
+   "data": "2026-09-19",
+   "cat": "compras",
+   "valor": 18.28,
+   "desc": "MERCADOLIVRE · parc. 1 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 1
+  },
+  {
+   "id": "mp-out26-04",
+   "cartao": "mp",
+   "data": "2026-09-21",
+   "cat": "compras",
+   "valor": 16.56,
+   "desc": "MERCADOLIVRE · parc. 1 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 1
+  },
+  {
+   "id": "mp-out26-05",
+   "cartao": "mp",
+   "data": "2026-09-22",
+   "cat": "compras",
+   "valor": 33.32,
+   "desc": "MERCADOLIVRE · parc. 1 de 2",
+   "fatura": "2026-10",
+   "parcelas": 2,
+   "parcelaAtual": 1
+  },
+  {
+   "id": "mp-out26-06",
+   "cartao": "mp",
+   "data": "2026-09-28",
+   "cat": "compras",
+   "valor": 14.2,
+   "desc": "MERCADOLIVRE · parc. 1 de 4",
+   "fatura": "2026-10",
+   "parcelas": 4,
+   "parcelaAtual": 1
+  },
+  {
+   "id": "mp-out26-07",
+   "cartao": "mp",
+   "data": "2025-11-20",
+   "cat": "compras",
+   "valor": 82.83,
+   "desc": "MP MERCADOLIVRE · parc. 11 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 11
+  },
+  {
+   "id": "mp-out26-08",
+   "cartao": "mp",
+   "data": "2026-03-14",
+   "cat": "compras",
+   "valor": 28.46,
+   "desc": "MP MERCADOLIVRE · parc. 7 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 7
+  },
+  {
+   "id": "mp-out26-09",
+   "cartao": "mp",
+   "data": "2026-06-23",
+   "cat": "compras",
+   "valor": 40.37,
+   "desc": "MP LORENTTISTORE · parc. 4 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 4
+  },
+  {
+   "id": "mp-out26-10",
+   "cartao": "mp",
+   "data": "2026-07-14",
+   "cat": "compras",
+   "valor": 11.68,
+   "desc": "MERCADOLIVRE SOLUCAO140 · parc. 3 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 3
+  },
+  {
+   "id": "mp-out26-11",
+   "cartao": "mp",
+   "data": "2026-08-10",
+   "cat": "servicos",
+   "valor": 52.67,
+   "desc": "PG PERFECT PAY · parc. 2 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 2
+  },
+  {
+   "id": "mp-out26-12",
+   "cartao": "mp",
+   "data": "2026-08-22",
+   "cat": "construcao",
+   "valor": 25.41,
+   "desc": "MERCADOLIVRE SOACABAMENTO · parc. 2 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 2
+  },
+  {
+   "id": "mp-out26-13",
+   "cartao": "mp",
+   "data": "2026-08-22",
+   "cat": "construcao",
+   "valor": 12.06,
+   "desc": "MERCADOLIVRE SOACABAMENTO · parc. 2 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 2
+  }
+ ]
+}
