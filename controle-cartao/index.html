@@ -14,9 +14,9 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icone-192.png?v=1">
 <link rel="manifest" href="manifest.json">
 <title>Admin. Financeira</title>
-<meta name="description" content="Controle dos gastos do cartão e das contas fixas da família">
+<meta name="description" content="Controle dos gastos dos cartões, do salário e das contas fixas da família">
 <meta property="og:title" content="Admin. Financeira">
-<meta property="og:description" content="Controle dos gastos do cartão e das contas fixas da família">
+<meta property="og:description" content="Controle dos gastos dos cartões, do salário e das contas fixas da família">
 <meta property="og:image" content="https://gezielseveriano-ui.github.io/Deshboardproducao/controle-cartao/icone-512.png">
 <meta property="og:type" content="website">
 <style>
@@ -41,7 +41,6 @@
     --text: #e8eaee;
     --muted: #9aa1ad;
     --line: #2c313b;
-    --brand: #ff8f2b;
     --brand-soft: #3a2614;
     --ok: #4ade80;
     --ok-soft: #15291c;
@@ -62,19 +61,20 @@ body {
 header {
   background: var(--brand);
   color: #fff;
-  padding: 14px 16px 12px;
+  padding: 12px 16px 12px;
   position: sticky; top: 0; z-index: 5;
+  transition: background .2s;
 }
-header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+header h1 { margin: 0; font-size: 15px; font-weight: 600; opacity: .95; }
 .mes {
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 .mes button {
-  background: rgba(255,255,255,.2); color: #fff; border: 0;
-  width: 40px; height: 36px; border-radius: 10px; font-size: 20px;
+  background: rgba(255,255,255,.22); color: #fff; border: 0;
+  width: 44px; height: 44px; border-radius: 12px; font-size: 24px;
 }
-.mes span { font-weight: 600; font-size: 17px; }
+.mes span { font-weight: 800; font-size: 24px; letter-spacing: .5px; text-transform: uppercase; text-align: center; }
 .status { font-size: 12px; opacity: .95; margin-top: 6px; text-align: center; }
 main { padding: 12px 16px; max-width: 640px; margin: 0 auto; }
 .card {
@@ -88,6 +88,7 @@ input, select, textarea {
   border: 1px solid var(--line); border-radius: 10px;
   background: var(--card); color: var(--text);
 }
+input[type=checkbox] { width: auto; }
 .row { display: flex; gap: 8px; }
 .row > * { flex: 1; min-width: 0; }
 .btn {
@@ -117,21 +118,28 @@ input, select, textarea {
   background: transparent; border: 0; color: var(--muted);
   font-size: 18px; padding: 6px 8px;
 }
-.big { font-size: 26px; font-weight: 800; }
+.total {
+  background: var(--brand); color: #fff; text-align: center; padding: 18px 14px;
+}
+.total .l { font-size: 14px; opacity: .95; }
+.total .mesgrande { font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+.total .n { font-size: 38px; font-weight: 800; margin: 6px 0 2px; }
+.total .p { font-size: 13px; opacity: .95; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kpi { background: var(--bg); border-radius: 12px; padding: 10px; }
 .kpi .l { font-size: 12px; color: var(--muted); }
 .kpi .n { font-size: 18px; font-weight: 700; margin-top: 2px; }
 .pos { color: var(--ok); }
 .neg { color: var(--bad); }
-.bar { height: 10px; background: var(--bg); border-radius: 6px; overflow: hidden; margin-top: 6px; }
-.bar > div { height: 100%; background: var(--brand); border-radius: 6px; }
 .tag { display: inline-block; white-space: nowrap; font-size: 12px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
 .tag.ok { background: var(--ok-soft); color: var(--ok); }
 .tag.bad { background: var(--bad-soft); color: var(--bad); }
 .tag.wait { background: var(--bg); color: var(--muted); }
+.tag.parc { background: var(--brand-soft); color: var(--brand); }
 .empty { color: var(--muted); text-align: center; padding: 16px 0; font-size: 14px; }
 .muted { color: var(--muted); font-size: 13px; }
+.linha { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; }
+.linha.tot { border-top: 2px solid var(--line); margin-top: 6px; padding-top: 10px; font-weight: 800; font-size: 18px; }
 nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
   display: flex; background: var(--card); border-top: 1px solid var(--line);
@@ -139,22 +147,12 @@ nav {
 }
 nav button {
   flex: 1; border: 0; background: transparent; color: var(--muted);
-  padding: 8px 0 10px; font-size: 12px;
+  padding: 8px 0 10px; font-size: 11px; min-width: 0;
 }
-nav button b { display: block; font-size: 22px; font-weight: normal; }
-nav button.on { color: var(--brand); font-weight: 700; }
+nav button b { display: block; font-size: 20px; font-weight: normal; }
+nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 var(--cor, var(--brand)); }
 .tab { display: none; }
 .tab.on { display: block; }
-.alerta { border-left: 6px solid var(--ok); }
-.alerta.amarelo { border-left-color: #e0a100; }
-.alerta.vermelho { border-left-color: var(--bad); background: var(--bad-soft); }
-.alerta .tit { font-weight: 800; font-size: 16px; }
-.alerta .bar { height: 14px; background: var(--bg); }
-.alerta .bar > div { background: var(--ok); }
-.alerta.amarelo .bar > div { background: #e0a100; }
-.alerta.vermelho .bar > div { background: var(--bad); }
-select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; max-width: 100%; color: var(--muted); }
-.tag.parc { background: var(--brand-soft); color: var(--brand); }
 .toast {
   position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
   background: #1d2330; color: #fff; padding: 10px 16px; border-radius: 10px;
@@ -165,8 +163,8 @@ select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; m
 </head>
 <body>
 
-<header>
-  <h1>💳 Admin. Financeira</h1>
+<header id="topo">
+  <h1>💳 Admin. Financeira · <span id="abaNome"></span></h1>
   <div class="mes">
     <button onclick="mudaMes(-1)" aria-label="Mês anterior">‹</button>
     <span id="mesNome"></span>
@@ -176,21 +174,37 @@ select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; m
 </header>
 
 <main>
-  <div class="card alerta" id="alerta"></div>
-  <!-- ===== LANÇAR ===== -->
-  <section class="tab on" id="tab-lancar">
+  <!-- ===== CARTÃO (Inter, Bradesco, Mercado Pago) ===== -->
+  <section class="tab on" id="tab-cartao">
+    <div class="card total" id="totalCartao"></div>
+
     <div class="card">
-      <h2>Novo gasto no cartão</h2>
+      <h2 id="tituloForm">Novo gasto</h2>
       <label>Categoria</label>
       <div class="chips" id="chipsCat"></div>
       <div class="row">
         <div>
-          <label>Valor total (R$)</label>
+          <label id="lblValor">Valor (R$)</label>
           <input id="gValor" inputmode="decimal" placeholder="150,00" oninput="previaParcelas()">
         </div>
         <div>
           <label>Parcelas</label>
-          <select id="gParc" onchange="previaParcelas()"></select>
+          <select id="gParc" onchange="mudouParcelas()"></select>
+        </div>
+      </div>
+      <div id="boxParc" style="display:none">
+        <div class="row">
+          <div>
+            <label>O valor digitado é</label>
+            <select id="gTipoValor" onchange="previaParcelas()">
+              <option value="total">o total da compra</option>
+              <option value="parcela">de cada parcela</option>
+            </select>
+          </div>
+          <div>
+            <label id="lblParcAtual">Parcela deste mês</label>
+            <select id="gParcAtual" onchange="previaParcelas()"></select>
+          </div>
         </div>
       </div>
       <div class="muted" id="gPrevia" style="margin-top:6px"></div>
@@ -202,85 +216,60 @@ select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; m
     </div>
 
     <div class="card">
-      <h2>Fatura do mês <span class="muted" id="totalMesLista"></span></h2>
+      <h2 id="tituloLista">Gastos do mês</h2>
       <div id="listaGastos"></div>
     </div>
   </section>
 
-  <!-- ===== FIXAS ===== -->
-  <section class="tab" id="tab-fixas">
-    <div class="card">
-      <h2>Contas fixas do mês</h2>
-      <p class="muted" style="margin-top:0">Toque em "Pagar" e informe quanto veio. Se passar do previsto, fica vermelho.</p>
-      <div id="listaFixas"></div>
-      <div class="grid2" style="margin-top:10px">
-        <div class="kpi"><div class="l">Previsto</div><div class="n" id="fxPrev"></div></div>
-        <div class="kpi"><div class="l">Pago até agora</div><div class="n" id="fxPago"></div></div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Cadastrar conta fixa</h2>
-      <div class="row">
-        <div style="flex:1.4">
-          <label>Nome</label>
-          <input id="fNome" placeholder="Ex.: Luz">
-        </div>
-        <div>
-          <label>Previsto (R$)</label>
-          <input id="fPrev" inputmode="decimal" placeholder="300,00">
-        </div>
-      </div>
-      <label>Como paga?</label>
-      <select id="fCat"></select>
-      <p class="muted">Se essa conta é paga no cartão (ex.: Supermercado), escolha a categoria. Assim o app usa os gastos do cartão e não conta duas vezes.</p>
-      <button class="btn sec" onclick="salvarFixa()">Adicionar conta fixa</button>
-    </div>
-  </section>
+  <!-- ===== SALÁRIO ===== -->
+  <section class="tab" id="tab-salario">
+    <div class="card total" id="totalSalario"></div>
 
-  <!-- ===== RESUMO ===== -->
-  <section class="tab" id="tab-resumo">
     <div class="card">
-      <h2>Quanto sobra no mês</h2>
-      <div class="big" id="rSobra"></div>
-      <div class="muted" id="rSobraTxt"></div>
-      <div class="grid2" style="margin-top:12px">
-        <div class="kpi"><div class="l">Salário</div><div class="n" id="rSal"></div></div>
-        <div class="kpi"><div class="l">Cartão (gastos)</div><div class="n" id="rCartao"></div></div>
-        <div class="kpi"><div class="l">Contas pagas fora do cartão</div><div class="n" id="rFixas"></div></div>
-        <div class="kpi"><div class="l" id="rReservaL">Ainda reservado no cartão</div><div class="n" id="rReserva"></div></div>
-        <div class="kpi" style="grid-column:1/-1"><div class="l">Fixas acima do previsto</div><div class="n" id="rEstouro"></div></div>
+      <h2 id="tituloRecebido">Salário recebido</h2>
+      <div class="row">
+        <input id="sRecebido" inputmode="decimal" placeholder="6.000,00">
+        <button class="btn" style="margin-top:0;flex:0 0 110px" onclick="salvarRecebido()">Salvar</button>
       </div>
     </div>
+
     <div class="card">
-      <h2>Onde foi o dinheiro do cartão</h2>
-      <div id="rCats"></div>
+      <h2>💳 Pagamento dos cartões</h2>
+      <div id="listaPagCartoes"></div>
     </div>
+
     <div class="card">
-      <h2>💳 Compras parceladas: quanto falta</h2>
-      <div id="rParc"></div>
+      <h2>📌 Contas fixas</h2>
+      <div id="listaFixas"></div>
+      <details style="margin-top:10px">
+        <summary class="muted">➕ Cadastrar outra conta fixa</summary>
+        <div class="row">
+          <div style="flex:1.4">
+            <label>Nome</label>
+            <input id="fNome" placeholder="Ex.: Gás">
+          </div>
+          <div>
+            <label>Previsto (R$)</label>
+            <input id="fPrev" inputmode="decimal" placeholder="100,00">
+          </div>
+        </div>
+        <button class="btn sec" onclick="salvarFixa()">Adicionar conta fixa</button>
+      </details>
     </div>
+
     <div class="card">
-      <h2>📅 Parcelas já comprometidas nos próximos meses</h2>
-      <div id="rFuturo"></div>
+      <h2>Resumo do salário</h2>
+      <div id="resumoSalario"></div>
     </div>
-    <div class="card">
-      <h2>Comparar com o mês anterior</h2>
-      <div id="rComp"></div>
-    </div>
-    <button class="btn" onclick="compartilhar()">📲 Enviar resumo no WhatsApp</button>
   </section>
 
   <!-- ===== AJUSTES ===== -->
   <section class="tab" id="tab-ajustes">
     <div class="card">
-      <h2>Salário</h2>
-      <input id="aSal" inputmode="decimal">
-      <label>Dia do fechamento da fatura (compras desse dia já vão para a próxima)</label>
-      <input id="aCorte" inputmode="numeric" placeholder="3">
-      <label>Quanto quero guardar por mês (R$)</label>
-      <input id="aMeta" inputmode="decimal" placeholder="0,00">
-      <p class="muted">O limite do cartão é: salário − contas fixas − o que você quer guardar.</p>
-      <button class="btn sec" onclick="salvarSalario()">Salvar</button>
+      <h2>Fechamento das faturas</h2>
+      <p class="muted" style="margin-top:0">Dia em que cada fatura fecha. Compras desse dia em diante vão para a fatura do mês seguinte. Deixe em branco para contar pelo mês da compra.</p>
+      <div id="listaCortes"></div>
+      <button class="btn sec" onclick="salvarCortes()">Salvar</button>
     </div>
     <div class="card">
       <h2>Categorias</h2>
@@ -311,7 +300,6 @@ select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; m
         <button class="btn" onclick="conectarComLink()">Conectar com o link</button>
         <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
         <p class="muted" style="margin-top:0"><b>Primeira vez?</b> Configure abaixo (só em um aparelho).</p>
-        <p class="muted" style="margin-top:0">Para os dois celulares verem as mesmas anotações, conecte uma conta gratuita do Supabase (só precisa fazer uma vez, em um celular).</p>
         <p class="muted"><b>1.</b> No Supabase, abra seu projeto → <b>SQL Editor</b> → cole o comando abaixo → <b>Run</b>.</p>
         <button class="btn ghost" onclick="copiarSQL()">📋 Copiar comando SQL</button>
         <p class="muted"><b>2.</b> Em <b>Project Settings → API</b> (ou <b>API Keys</b>), copie o <b>Project URL</b> e a chave <b>anon / publishable</b> e cole aqui:</p>
@@ -320,12 +308,12 @@ select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; m
         <label>Chave anon / publishable</label>
         <input id="sKey" placeholder="eyJ... ou sb_publishable_..." autocapitalize="off" autocorrect="off">
         <button class="btn" onclick="conectar()">Conectar</button>
-        <p class="muted"><b>3.</b> Depois toque em "Enviar link de conexão" e mande para sua esposa. Ela abre o link uma vez e pronto.</p>
+        <p class="muted"><b>3.</b> Depois toque em "Enviar link de conexão" e mande para sua esposa.</p>
       </div>
     </div>
     <div class="card">
       <h2>Cópia de segurança</h2>
-      <p class="muted" style="margin-top:0">Os dados ficam salvos neste celular. Faça uma cópia de vez em quando (e guarde no Google Drive ou mande pra você no WhatsApp). Se trocar de celular, é só restaurar.</p>
+      <p class="muted" style="margin-top:0">Faça uma cópia de vez em quando e guarde no Google Drive ou no WhatsApp.</p>
       <button class="btn sec" onclick="exportar()">⬇️ Baixar cópia de segurança</button>
       <button class="btn ghost" onclick="document.getElementById('arqImport').click()">⬆️ Restaurar cópia</button>
       <input type="file" id="arqImport" accept=".json,application/json" style="display:none" onchange="importar(event)">
@@ -344,21 +332,36 @@ select.mini { margin-top: 6px; padding: 6px 8px; font-size: 13px; width: auto; m
   </section>
 </main>
 
-<nav>
-  <button class="on" data-tab="lancar" onclick="aba('lancar')"><b>➕</b>Lançar</button>
-  <button data-tab="fixas" onclick="aba('fixas')"><b>📌</b>Fixas</button>
-  <button data-tab="resumo" onclick="aba('resumo')"><b>📊</b>Resumo</button>
-  <button data-tab="ajustes" onclick="aba('ajustes')"><b>⚙️</b>Ajustes</button>
-</nav>
+<nav id="nav"></nav>
 
 <div class="toast" id="toast"></div>
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-10-2';
+const APP_VERSAO = '2026-10-11-1';
+
+const CARTOES = [
+  { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
+  { id: 'bradesco', nome: 'Cartão Bradesco', curto: 'Bradesco', cor: '#cc092f', icone: '🔴' },
+  { id: 'mp', nome: 'Cartão Mercado Pago', curto: 'Merc. Pago', cor: '#009ee3', icone: '🔵' }
+];
+const ABAS = [
+  ...CARTOES.map(c => ({ id: c.id, nome: c.curto, icone: c.icone, cor: c.cor })),
+  { id: 'salario', nome: 'Salário', icone: '💰', cor: '#15803d' },
+  { id: 'ajustes', nome: 'Ajustes', icone: '⚙️', cor: '#6b7280' }
+];
+// Contas fixas da família (pagas fora do cartão).
+const FIXAS_PADRAO = [
+  { id: 'agua', nome: 'Água', previsto: 100 },
+  { id: 'luz', nome: 'Luz', previsto: 300 },
+  { id: 'internet', nome: 'Internet', previsto: 100 },
+  { id: 'van', nome: 'Van escolar', previsto: 0 },
+  { id: 'celular', nome: 'Crédito do celular', previsto: 0 },
+  { id: 'mei', nome: 'MEI', previsto: 0 }
+];
 
 const PADRAO = {
-  salario: 6500,
+  salario: 6000,
   categorias: [
     { id: 'mercado', nome: 'Supermercado', icone: '🛒' },
     { id: 'combustivel', nome: 'Combustível', icone: '⛽' },
@@ -370,17 +373,17 @@ const PADRAO = {
     { id: 'outros', nome: 'Outros', icone: '📦' }
   ],
   gastos: [],
-  fixas: [
-    { id: 'luz', nome: 'Luz', previsto: 300 },
-    { id: 'agua', nome: 'Água', previsto: 100 },
-    { id: 'internet', nome: 'Internet', previsto: 100 }
-  ],
-  pagamentos: {},
+  fixas: FIXAS_PADRAO.map(f => ({ ...f })),
+  pagamentos: {},   // contas fixas pagas: { 'AAAA-MM': { idConta: valor } }
+  salarios: {},     // salário recebido: { 'AAAA-MM': valor }
+  pagCartao: {},    // faturas pagas: { 'AAAA-MM': { idCartao: valor } }
+  cortes: { inter: 3 },
   ultimoBackup: null
 };
 
 let db = carregar();
-let mesAtual = mesFatura(hojeISO());
+let abaAtual = 'inter';
+let mesAtual = mesFatura(hojeISO(), 'inter');
 let catSel = db.categorias[0] && db.categorias[0].id;
 
 function carregar() {
@@ -421,21 +424,15 @@ function nomeMes(ym) {
   const t = new Date(a, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
+function soMes(ym) {
+  const [a, m] = ym.split('-').map(Number);
+  return new Date(a, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long' }) + ' ' + a;
+}
 function mesDeslocado(ym, delta) {
   const [a, m] = ym.split('-').map(Number);
   const d = new Date(a, m - 1 + delta, 1);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
-function cat(id) {
-  return db.categorias.find(c => c.id === id) || { id, nome: 'Categoria removida', icone: '❔' };
-}
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200);
-}
-
-// ---------- cálculos ----------
 function mesesEntre(a, b) {
   const [ay, am] = a.split('-').map(Number), [by, bm] = b.split('-').map(Number);
   return (by * 12 + bm) - (ay * 12 + am);
@@ -444,16 +441,35 @@ function abrevMes(ym) {
   const [a, m] = ym.split('-').map(Number);
   return new Date(a, m - 1, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(a).slice(2);
 }
+function cat(id) {
+  return db.categorias.find(c => c.id === id) || { id, nome: 'Categoria removida', icone: '❔' };
+}
+function cartao(id) { return CARTOES.find(c => c.id === id) || CARTOES[0]; }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ---------- cálculos ----------
 // O controle é por fatura: compra feita antes do dia do fechamento entra na
 // fatura do mesmo mês; do dia do fechamento em diante, na do mês seguinte
 // (na fatura do Inter, compras de 03/10 já foram para a de novembro).
-// Ex.: fechamento dia 3 → compra em 09/10 cai na fatura de novembro.
-function mesFatura(data) {
-  const corte = db.diaCorte || 3;
+// Cartão sem dia de fechamento configurado conta pelo mês da compra.
+function corteDe(cartaoId) {
+  const c = (db.cortes || {})[cartaoId];
+  if (c) return c;
+  return cartaoId === 'inter' ? (db.diaCorte || 3) : 0;
+}
+function mesFatura(data, cartaoId) {
+  const corte = corteDe(cartaoId || 'inter');
+  if (!corte) return data.slice(0, 7);
   const dia = Number(data.slice(8, 10));
   return dia < corte ? data.slice(0, 7) : mesDeslocado(data.slice(0, 7), 1);
 }
-function mesBase(g) { return g.fatura || mesFatura(g.data); }
+// Lançamentos antigos (sem "cartao") são todos do Inter.
+function cartaoDe(g) { return g.cartao || 'inter'; }
+function mesBase(g) { return g.fatura || mesFatura(g.data, cartaoDe(g)); }
 // Compra parcelada: "valor" é o valor de cada parcela, "parcelas" o total de
 // parcelas e "parcelaAtual" qual parcela cai na fatura do "mesBase" (1 para
 // compras novas). Parcelas anteriores já tinham sido pagas antes do controle.
@@ -471,107 +487,122 @@ function faltamDepois(g, ym) {
   const k = k0 + mesesEntre(mesBase(g), ym);
   return k < k0 ? n - k0 + 1 : Math.max(0, n - k);
 }
-function gastosDoMes(ym) {
+function gastosDoMes(ym, cartaoId) {
   const out = [];
   for (const g of db.gastos) {
+    if (cartaoDe(g) !== cartaoId) continue;
     const k = parcelaNoMes(g, ym);
     if (k) out.push({ ...g, k });
   }
   return out;
 }
-function limiteCartao(ym) {
-  return db.salario - resumoFixas(ym).comprometido - (db.metaSobra || 0);
+function totalCartao(ym, cartaoId) { return gastosDoMes(ym, cartaoId).reduce((s, g) => s + g.valor, 0); }
+function parcelasFuturas(ym, cartaoId) {
+  return db.gastos.filter(g => cartaoDe(g) === cartaoId && g.parcelas > 1 && !g.fim)
+    .reduce((s, g) => s + faltamDepois(g, ym) * g.valor, 0);
 }
-function situacao(ym) {
-  const usado = totalCartao(ym), limite = limiteCartao(ym);
-  const pct = limite > 0 ? usado / limite * 100 : (usado > 0 ? 999 : 0);
-  const nivel = pct > 100 ? 'vermelho' : pct >= 75 ? 'amarelo' : 'verde';
-  return { usado, limite, pct, nivel, resta: limite - usado };
-}
-function totalCartao(ym) { return gastosDoMes(ym).reduce((s, g) => s + g.valor, 0); }
-function porCategoria(ym) {
-  const m = {};
-  gastosDoMes(ym).forEach(g => { m[g.cat] = (m[g.cat] || 0) + g.valor; });
-  return m;
-}
-// Conta fixa "paga no cartão" (f.cat = categoria do cartão): o valor do mês é
-// o que foi gasto no cartão nessa categoria, então ela não soma de novo. Só
-// fica reservado o que ainda falta para chegar no previsto.
 function fixasDoMes(ym) {
   const pg = db.pagamentos[ym] || {};
-  const pc = porCategoria(ym);
-  return db.fixas.map(f => f.cat
-    ? { ...f, noCartao: true, pago: pc[f.cat] || 0 }
-    : { ...f, pago: pg[f.id] });
+  return db.fixas.map(f => ({ ...f, pago: pg[f.id] }));
 }
-function categoriasDeFixas() { return new Set(db.fixas.filter(f => f.cat).map(f => f.cat)); }
-function resumoFixas(ym) {
-  let previsto = 0, pago = 0, estouro = 0, comprometido = 0, reserva = 0, nomesCartao = [];
-  fixasDoMes(ym).forEach(f => {
-    previsto += f.previsto;
-    if (f.noCartao) {
-      pago += f.pago;
-      reserva += Math.max(0, f.previsto - f.pago);
-      nomesCartao.push(f.nome);
-      if (f.pago > f.previsto) estouro += f.pago - f.previsto;
-    } else if (f.pago != null) {
-      pago += f.pago;
-      comprometido += f.pago;
-      if (f.pago > f.previsto) estouro += f.pago - f.previsto;
-    } else {
-      comprometido += f.previsto;
-    }
-  });
-  // "comprometido" = contas pagas fora do cartão; "reserva" = o que ainda falta
-  // gastar no cartão das fixas que são pagas nele (ex.: Supermercado).
-  return { previsto, pago, estouro, comprometido: comprometido + reserva, fora: comprometido, reserva, nomesCartao };
+function resumoSalario(ym) {
+  const recebido = (db.salarios || {})[ym];
+  const pagCart = (db.pagCartao || {})[ym] || {};
+  let cartoesPagos = 0, cartoesFalta = 0;
+  for (const c of CARTOES) {
+    const fatura = totalCartao(ym, c.id), pago = pagCart[c.id];
+    if (pago != null) cartoesPagos += pago;
+    else cartoesFalta += fatura;
+  }
+  let fixasPagas = 0, fixasFalta = 0;
+  for (const f of fixasDoMes(ym)) {
+    if (f.pago != null) fixasPagas += f.pago;
+    else fixasFalta += f.previsto;
+  }
+  const base = recebido != null ? recebido : 0;
+  return {
+    recebido, cartoesPagos, cartoesFalta, fixasPagas, fixasFalta,
+    saldo: base - cartoesPagos - fixasPagas,
+    previsto: base - cartoesPagos - fixasPagas - cartoesFalta - fixasFalta
+  };
 }
 
 // ---------- navegação ----------
 function aba(nome) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + nome));
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === nome));
+  abaAtual = nome;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  const sec = CARTOES.some(c => c.id === nome) ? 'cartao' : nome;
+  document.getElementById('tab-' + sec).classList.add('on');
+  if (sec === 'cartao') {
+    const hoje = hojeISO();
+    document.getElementById('gData').value = mesFatura(hoje, nome) === mesAtual ? hoje : mesAtual + '-01';
+  }
   window.scrollTo(0, 0);
   render();
 }
 function mudaMes(d) {
   mesAtual = mesDeslocado(mesAtual, d);
-  const hoje = hojeISO();
-  document.getElementById('gData').value = mesFatura(hoje) === mesAtual ? hoje : mesAtual + '-01';
+  if (CARTOES.some(c => c.id === abaAtual)) {
+    const hoje = hojeISO();
+    document.getElementById('gData').value = mesFatura(hoje, abaAtual) === mesAtual ? hoje : mesAtual + '-01';
+  }
   render();
 }
 
-// ---------- ações ----------
+// ---------- gastos do cartão ----------
+function mudouParcelas() {
+  const n = Number(document.getElementById('gParc').value) || 1;
+  document.getElementById('boxParc').style.display = n > 1 ? '' : 'none';
+  const sel = document.getElementById('gParcAtual');
+  const atual = Math.min(Number(sel.value) || 1, n);
+  sel.innerHTML = Array.from({ length: n }, (_, i) => `<option value="${i + 1}" ${i + 1 === atual ? 'selected' : ''}>${i + 1}ª de ${n}</option>`).join('');
+  previaParcelas();
+}
+function previaParcelas() {
+  const n = Number(document.getElementById('gParc').value) || 1;
+  const v = numero(document.getElementById('gValor').value);
+  const el = document.getElementById('gPrevia');
+  document.getElementById('lblParcAtual').textContent = 'Parcela que cai em ' + abrevMes(mesAtual);
+  if (n <= 1 || !(v > 0)) { el.textContent = ''; return; }
+  const porParcela = document.getElementById('gTipoValor').value === 'parcela';
+  const parc = porParcela ? v : Math.round(v / n * 100) / 100;
+  const k = Number(document.getElementById('gParcAtual').value) || 1;
+  const ini = k > 1 ? mesAtual : mesFatura(document.getElementById('gData').value || hojeISO(), abaAtual);
+  const fim = mesDeslocado(ini, n - k);
+  el.innerHTML = '➡️ <b>' + n + 'x de ' + brl(parc) + '</b> · parcela ' + k + ' em ' + abrevMes(ini) + ', última em ' + abrevMes(fim) +
+    (k > 1 ? ' · faltam ' + (n - k) + ' depois desta' : '');
+}
 function salvarGasto() {
+  const cartaoId = abaAtual;
   const valor = numero(document.getElementById('gValor').value);
   const data = document.getElementById('gData').value || hojeISO();
   const desc = document.getElementById('gDesc').value.trim();
   const n = Number(document.getElementById('gParc').value) || 1;
   if (!catSel) return toast('Escolha a categoria');
   if (!(valor > 0)) return toast('Informe o valor');
-  const nivelAntes = situacao(mesAtual).nivel;
   const id = novoId();
-  const g = { id, data, cat: catSel, valor: Math.round(valor / n * 100) / 100, desc };
-  if (n > 1) { g.parcelas = n; g.parcelaAtual = 1; }
+  const g = { id, cartao: cartaoId, data, cat: catSel, valor, desc };
+  if (n > 1) {
+    const porParcela = document.getElementById('gTipoValor').value === 'parcela';
+    const k = Number(document.getElementById('gParcAtual').value) || 1;
+    g.valor = porParcela ? valor : Math.round(valor / n * 100) / 100;
+    g.parcelas = n; g.parcelaAtual = k;
+    // Compra antiga já no meio das parcelas: a parcela informada cai no mês que está na tela.
+    if (k > 1) g.fatura = mesAtual;
+  }
   db.gastos.push(g);
   marca('g:' + id);
-  document.getElementById('gParc').value = '1';
   gravar();
   document.getElementById('gValor').value = '';
   document.getElementById('gDesc').value = '';
-  const mf = mesFatura(data);
+  document.getElementById('gParc').value = '1';
+  mudouParcelas();
+  const mf = mesBase(g);
   const mudouMes = mf !== mesAtual;
-  mesAtual = mf;
-  toast(cat(catSel).icone + ' ' + (n > 1 ? n + 'x de ' + brl(g.valor) : brl(valor)) + ' anotado' + (mudouMes ? ' na fatura de ' + nomeMes(mf) : '') + '!');
+  mesAtual = parcelaNoMes(g, mesAtual) ? mesAtual : mf;
+  toast(cat(catSel).icone + ' ' + (n > 1 ? n + 'x de ' + brl(g.valor) : brl(valor)) + ' anotado' +
+    (mudouMes && mesAtual === mf ? ' na fatura de ' + soMes(mf) : '') + '!');
   render();
-  previaParcelas();
-  const sit = situacao(mesAtual);
-  if (sit.nivel === 'vermelho' && nivelAntes !== 'vermelho') {
-    alert('🚨 ATENÇÃO!\n\nO cartão de ' + nomeMes(mesAtual) + ' passou do limite em ' + brl(-sit.resta) +
-      '.\n\nCom o salário e as contas fixas, não sobra para esse gasto. Evite usar o cartão até o mês que vem.');
-  } else if (sit.nivel === 'amarelo' && nivelAntes === 'verde') {
-    alert('⚠️ Cuidado: o cartão já usou ' + sit.pct.toFixed(0) + '% do limite deste mês.\nSó restam ' + brl(sit.resta) + '.');
-  }
 }
 function apagarGasto(id) {
   const g = db.gastos.find(x => x.id === id);
@@ -584,42 +615,45 @@ function apagarGasto(id) {
   apaga('g:' + id);
   gravar(); render();
 }
-function vincularFixa(id, catId) {
-  const f = db.fixas.find(x => x.id === id);
-  if (!f) return;
-  f.cat = catId;
-  marca('f:' + id);
+function escolherCat(id) { catSel = id; renderChips(); }
+
+// ---------- salário ----------
+function salvarRecebido() {
+  const v = numero(document.getElementById('sRecebido').value);
+  if (!(v >= 0)) return toast('Informe o valor recebido');
+  db.salarios = db.salarios || {};
+  db.salarios[mesAtual] = v;
+  marca('s:' + mesAtual);
   gravar(); render();
-  toast(catId ? '💳 ' + f.nome + ' agora conta pelos gastos de ' + cat(catId).nome + ' no cartão' : f.nome + ' é paga fora do cartão');
+  toast('💰 Salário de ' + soMes(mesAtual) + ' salvo');
 }
-function opcoesCartao(sel) {
-  return '<option value="">Paga fora do cartão</option>' + db.categorias.map(c =>
-    `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>💳 No cartão: ${esc(c.nome)}</option>`).join('');
+function pagarCartao(cartaoId) {
+  const c = cartao(cartaoId);
+  const fatura = totalCartao(mesAtual, cartaoId);
+  const atual = ((db.pagCartao || {})[mesAtual] || {})[cartaoId];
+  const resp = prompt('Quanto você pagou do ' + c.nome + ' em ' + soMes(mesAtual) + '?\n(fatura no app: ' + brl(fatura) + ')',
+    String(atual != null ? atual : Math.round(fatura * 100) / 100).replace('.', ','));
+  if (resp === null) return;
+  const v = numero(resp);
+  if (!(v >= 0)) return toast('Valor inválido');
+  db.pagCartao = db.pagCartao || {};
+  db.pagCartao[mesAtual] = db.pagCartao[mesAtual] || {};
+  db.pagCartao[mesAtual][cartaoId] = v;
+  marca('pc:' + mesAtual + ':' + cartaoId);
+  gravar(); render();
 }
-// Uma conta fixa com o mesmo nome de uma categoria (ex.: "Supermercado")
-// passa a ser paga no cartão. Só quando ainda não foi escolhido (cat undefined).
-function vincularPorNome() {
-  const norm = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-  let mudou = false;
-  for (const f of db.fixas) {
-    if (f.cat !== undefined) continue;
-    const n = norm(f.nome);
-    const c = db.categorias.find(c => norm(c.nome) === n ||
-      (/mercado|feira|hortifruti/.test(n) && c.id === 'mercado') ||
-      (/combust|gasolina|posto|etanol|alcool/.test(n) && c.id === 'combustivel') ||
-      (/farmacia|remedio|drogaria/.test(n) && c.id === 'farmacia'));
-    if (c) { f.cat = c.id; marca('f:' + f.id); mudou = true; }
-  }
-  return mudou;
+function desfazerPagCartao(cartaoId) {
+  if (db.pagCartao && db.pagCartao[mesAtual]) delete db.pagCartao[mesAtual][cartaoId];
+  apaga('pc:' + mesAtual + ':' + cartaoId);
+  gravar(); render();
 }
 function salvarFixa() {
   const nome = document.getElementById('fNome').value.trim();
-  const prev = numero(document.getElementById('fPrev').value);
-  const catId = document.getElementById('fCat').value;
+  const prev = numero(document.getElementById('fPrev').value || '0');
   if (!nome) return toast('Informe o nome da conta');
   if (!(prev >= 0)) return toast('Informe o valor previsto');
   const id = novoId();
-  db.fixas.push({ id, nome, previsto: prev, cat: catId });
+  db.fixas.push({ id, nome, previsto: prev });
   marca('f:' + id);
   gravar();
   document.getElementById('fNome').value = '';
@@ -630,8 +664,8 @@ function salvarFixa() {
 function pagarFixa(id) {
   const f = db.fixas.find(x => x.id === id);
   const pg = (db.pagamentos[mesAtual] || {})[id];
-  const resp = prompt('Quanto veio a conta de ' + f.nome + ' em ' + nomeMes(mesAtual) + '?\n(previsto: ' + brl(f.previsto) + ')',
-    String(pg != null ? pg : f.previsto).replace('.', ','));
+  const resp = prompt('Quanto veio a conta de ' + f.nome + ' em ' + soMes(mesAtual) + '?' + (f.previsto ? '\n(previsto: ' + brl(f.previsto) + ')' : ''),
+    pg != null ? String(pg).replace('.', ',') : f.previsto ? String(f.previsto).replace('.', ',') : '');
   if (resp === null) return;
   const v = numero(resp);
   if (!(v >= 0)) return toast('Valor inválido');
@@ -639,7 +673,7 @@ function pagarFixa(id) {
   db.pagamentos[mesAtual][id] = v;
   marca('p:' + mesAtual + ':' + id);
   gravar(); render();
-  if (v > f.previsto) toast('⚠️ ' + f.nome + ' veio ' + brl(v - f.previsto) + ' acima do previsto');
+  if (f.previsto && v > f.previsto) toast('⚠️ ' + f.nome + ' veio ' + brl(v - f.previsto) + ' acima do previsto');
 }
 function desfazerPagamento(id) {
   if (db.pagamentos[mesAtual]) delete db.pagamentos[mesAtual][id];
@@ -648,7 +682,7 @@ function desfazerPagamento(id) {
 }
 function editarPrevisto(id) {
   const f = db.fixas.find(x => x.id === id);
-  const resp = prompt('Novo valor previsto para ' + f.nome + ':', String(f.previsto).replace('.', ','));
+  const resp = prompt('Valor previsto por mês para ' + f.nome + ':', f.previsto ? String(f.previsto).replace('.', ',') : '');
   if (resp === null) return;
   const v = numero(resp);
   if (!(v >= 0)) return toast('Valor inválido');
@@ -661,16 +695,18 @@ function apagarFixa(id) {
   apaga('f:' + id);
   gravar(); render();
 }
-function salvarSalario() {
-  const v = numero(document.getElementById('aSal').value);
-  if (!(v >= 0)) return toast('Valor inválido');
-  const meta = numero(document.getElementById('aMeta').value || '0');
-  if (!(meta >= 0)) return toast('Valor a guardar inválido');
-  db.salario = v; marca('salario');
-  db.metaSobra = meta; marca('metaSobra');
-  const corte = parseInt(document.getElementById('aCorte').value, 10);
-  if (corte >= 1 && corte <= 31) { db.diaCorte = corte; marca('diaCorte'); }
-  gravar(); toast('Salário salvo'); render();
+
+// ---------- ajustes ----------
+function salvarCortes() {
+  db.cortes = { ...(db.cortes || {}) };
+  for (const c of CARTOES) {
+    const v = parseInt(document.getElementById('corte-' + c.id).value, 10);
+    db.cortes[c.id] = v >= 1 && v <= 31 ? v : 0;
+  }
+  if (!db.cortes.inter) db.cortes.inter = 3;
+  marca('cortes');
+  gravar(); render();
+  toast('Fechamentos salvos');
 }
 function salvarCat() {
   const nome = document.getElementById('cNome').value.trim();
@@ -694,15 +730,13 @@ function apagarCat(id) {
   if (catSel === id) catSel = db.categorias[0] && db.categorias[0].id;
   gravar(); render();
 }
-function escolherCat(id) { catSel = id; renderChips(); }
-
 function exportar() {
   db.ultimoBackup = new Date().toISOString();
   gravar();
   const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'controle-cartao-' + hojeISO() + '.json';
+  a.download = 'admin-financeira-' + hojeISO() + '.json';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   render();
@@ -724,108 +758,40 @@ function importar(ev) {
   r.readAsText(arq);
 }
 
-function textoResumo() {
-  const pc = porCategoria(mesAtual);
-  const cartao = totalCartao(mesAtual);
-  const fx = resumoFixas(mesAtual);
-  const sobra = db.salario - cartao - fx.comprometido;
-  let t = '*Resumo ' + nomeMes(mesAtual) + '*\n\n';
-  t += '💳 Cartão: ' + brl(cartao) + '\n';
-  Object.entries(pc).sort((a, b) => b[1] - a[1]).forEach(([id, v]) => {
-    t += '  ' + cat(id).icone + ' ' + cat(id).nome + ': ' + brl(v) + '\n';
-  });
-  t += '\n📌 Contas fixas: previsto ' + brl(fx.previsto) + '\n';
-  fixasDoMes(mesAtual).forEach(f => {
-    if (f.noCartao) {
-      const dif = f.pago - f.previsto;
-      t += '  ' + f.nome + ' (no cartão): ' + brl(f.pago) + ' de ' + brl(f.previsto) + (dif > 0 ? ' ⚠️ +' + brl(dif) : '') + '\n';
-    } else if (f.pago != null) {
-      const dif = f.pago - f.previsto;
-      t += '  ' + f.nome + ': ' + brl(f.pago) + (dif > 0 ? ' ⚠️ +' + brl(dif) : dif < 0 ? ' ✅' : '') + '\n';
-    } else {
-      t += '  ' + f.nome + ': a pagar (' + brl(f.previsto) + ')\n';
+// ---------- ajustes automáticos dos dados ----------
+// Lançamentos importados das faturas trazem "parcela 3/5" na observação:
+// transforma em compra parcelada para contar as parcelas que faltam.
+function migrarParcelas() {
+  let mudou = false;
+  for (const g of db.gastos) {
+    // A primeira importação (prints de 08/10) era a fatura que vence em novembro.
+    if (!g.fatura && g.id.startsWith('inter-2026-10-')) { g.fatura = '2026-11'; marca('g:' + g.id); mudou = true; }
+    if (g.parcelas || !g.desc) continue;
+    const m = g.desc.match(/parcela (\d+)\/(\d+)/);
+    if (!m) continue;
+    g.parcelas = Number(m[2]); g.parcelaAtual = Number(m[1]);
+    marca('g:' + g.id); mudou = true;
+  }
+  return mudou;
+}
+// Contas fixas agora são só as pagas fora do cartão (água, luz, internet, van,
+// celular, MEI). Supermercado/combustível ficam nos cartões: tira as fixas que
+// estavam ligadas a uma categoria do cartão e garante as contas padrão.
+function ajustarFixas() {
+  let mudou = false;
+  for (const f of [...db.fixas]) {
+    if (f.cat) {
+      db.fixas = db.fixas.filter(x => x.id !== f.id);
+      apaga('f:' + f.id); mudou = true;
     }
-  });
-  t += '\n💰 Salário: ' + brl(db.salario) + '\n';
-  t += (sobra >= 0 ? '✅ Sobra: ' : '🚨 Falta: ') + brl(Math.abs(sobra));
-  const sit = situacao(mesAtual);
-  t += '\n' + (sit.nivel === 'vermelho' ? '🚨 Cartão passou do limite em ' + brl(-sit.resta)
-    : sit.nivel === 'amarelo' ? '⚠️ Cartão em ' + sit.pct.toFixed(0) + '% do limite'
-    : '✅ Cartão em ' + sit.pct.toFixed(0) + '% do limite');
-  return t;
-}
-function compartilhar() {
-  const t = textoResumo();
-  if (navigator.share) {
-    navigator.share({ text: t }).catch(() => {});
-  } else {
-    window.open('https://wa.me/?text=' + encodeURIComponent(t), '_blank');
   }
+  for (const p of FIXAS_PADRAO) {
+    if (db.fixas.some(f => f.id === p.id) || (db.apagados || {})['f:' + p.id]) continue;
+    db.fixas.push({ ...p }); marca('f:' + p.id); mudou = true;
+  }
+  return mudou;
 }
 
-// ---------- telas ----------
-function renderAlerta() {
-  const s = situacao(mesAtual);
-  const el = document.getElementById('alerta');
-  el.className = 'card alerta ' + s.nivel;
-  const tit = s.nivel === 'vermelho' ? '🚨 Passou do limite em ' + brl(-s.resta) + '!'
-    : s.nivel === 'amarelo' ? '⚠️ Cuidado: restam só ' + brl(s.resta)
-    : '✅ Dentro do limite: ainda pode gastar ' + brl(s.resta);
-  const sub = s.nivel === 'vermelho'
-    ? 'O salário não cobre o cartão + as contas fixas deste mês. Segure os gastos no cartão.'
-    : 'Limite do cartão = salário ' + brl(db.salario) + ' − contas fora do cartão ' + brl(resumoFixas(mesAtual).fora) + (resumoFixas(mesAtual).reserva ? ' − falta gastar das fixas no cartão ' + brl(resumoFixas(mesAtual).reserva) : '') +
-      (db.metaSobra ? ' − guardar ' + brl(db.metaSobra) : '');
-  const prox = mesDeslocado(mesAtual, 1);
-  const jaProx = totalCartao(prox);
-  el.innerHTML = `<div class="tit">${tit}</div>
-    <div class="row" style="margin-top:6px;align-items:baseline">
-      <div class="muted">Cartão: <b>${brl(s.usado)}</b> de ${brl(Math.max(0, s.limite))}</div>
-      <div style="text-align:right;font-weight:700">${Math.min(s.pct, 999).toFixed(0)}%</div>
-    </div>
-    <div class="bar"><div style="width:${Math.min(100, s.pct)}%"></div></div>
-    <div class="muted" style="margin-top:6px">${sub}</div>
-    ${jaProx > 0 ? `<div class="muted" style="margin-top:4px">📅 ${nomeMes(prox)} já começa com <b>${brl(jaProx)}</b> em parcelas.</div>` : ''}`;
-}
-function renderParcelados() {
-  const ativos = db.gastos.filter(g => g.parcelas > 1 && !g.fim && faltamDepois(g, mesAtual) + (parcelaNoMes(g, mesAtual) ? 1 : 0) > 0)
-    .map(g => ({ g, k: parcelaNoMes(g, mesAtual), faltam: faltamDepois(g, mesAtual) }))
-    .sort((a, b) => b.faltam * b.g.valor - a.faltam * a.g.valor);
-  const totalFalta = ativos.reduce((s, x) => s + x.faltam * x.g.valor, 0);
-  document.getElementById('rParc').innerHTML = ativos.length ? ativos.map(({ g, k, faltam }) => {
-    const c = cat(g.cat);
-    const fim = mesDeslocado(mesBase(g), g.parcelas - (g.parcelaAtual || 1));
-    const nome = (g.desc || c.nome).replace(/ · parcela \d+\/\d+/, '').replace(/ · compra em .*/, '');
-    return `<div class="item">
-      <div class="ic">${esc(c.icone)}</div>
-      <div class="info"><div class="t">${esc(nome)}</div>
-        <div class="s">${g.parcelas}x de ${brl(g.valor)} · ${k ? 'parcela ' + k + '/' + g.parcelas + ' neste mês' : 'começa depois'} · termina ${abrevMes(fim)}</div></div>
-      <div style="text-align:right"><div class="v">${brl(faltam * g.valor)}</div><div class="muted">${faltam ? 'faltam ' + faltam : 'última!'}</div></div>
-    </div>`;
-  }).join('') + `<div class="item"><div class="info"><div class="t">Total que ainda falta pagar</div><div class="s">depois de ${nomeMes(mesAtual)}</div></div><div class="v neg">${brl(totalFalta)}</div></div>`
-    : '<div class="empty">Nenhuma compra parcelada em andamento.</div>';
-
-  let html = '';
-  for (let i = 1; i <= 6; i++) {
-    const ym = mesDeslocado(mesAtual, i);
-    const v = totalCartao(ym), lim = limiteCartao(ym);
-    if (!v) continue;
-    const pct = lim > 0 ? v / lim * 100 : 999;
-    html += `<div style="margin-bottom:10px">
-      <div class="row" style="align-items:baseline"><div><b>${nomeMes(ym)}</b></div>
-        <div style="text-align:right"><b>${brl(v)}</b> <span class="muted">${pct.toFixed(0)}% do limite</span></div></div>
-      <div class="bar"><div style="width:${Math.min(100, pct)}%;background:${pct > 100 ? 'var(--bad)' : pct >= 75 ? '#e0a100' : 'var(--ok)'}"></div></div>
-    </div>`;
-  }
-  document.getElementById('rFuturo').innerHTML = html || '<div class="empty">Nenhuma parcela para os próximos meses.</div>';
-}
-function previaParcelas() {
-  const n = Number(document.getElementById('gParc').value) || 1;
-  const v = numero(document.getElementById('gValor').value);
-  const el = document.getElementById('gPrevia');
-  if (n <= 1 || !(v > 0)) { el.textContent = ''; return; }
-  const ini = mesFatura(document.getElementById('gData').value || hojeISO());
-  el.innerHTML = '➡️ <b>' + n + 'x de ' + brl(Math.round(v / n * 100) / 100) + '</b> · de ' + abrevMes(ini) + ' até ' + abrevMes(mesDeslocado(ini, n - 1));
-}
 // Tira lançamentos feitos à mão que repetem um lançamento importado da fatura:
 // mesmo valor e mesma fatura com data próxima ou mesma categoria (ou data
 // próxima numa fatura vizinha, se a data foi digitada perto do fechamento).
@@ -838,7 +804,7 @@ function removerDuplicados() {
   const dias = (a, b) => Math.abs(new Date(a) - new Date(b)) / 86400000;
   const removidos = [];
   for (const m of db.gastos) {
-    if (m.id.startsWith('inter-')) continue;
+    if (m.id.startsWith('inter-') || cartaoDe(m) !== 'inter') continue;
     const criado = parseInt(m.id.slice(0, -4), 36);
     if (!(criado <= CORTE_DUP)) continue;
     const par = importados.find(i => {
@@ -873,6 +839,131 @@ function voltarDuplicado(id) {
   gravar(); render();
   toast('Lançamento devolvido');
 }
+
+// ---------- telas ----------
+function renderNav() {
+  document.getElementById('nav').innerHTML = ABAS.map(a =>
+    `<button class="${a.id === abaAtual ? 'on' : ''}" style="--cor:${a.cor}" onclick="aba('${a.id}')"><b>${a.icone}</b>${a.nome}</button>`
+  ).join('');
+}
+function renderChips() {
+  document.getElementById('chipsCat').innerHTML = db.categorias.map(c =>
+    `<button class="chip ${c.id === catSel ? 'on' : ''}" onclick="escolherCat('${c.id}')">${esc(c.icone)} ${esc(c.nome)}</button>`
+  ).join('');
+}
+function renderCartao() {
+  const c = cartao(abaAtual);
+  const gs = gastosDoMes(mesAtual, c.id).sort((a, b) => b.data.localeCompare(a.data) || b.id.localeCompare(a.id));
+  const total = gs.reduce((s, g) => s + g.valor, 0);
+  const futuro = parcelasFuturas(mesAtual, c.id);
+  const el = document.getElementById('totalCartao');
+  el.style.background = c.cor;
+  el.innerHTML = `<div class="l">${esc(c.nome)} · total da fatura de</div>
+    <div class="mesgrande">${soMes(mesAtual)}</div>
+    <div class="n">${brl(total)}</div>
+    <div class="p">${gs.length} ${gs.length === 1 ? 'gasto' : 'gastos'}${futuro > 0 ? ' · parcelas que ainda faltam depois deste mês: ' + brl(futuro) : ''}</div>`;
+  document.getElementById('tituloForm').textContent = 'Novo gasto no ' + c.nome;
+  document.getElementById('tituloLista').textContent = 'Gastos de ' + soMes(mesAtual) + ' no ' + c.curto;
+  renderChips();
+  previaParcelas();
+  document.getElementById('listaGastos').innerHTML = gs.length ? gs.map(g => {
+    const ct = cat(g.cat);
+    const dia = g.data.split('-').reverse().slice(0, 2).join('/');
+    const desc = (g.desc || '').replace(/ · parcela \d+\/\d+/, '').replace(/ · parc\. \d+ de \d+/, '');
+    return `<div class="item">
+      <div class="ic">${esc(ct.icone)}</div>
+      <div class="info"><div class="t">${esc(ct.nome)} ${g.parcelas > 1 ? `<span class="tag parc">${g.k}/${g.parcelas}</span>` : ''}</div><div class="s">${dia}${desc ? ' · ' + esc(desc) : ''}</div></div>
+      <div class="v">${brl(g.valor)}</div>
+      <button class="x" onclick="apagarGasto('${g.id}')" aria-label="Apagar">✕</button>
+    </div>`;
+  }).join('') : `<div class="empty">Nenhum gasto no ${esc(c.curto)} em ${soMes(mesAtual)}.</div>`;
+}
+function renderSalario() {
+  const r = resumoSalario(mesAtual);
+  const el = document.getElementById('totalSalario');
+  el.style.background = r.recebido != null && r.saldo < 0 ? 'var(--bad)' : '#15803d';
+  el.innerHTML = `<div class="l">Salário · sobra de</div>
+    <div class="mesgrande">${soMes(mesAtual)}</div>
+    <div class="n">${r.recebido == null ? '—' : (r.saldo < 0 ? '- ' : '') + brl(Math.abs(r.saldo))}</div>
+    <div class="p">${r.recebido == null ? 'Informe o salário recebido neste mês' :
+      'Recebido ' + brl(r.recebido) + ' − já pago ' + brl(r.cartoesPagos + r.fixasPagas)}</div>`;
+  document.getElementById('tituloRecebido').textContent = '💰 Salário recebido em ' + soMes(mesAtual);
+  const inp = document.getElementById('sRecebido');
+  if (document.activeElement !== inp) inp.value = r.recebido != null ? String(r.recebido).replace('.', ',') : '';
+  inp.placeholder = String(db.salario || 6000).replace('.', ',');
+
+  const pagCart = (db.pagCartao || {})[mesAtual] || {};
+  document.getElementById('listaPagCartoes').innerHTML = CARTOES.map(c => {
+    const fatura = totalCartao(mesAtual, c.id), pago = pagCart[c.id];
+    const status = pago == null ? '<span class="tag wait">a pagar</span>'
+      : Math.abs(pago - fatura) < 0.01 ? '<span class="tag ok">pago</span>'
+      : pago > fatura ? `<span class="tag ok">pago ${brl(pago - fatura)} a mais que no app</span>`
+      : `<span class="tag bad">faltou ${brl(fatura - pago)}</span>`;
+    return `<div class="item">
+      <div class="ic">${c.icone}</div>
+      <div class="info"><div class="t">${esc(c.nome)}</div>
+        <div style="margin:2px 0">${status}</div>
+        <div class="s">Fatura no app: ${brl(fatura)}</div></div>
+      <div class="v">${pago != null ? brl(pago) : ''}</div>
+      ${pago == null
+        ? `<button class="chip" onclick="pagarCartao('${c.id}')">Paguei</button>`
+        : `<button class="x" onclick="pagarCartao('${c.id}')" aria-label="Editar">✎</button><button class="x" onclick="desfazerPagCartao('${c.id}')" aria-label="Desfazer">↺</button>`}
+    </div>`;
+  }).join('');
+
+  document.getElementById('listaFixas').innerHTML = fixasDoMes(mesAtual).map(f => {
+    let tag;
+    if (f.pago == null) tag = '<span class="tag wait">a pagar</span>';
+    else if (!f.previsto) tag = '<span class="tag ok">pago</span>';
+    else {
+      const dif = f.pago - f.previsto;
+      tag = dif > 0 ? `<span class="tag bad">+${brl(dif)} acima</span>`
+          : dif < 0 ? `<span class="tag ok">${brl(-dif)} abaixo</span>`
+          : '<span class="tag ok">no previsto</span>';
+    }
+    return `<div class="item">
+      <div class="info">
+        <div class="t">${esc(f.nome)}</div>
+        <div style="margin:2px 0">${tag}</div>
+        <div class="s">Previsto ${f.previsto ? brl(f.previsto) : '—'} · <a href="#" onclick="editarPrevisto('${f.id}');return false">mudar</a></div>
+      </div>
+      <div class="v">${f.pago != null ? brl(f.pago) : ''}</div>
+      ${f.pago == null
+        ? `<button class="chip" onclick="pagarFixa('${f.id}')">Paguei</button>`
+        : `<button class="x" onclick="pagarFixa('${f.id}')" aria-label="Editar">✎</button><button class="x" onclick="desfazerPagamento('${f.id}')" aria-label="Desfazer">↺</button>`}
+      <button class="x" onclick="apagarFixa('${f.id}')" aria-label="Remover">🗑</button>
+    </div>`;
+  }).join('') || '<div class="empty">Nenhuma conta fixa cadastrada.</div>';
+
+  const linha = (t, v, cls) => `<div class="linha"><span>${t}</span><b class="${cls || ''}">${v}</b></div>`;
+  document.getElementById('resumoSalario').innerHTML =
+    linha('💰 Salário recebido', r.recebido != null ? brl(r.recebido) : '—') +
+    linha('💳 Cartões pagos', '− ' + brl(r.cartoesPagos)) +
+    linha('📌 Contas fixas pagas', '− ' + brl(r.fixasPagas)) +
+    `<div class="linha tot"><span>Sobra agora</span><span class="${r.saldo < 0 ? 'neg' : 'pos'}">${r.recebido == null ? '—' : brl(r.saldo)}</span></div>` +
+    `<div style="margin-top:12px" class="muted">Ainda falta pagar neste mês:</div>` +
+    linha('💳 Cartões (pelo que está no app)', brl(r.cartoesFalta)) +
+    linha('📌 Contas fixas (pelo previsto)', brl(r.fixasFalta)) +
+    `<div class="linha tot"><span>Vai sobrar no fim do mês</span><span class="${r.previsto < 0 ? 'neg' : 'pos'}">${r.recebido == null ? '—' : brl(r.previsto)}</span></div>`;
+}
+function renderAjustes() {
+  document.getElementById('listaCortes').innerHTML = CARTOES.map(c => {
+    const v = corteDe(c.id);
+    return `<div class="row" style="align-items:center;margin-top:6px">
+      <div>${c.icone} ${esc(c.nome)}</div>
+      <input id="corte-${c.id}" inputmode="numeric" style="flex:0 0 90px" placeholder="—" value="${v || ''}">
+    </div>`;
+  }).join('');
+  document.getElementById('listaCats').innerHTML = db.categorias.map(c =>
+    `<div class="item"><div class="ic">${esc(c.icone)}</div><div class="info"><div class="t">${esc(c.nome)}</div></div>
+     <button class="x" onclick="apagarCat('${c.id}')" aria-label="Remover">🗑</button></div>`
+  ).join('');
+  renderDup();
+  document.getElementById('versaoTxt').textContent = 'Versão ' + APP_VERSAO;
+  document.getElementById('ultBackup').textContent = db.ultimoBackup
+    ? 'Última cópia: ' + new Date(db.ultimoBackup).toLocaleString('pt-BR')
+    : 'Nenhuma cópia feita ainda.';
+}
 function renderDup() {
   const lista = db.dupRemovidos || [];
   document.getElementById('cardDup').style.display = lista.length ? '' : 'none';
@@ -883,164 +974,17 @@ function renderDup() {
       <button class="chip" onclick="voltarDuplicado('${r.id}')">Voltar</button>
     </div>`).join('');
 }
-
-// Lançamentos importados das faturas trazem "parcela 3/5" na observação:
-// transforma em compra parcelada para contar as parcelas que faltam.
-function migrarParcelas() {
-  let mudou = false;
-  for (const g of db.gastos) {
-    // A primeira importação (prints de 08/10) era a fatura que vence em novembro.
-    if (!g.fatura && g.id.startsWith('inter-2026-10-')) { g.fatura = '2026-11'; marca('g:' + g.id); mudou = true; }
-    if (g.parcelas || !g.desc) continue;
-    const m = g.desc.match(/parcela (\d+)\/(\d+)/);
-    if (!m) continue;
-    g.parcelas = Number(m[2]); g.parcelaAtual = Number(m[1]);
-    marca('g:' + g.id); mudou = true;
-  }
-  return mudou;
-}
-
-function renderChips() {
-  document.getElementById('chipsCat').innerHTML = db.categorias.map(c =>
-    `<button class="chip ${c.id === catSel ? 'on' : ''}" onclick="escolherCat('${c.id}')">${esc(c.icone)} ${esc(c.nome)}</button>`
-  ).join('');
-}
-
 function render() {
-  document.getElementById('mesNome').textContent = nomeMes(mesAtual);
-  renderChips();
-
-  // Lista de gastos
-  const gs = gastosDoMes(mesAtual).sort((a, b) => b.data.localeCompare(a.data) || b.id.localeCompare(a.id));
-  document.getElementById('totalMesLista').textContent = '· ' + brl(totalCartao(mesAtual));
-  document.getElementById('listaGastos').innerHTML = gs.length ? gs.map(g => {
-    const c = cat(g.cat);
-    const dia = g.data.split('-').reverse().slice(0, 2).join('/');
-    return `<div class="item">
-      <div class="ic">${esc(c.icone)}</div>
-      <div class="info"><div class="t">${esc(c.nome)} ${g.parcelas > 1 ? `<span class="tag parc">${g.k}/${g.parcelas}</span>` : ''}</div><div class="s">${dia}${g.desc ? ' · ' + esc(g.desc.replace(/ · parcela \d+\/\d+/, '')) : ''}</div></div>
-      <div class="v">${brl(g.valor)}</div>
-      <button class="x" onclick="apagarGasto('${g.id}')" aria-label="Apagar">✕</button>
-    </div>`;
-  }).join('') : '<div class="empty">Nenhum gasto anotado neste mês.</div>';
-
-  renderAlerta();
-  renderParcelados();
-
-  // Fixas
-  const fxs = fixasDoMes(mesAtual);
-  const selFCat = document.getElementById('fCat');
-  if (document.activeElement !== selFCat) { const v = selFCat.value; selFCat.innerHTML = opcoesCartao(v); }
-  document.getElementById('listaFixas').innerHTML = fxs.length ? fxs.map(f => {
-    let tag, val;
-    const seletor = `<select class="mini" onchange="vincularFixa('${f.id}', this.value)">${opcoesCartao(f.cat || '')}</select>`;
-    if (f.noCartao) {
-      const dif = f.pago - f.previsto, pct = f.previsto ? Math.min(100, f.pago / f.previsto * 100) : 100;
-      tag = dif > 0 ? `<span class="tag bad">+${brl(dif)} acima</span>` : `<span class="tag ok">faltam ${brl(-dif)}</span>`;
-      return `<div class="item" style="flex-wrap:wrap">
-        <div class="info">
-          <div class="t">${esc(f.nome)} <span class="tag parc">💳 no cartão</span></div>
-          <div style="margin:2px 0">${tag}</div>
-          <div class="s">Gasto no cartão em ${esc(cat(f.cat).nome)} · previsto ${brl(f.previsto)} · <a href="#" onclick="editarPrevisto('${f.id}');return false">mudar</a></div>
-        </div>
-        <div class="v ${dif > 0 ? 'neg' : ''}">${brl(f.pago)}</div>
-        <button class="x" onclick="apagarFixa('${f.id}')" aria-label="Remover">🗑</button>
-        <div style="flex-basis:100%"><div class="bar"><div style="width:${pct}%;background:${dif > 0 ? 'var(--bad)' : 'var(--ok)'}"></div></div>${seletor}</div>
-      </div>`;
-    }
-    if (f.pago == null) {
-      tag = '<span class="tag wait">a pagar</span>';
-      val = `<div class="v">${brl(f.previsto)}</div>`;
-    } else {
-      const dif = f.pago - f.previsto;
-      tag = dif > 0 ? `<span class="tag bad">+${brl(dif)} acima</span>`
-          : dif < 0 ? `<span class="tag ok">${brl(-dif)} abaixo</span>`
-          : '<span class="tag ok">no previsto</span>';
-      val = `<div class="v ${dif > 0 ? 'neg' : 'pos'}">${brl(f.pago)}</div>`;
-    }
-    return `<div class="item" style="flex-wrap:wrap">
-      <div class="info">
-        <div class="t">${esc(f.nome)}</div>
-        <div style="margin:2px 0">${tag}</div>
-        <div class="s">Previsto ${brl(f.previsto)} · <a href="#" onclick="editarPrevisto('${f.id}');return false">mudar</a></div>
-      </div>
-      ${val}
-      ${f.pago == null
-        ? `<button class="chip" onclick="pagarFixa('${f.id}')">Pagar</button>`
-        : `<button class="x" onclick="pagarFixa('${f.id}')" aria-label="Editar">✎</button><button class="x" onclick="desfazerPagamento('${f.id}')" aria-label="Desfazer">↺</button>`}
-      <button class="x" onclick="apagarFixa('${f.id}')" aria-label="Remover">🗑</button>
-      <div style="flex-basis:100%">${seletor}</div>
-    </div>`;
-  }).join('') : '<div class="empty">Nenhuma conta fixa cadastrada.</div>';
-  const rf = resumoFixas(mesAtual);
-  document.getElementById('fxPrev').textContent = brl(rf.previsto);
-  document.getElementById('fxPago').textContent = brl(rf.pago);
-
-  // Resumo
-  const cartao = totalCartao(mesAtual);
-  const sobra = db.salario - cartao - rf.comprometido;
-  const elS = document.getElementById('rSobra');
-  elS.textContent = (sobra < 0 ? '- ' : '') + brl(Math.abs(sobra));
-  elS.className = 'big ' + (sobra >= 0 ? 'pos' : 'neg');
-  document.getElementById('rSobraTxt').textContent =
-    'Salário − cartão − contas pagas fora do cartão − o que ainda falta gastar das fixas no cartão';
-  document.getElementById('rSal').textContent = brl(db.salario);
-  document.getElementById('rCartao').textContent = brl(cartao);
-  document.getElementById('rFixas').textContent = brl(rf.fora);
-  document.getElementById('rReserva').textContent = brl(rf.reserva);
-  document.getElementById('rReservaL').textContent = rf.nomesCartao.length
-    ? 'Falta gastar no cartão (' + rf.nomesCartao.join(', ') + ')' : 'Ainda reservado no cartão';
-  const elE = document.getElementById('rEstouro');
-  elE.textContent = brl(rf.estouro);
-  elE.className = 'n ' + (rf.estouro > 0 ? 'neg' : 'pos');
-
-  const pc = porCategoria(mesAtual);
-  const ordem = Object.entries(pc).sort((a, b) => b[1] - a[1]);
-  document.getElementById('rCats').innerHTML = ordem.length ? ordem.map(([id, v]) => {
-    const c = cat(id);
-    const pct = cartao ? v / cartao * 100 : 0;
-    return `<div style="margin-bottom:12px">
-      <div class="row" style="align-items:baseline">
-        <div>${esc(c.icone)} <b>${esc(c.nome)}</b></div>
-        <div style="text-align:right"><b>${brl(v)}</b> <span class="muted">${pct.toFixed(0)}%</span></div>
-      </div>
-      <div class="bar"><div style="width:${pct}%"></div></div>
-    </div>`;
-  }).join('') : '<div class="empty">Sem gastos no cartão neste mês.</div>';
-
-  const ant = mesDeslocado(mesAtual, -1);
-  const pcAnt = porCategoria(ant);
-  const ids = [...new Set([...Object.keys(pc), ...Object.keys(pcAnt)])];
-  const totAnt = totalCartao(ant);
-  document.getElementById('rComp').innerHTML = ids.length ? (
-    `<div class="muted" style="margin-bottom:6px">${nomeMes(ant)} → ${nomeMes(mesAtual)}</div>` +
-    ids.map(id => {
-      const a = pcAnt[id] || 0, b = pc[id] || 0, d = b - a;
-      return `<div class="item"><div class="ic">${esc(cat(id).icone)}</div>
-        <div class="info"><div class="t">${esc(cat(id).nome)}</div><div class="s">${brl(a)} → ${brl(b)}</div></div>
-        <div class="v ${d > 0 ? 'neg' : 'pos'}">${d > 0 ? '+' : ''}${brl(d)}</div></div>`;
-    }).join('') +
-    `<div class="item"><div class="info"><div class="t">Total do cartão</div><div class="s">${brl(totAnt)} → ${brl(cartao)}</div></div>
-      <div class="v ${cartao - totAnt > 0 ? 'neg' : 'pos'}">${cartao - totAnt > 0 ? '+' : ''}${brl(cartao - totAnt)}</div></div>`
-  ) : '<div class="empty">Ainda sem dados para comparar.</div>';
-
-  // Ajustes
-  const aSal = document.getElementById('aSal');
-  if (document.activeElement !== aSal) aSal.value = String(db.salario).replace('.', ',');
-  const aMeta = document.getElementById('aMeta');
-  const aCorte = document.getElementById('aCorte');
-  if (document.activeElement !== aCorte) aCorte.value = db.diaCorte || 3;
-  if (document.activeElement !== aMeta) aMeta.value = db.metaSobra ? String(db.metaSobra).replace('.', ',') : '';
-  document.getElementById('listaCats').innerHTML = db.categorias.map(c =>
-    `<div class="item"><div class="ic">${esc(c.icone)}</div><div class="info"><div class="t">${esc(c.nome)}</div></div>
-     <button class="x" onclick="apagarCat('${c.id}')" aria-label="Remover">🗑</button></div>`
-  ).join('');
+  const a = ABAS.find(x => x.id === abaAtual);
+  document.getElementById('topo').style.background = a.cor;
+  document.querySelector('meta[name=theme-color]').content = a.cor;
+  document.getElementById('abaNome').textContent = CARTOES.some(c => c.id === abaAtual) ? cartao(abaAtual).nome : a.nome;
+  document.getElementById('mesNome').textContent = soMes(mesAtual);
+  renderNav();
+  if (CARTOES.some(c => c.id === abaAtual)) renderCartao();
+  else if (abaAtual === 'salario') renderSalario();
+  else renderAjustes();
   renderSync();
-  renderDup();
-  document.getElementById('versaoTxt').textContent = 'Versão ' + APP_VERSAO;
-  document.getElementById('ultBackup').textContent = db.ultimoBackup
-    ? 'Última cópia: ' + new Date(db.ultimoBackup).toLocaleString('pt-BR')
-    : 'Nenhuma cópia feita ainda.';
 }
 
 // Faturas publicadas no GitHub (lista em faturas.json) entram sozinhas
@@ -1054,7 +998,7 @@ async function importarFaturas() {
     if (!r.ok) return;
     lista = await r.json();
   } catch (e) { return; }
-  let qtd = 0, ultimoMes = null;
+  let qtd = 0;
   for (const arq of lista) {
     if (db.faturasImportadas.includes(arq) || !/^[\w.-]+\.json$/.test(arq)) continue;
     try {
@@ -1069,14 +1013,12 @@ async function importarFaturas() {
       db.gastos.push(...novos);
       db.faturasImportadas.push(arq);
       qtd += novos.length;
-      if (novos.length) ultimoMes = mesBase(novos[0]);
     } catch (e) {}
   }
   if (location.search) history.replaceState(null, '', location.pathname);
   migrarParcelas();
   gravar();
   if (qtd) {
-    mesAtual = ultimoMes;
     render();
     toast('💳 ' + qtd + ' lançamentos da fatura entraram no app!');
   }
@@ -1135,39 +1077,55 @@ function mesclar(a, b) {
   for (const [k, t] of Object.entries(a.mod || {})) mod[k] = Math.max(mod[k] || 0, t);
   for (const [k, t] of Object.entries(a.apagados || {})) apagados[k] = Math.max(apagados[k] || 0, t);
   const vivo = k => !(apagados[k] && apagados[k] >= (mod[k] || 0));
+  const ma = a.mod || {}, mb = b.mod || {};
   const lista = (la, lb, pre) => {
     const m = new Map();
     for (const it of lb || []) m.set(it.id, it);
     for (const it of la || []) {
       const k = pre + it.id;
-      if (!m.has(it.id) || ((a.mod || {})[k] || 0) >= ((b.mod || {})[k] || 0)) m.set(it.id, it);
+      if (!m.has(it.id) || (ma[k] || 0) >= (mb[k] || 0)) m.set(it.id, it);
     }
     return [...m.values()].filter(it => vivo(pre + it.id));
   };
-  const pagamentos = {};
-  for (const [lado, outro] of [[b, a], [a, b]]) {
-    for (const [ym, pg] of Object.entries(lado.pagamentos || {})) {
-      for (const [fid, v] of Object.entries(pg)) {
-        const k = 'p:' + ym + ':' + fid;
-        const jaTem = pagamentos[ym] && fid in pagamentos[ym];
-        if (jaTem && ((lado.mod || {})[k] || 0) < ((outro.mod || {})[k] || 0)) continue;
-        (pagamentos[ym] = pagamentos[ym] || {})[fid] = v;
+  // { 'AAAA-MM': { id: valor } } — usado pelas contas fixas e pelos cartões pagos.
+  const mapaMes = (campo, pre) => {
+    const out = {};
+    for (const [lado, outro] of [[b, a], [a, b]]) {
+      for (const [ym, pg] of Object.entries(lado[campo] || {})) {
+        for (const [id, v] of Object.entries(pg)) {
+          const k = pre + ym + ':' + id;
+          const jaTem = out[ym] && id in out[ym];
+          if (jaTem && ((lado.mod || {})[k] || 0) < ((outro.mod || {})[k] || 0)) continue;
+          (out[ym] = out[ym] || {})[id] = v;
+        }
       }
     }
+    for (const ym of Object.keys(out)) {
+      for (const id of Object.keys(out[ym])) if (!vivo(pre + ym + ':' + id)) delete out[ym][id];
+      if (!Object.keys(out[ym]).length) delete out[ym];
+    }
+    return out;
+  };
+  // { 'AAAA-MM': valor } — salário recebido em cada mês.
+  const salarios = {};
+  for (const ym of new Set([...Object.keys(a.salarios || {}), ...Object.keys(b.salarios || {})])) {
+    const k = 's:' + ym;
+    const temA = ym in (a.salarios || {}), temB = ym in (b.salarios || {});
+    salarios[ym] = temA && (!temB || (ma[k] || 0) >= (mb[k] || 0)) ? a.salarios[ym] : b.salarios[ym];
   }
-  for (const ym of Object.keys(pagamentos)) {
-    for (const fid of Object.keys(pagamentos[ym])) if (!vivo('p:' + ym + ':' + fid)) delete pagamentos[ym][fid];
-    if (!Object.keys(pagamentos[ym]).length) delete pagamentos[ym];
-  }
+  const escolhe = campo => (ma[campo] || 0) >= (mb[campo] || 0) ? a[campo] : b[campo];
   return {
     ...a,
-    salario: ((a.mod || {}).salario || 0) >= ((b.mod || {}).salario || 0) ? a.salario : b.salario,
-    metaSobra: ((a.mod || {}).metaSobra || 0) >= ((b.mod || {}).metaSobra || 0) ? a.metaSobra : b.metaSobra,
-    diaCorte: ((a.mod || {}).diaCorte || 0) >= ((b.mod || {}).diaCorte || 0) ? a.diaCorte : b.diaCorte,
+    salario: escolhe('salario'),
+    diaCorte: escolhe('diaCorte'),
+    cortes: escolhe('cortes'),
     categorias: lista(a.categorias, b.categorias, 'c:'),
     gastos: lista(a.gastos, b.gastos, 'g:'),
     fixas: lista(a.fixas, b.fixas, 'f:'),
-    pagamentos, mod, apagados,
+    pagamentos: mapaMes('pagamentos', 'p:'),
+    pagCartao: mapaMes('pagCartao', 'pc:'),
+    salarios,
+    mod, apagados,
     dupRemovidos: Object.values(Object.fromEntries([...(b.dupRemovidos || []), ...(a.dupRemovidos || [])].map(r => [r.id, r])))
       .filter(r => !(a.gastos || []).concat(b.gastos || []).some(g => g.id === r.id && vivo('g:' + r.id))),
     faturasImportadas: [...new Set([...(a.faturasImportadas || []), ...(b.faturasImportadas || [])])]
@@ -1201,7 +1159,7 @@ async function sincronizar(manual) {
       const antes = estavel(compartilhado(db));
       if (remoto) db = mesclar(db, remoto);
       migrarParcelas();
-      vincularPorNome();
+      ajustarFixas();
       const depois = compartilhado(db);
       if (estavel(depois) !== antes) { gravar(true); render(); }
       if (remoto && estavel(depois) === estavel(remoto)) break;
@@ -1325,12 +1283,11 @@ async function atualizarApp(manual) {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { sincronizar(); atualizarApp(); } });
 setInterval(() => { if (!document.hidden) sincronizar(); }, 20000);
 
-document.getElementById('gData').value = hojeISO();
 document.getElementById('gParc').innerHTML = '<option value="1">À vista</option>' +
   Array.from({ length: 23 }, (_, i) => `<option value="${i + 2}">${i + 2}x</option>`).join('');
-if (migrarParcelas() | vincularPorNome()) gravar(true);
+if (migrarParcelas() | ajustarFixas()) gravar(true);
 lerConvite();
-render();
+aba('inter');
 (async () => {
   atualizarApp();
   await sincronizar();
