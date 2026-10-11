@@ -154,6 +154,7 @@ input[type=checkbox] { width: auto; }
 .empty { color: var(--muted); text-align: center; padding: 16px 0; font-size: 14px; }
 .muted { color: var(--muted); font-size: 13px; }
 .linha { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; }
+summary.linha::-webkit-details-marker { display: none; }
 .linha.tot { border-top: 2px solid var(--line); margin-top: 6px; padding-top: 10px; font-weight: 800; font-size: 18px; }
 nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
@@ -377,7 +378,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-11-6';
+const APP_VERSAO = '2026-10-11-7';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -1068,14 +1069,29 @@ function curto(v) {
   if (v >= 1000) return (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
   return Math.round(v).toLocaleString('pt-BR');
 }
+// Quadro "Já comprometido": fechado mostra só o total; tocando, abre os meses.
+let comprometidoAberto = false;
 function renderComprometido(c) {
   const lista = comprometidoFuturo([c.id]);
   const total = lista.reduce((s, x) => s + x.v, 0);
-  document.getElementById('cardComprometido').innerHTML = `<h2>📅 Já comprometido com parcelas</h2><div class="muted" style="margin:-6px 0 4px">Toque no mês para ver cada parcela.</div>` + (lista.length
-    ? lista.map(x => `<details><summary class="linha" style="cursor:pointer"><span>▸ ${soMes(x.ym).replace(/^./, l => l.toUpperCase())}</span><b>${brl(x.v)}</b></summary>
-        <div class="dica" style="margin:0 0 8px">${itensParcelas(x.ym, [c.id])}</div></details>`).join('') +
-      `<div class="linha tot"><span>Total que ainda falta</span><span>${brl(total)}</span></div>`
-    : `<div class="empty">Nenhuma parcela para os próximos meses no ${esc(c.curto)}.</div>`);
+  const el = document.getElementById('cardComprometido');
+  if (!lista.length) {
+    el.innerHTML = `<div class="linha" style="padding:0"><b>📅 Já comprometido com parcelas</b><span class="muted">nada</span></div>`;
+    return;
+  }
+  el.innerHTML = `<details ${comprometidoAberto ? 'open' : ''} ontoggle="comprometidoAberto = this.open">
+    <summary class="linha" style="cursor:pointer;padding:0;list-style:none">
+      <span><b>📅 Já comprometido com parcelas</b><br><span class="muted">${comprometidoAberto ? 'toque para fechar ▲' : 'toque para ver mês a mês ▼'}</span></span>
+      <b style="font-size:18px">${brl(total)}</b>
+    </summary>
+    <div class="muted" style="margin:10px 0 4px">Toque no mês para ver cada parcela.</div>
+    ${lista.map(x => `<details><summary class="linha" style="cursor:pointer"><span>▸ ${soMes(x.ym).replace(/^./, l => l.toUpperCase())}</span><b>${brl(x.v)}</b></summary>
+        <div class="dica" style="margin:0 0 8px">${itensParcelas(x.ym, [c.id])}</div></details>`).join('')}
+    <div class="linha tot"><span>Total que ainda falta</span><span>${brl(total)}</span></div>
+  </details>`;
+  el.querySelector('details').addEventListener('toggle', e => {
+    e.target.querySelector('summary .muted').textContent = e.target.open ? 'toque para fechar ▲' : 'toque para ver mês a mês ▼';
+  });
 }
 
 // Gráfico de colunas empilhadas: embaixo as parcelas (laranja), em cima as
