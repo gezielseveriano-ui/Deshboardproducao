@@ -282,8 +282,8 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
   <!-- ===== AJUSTES ===== -->
   <section class="tab" id="tab-ajustes">
     <div class="card">
-      <h2>Fechamento das faturas</h2>
-      <p class="muted" style="margin-top:0">Dia em que cada fatura fecha. Compras desse dia em diante vão para a fatura do mês seguinte. Deixe em branco para contar pelo mês da compra.</p>
+      <h2>Fechamento e vencimento das faturas</h2>
+      <p class="muted" style="margin-top:0">Cada fatura fica no mês em que vence. Compras do dia do fechamento em diante vão para a fatura seguinte. Em branco = conta pelo mês da compra.</p>
       <div id="listaCortes"></div>
       <button class="btn sec" onclick="salvarCortes()">Salvar</button>
     </div>
@@ -354,13 +354,16 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-11-2';
+const APP_VERSAO = '2026-10-11-3';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
   { id: 'bradesco', nome: 'Cartão Bradesco', curto: 'Bradesco', cor: '#cc092f', icone: '🔴' },
   { id: 'mp', nome: 'Cartão Mercado Pago', curto: 'Merc. Pago', cor: '#009ee3', icone: '🔵' }
 ];
+// Dias de fechamento e vencimento conhecidos pelas faturas de cada cartão.
+const FECHA_PADRAO = { inter: 3, bradesco: 28 };
+const VENCE_PADRAO = { inter: 10, bradesco: 10 };
 const ABAS = [
   ...CARTOES.map(c => ({ id: c.id, nome: c.curto, icone: c.icone, cor: c.cor })),
   { id: 'salario', nome: 'Salário', icone: '💰', cor: '#15803d' },
@@ -475,13 +478,26 @@ function toast(msg) {
 function corteDe(cartaoId) {
   const c = (db.cortes || {})[cartaoId];
   if (c) return c;
-  return cartaoId === 'inter' ? (db.diaCorte || 3) : 0;
+  if (cartaoId === 'inter' && db.diaCorte) return db.diaCorte;
+  return FECHA_PADRAO[cartaoId] || 0;
 }
+function vencDe(cartaoId) {
+  return (db.vencimentos || {})[cartaoId] || VENCE_PADRAO[cartaoId] || 0;
+}
+// O mês de cada fatura é o mês em que ela VENCE. A compra feita antes do dia
+// do fechamento entra na fatura que fecha naquele mês; do fechamento em
+// diante, na que fecha no mês seguinte. Se o vencimento cai num dia menor que
+// o do fechamento (Bradesco: fecha dia 28, vence dia 10), a fatura vence no
+// mês seguinte ao fechamento.
 function mesFatura(data, cartaoId) {
-  const corte = corteDe(cartaoId || 'inter');
+  cartaoId = cartaoId || 'inter';
+  const corte = corteDe(cartaoId);
   if (!corte) return data.slice(0, 7);
   const dia = Number(data.slice(8, 10));
-  return dia < corte ? data.slice(0, 7) : mesDeslocado(data.slice(0, 7), 1);
+  let mes = dia < corte ? data.slice(0, 7) : mesDeslocado(data.slice(0, 7), 1);
+  const venc = vencDe(cartaoId);
+  if (venc && venc <= corte) mes = mesDeslocado(mes, 1);
+  return mes;
 }
 // Lançamentos antigos (sem "cartao") são todos do Inter.
 function cartaoDe(g) { return g.cartao || 'inter'; }
@@ -724,12 +740,14 @@ function apagarFixa(id) {
 // ---------- ajustes ----------
 function salvarCortes() {
   db.cortes = { ...(db.cortes || {}) };
+  db.vencimentos = { ...(db.vencimentos || {}) };
   for (const c of CARTOES) {
     const v = parseInt(document.getElementById('corte-' + c.id).value, 10);
     db.cortes[c.id] = v >= 1 && v <= 31 ? v : 0;
+    const w = parseInt(document.getElementById('vence-' + c.id).value, 10);
+    db.vencimentos[c.id] = w >= 1 && w <= 31 ? w : 0;
   }
-  if (!db.cortes.inter) db.cortes.inter = 3;
-  marca('cortes');
+  marca('cortes'); marca('vencimentos');
   gravar(); render();
   toast('Fechamentos salvos');
 }
@@ -822,18 +840,19 @@ function ajustarFixas() {
 // próxima numa fatura vizinha, se a data foi digitada perto do fechamento).
 // Só considera lançamentos feitos antes da importação das faturas (CORTE_DUP),
 // para nunca mexer em gastos novos.
-const CORTE_DUP = 1791590224119;
+const CORTE_DUP = { inter: 1791590224119, bradesco: 1791741886000 };
+const importado = g => g.id.startsWith('inter-') || g.id.startsWith('brad-');
 function removerDuplicados() {
-  const importados = db.gastos.filter(g => g.id.startsWith('inter-'));
+  const importados = db.gastos.filter(importado);
   const usados = new Set();
   const dias = (a, b) => Math.abs(new Date(a) - new Date(b)) / 86400000;
   const removidos = [];
   for (const m of db.gastos) {
-    if (m.id.startsWith('inter-') || cartaoDe(m) !== 'inter') continue;
+    if (importado(m) || !CORTE_DUP[cartaoDe(m)]) continue;
     const criado = parseInt(m.id.slice(0, -4), 36);
-    if (!(criado <= CORTE_DUP)) continue;
+    if (!(criado <= CORTE_DUP[cartaoDe(m)])) continue;
     const par = importados.find(i => {
-      if (usados.has(i.id) || Math.abs(i.valor - m.valor) >= 0.005) return false;
+      if (usados.has(i.id) || cartaoDe(i) !== cartaoDe(m) || Math.abs(i.valor - m.valor) >= 0.005) return false;
       const mesmoMes = mesBase(i) === mesBase(m);
       const perto = dias(i.data, m.data) <= 3;
       return (mesmoMes && (perto || i.cat === m.cat)) || (perto && Math.abs(mesesEntre(mesBase(i), mesBase(m))) <= 1);
@@ -977,13 +996,12 @@ function renderSalario() {
     `<div class="linha tot"><span>Vai sobrar no fim do mês</span><span class="${r.previsto < 0 ? 'neg' : 'pos'}">${r.recebido == null ? '—' : brl(r.previsto)}</span></div>`;
 }
 function renderAjustes() {
-  document.getElementById('listaCortes').innerHTML = CARTOES.map(c => {
-    const v = corteDe(c.id);
-    return `<div class="row" style="align-items:center;margin-top:6px">
-      <div>${c.icone} ${esc(c.nome)}</div>
-      <input id="corte-${c.id}" inputmode="numeric" style="flex:0 0 90px" placeholder="—" value="${v || ''}">
-    </div>`;
-  }).join('');
+  document.getElementById('listaCortes').innerHTML = `<div class="row muted" style="margin-top:6px"><div></div><div style="flex:0 0 80px">Fecha dia</div><div style="flex:0 0 80px">Vence dia</div></div>` +
+    CARTOES.map(c => `<div class="row" style="align-items:center;margin-top:6px">
+      <div>${c.icone} ${esc(c.curto)}</div>
+      <input id="corte-${c.id}" inputmode="numeric" style="flex:0 0 80px" placeholder="—" value="${corteDe(c.id) || ''}">
+      <input id="vence-${c.id}" inputmode="numeric" style="flex:0 0 80px" placeholder="—" value="${vencDe(c.id) || ''}">
+    </div>`).join('');
   document.getElementById('listaCats').innerHTML = db.categorias.map(c =>
     `<div class="item"><div class="ic">${esc(c.icone)}</div><div class="info"><div class="t">${esc(c.nome)}</div></div>
      <button class="x" onclick="apagarCat('${c.id}')" aria-label="Remover">🗑</button></div>`
@@ -1149,6 +1167,7 @@ function mesclar(a, b) {
     salario: escolhe('salario'),
     diaCorte: escolhe('diaCorte'),
     cortes: escolhe('cortes'),
+    vencimentos: escolhe('vencimentos'),
     categorias: lista(a.categorias, b.categorias, 'c:'),
     gastos: lista(a.gastos, b.gastos, 'g:'),
     fixas: lista(a.fixas, b.fixas, 'f:'),

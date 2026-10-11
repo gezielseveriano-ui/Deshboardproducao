@@ -1,0 +1,180 @@
+{
+ "nome": "Fatura Bradesco – outubro/2026",
+ "categorias": [
+  {
+   "id": "saude",
+   "nome": "Saúde / Dentista",
+   "icone": "🦷"
+  },
+  {
+   "id": "passeio",
+   "nome": "Passeios",
+   "icone": "🎡"
+  },
+  {
+   "id": "compras",
+   "nome": "Compras online",
+   "icone": "🛍️"
+  },
+  {
+   "id": "servicos",
+   "nome": "Serviços",
+   "icone": "🛠️"
+  },
+  {
+   "id": "juros",
+   "nome": "Juros e IOF",
+   "icone": "💸"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "brad-out26-01",
+   "cartao": "bradesco",
+   "data": "2026-09-29",
+   "cat": "juros",
+   "valor": 3.85,
+   "desc": "IOF S/ TRANS INTER REAIS",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "brad-out26-02",
+   "cartao": "bradesco",
+   "data": "2026-02-21",
+   "cat": "saude",
+   "valor": 100.0,
+   "desc": "Odontocompany · parc. 8 de 10",
+   "fatura": "2026-10",
+   "parcelas": 10,
+   "parcelaAtual": 8
+  },
+  {
+   "id": "brad-out26-03",
+   "cartao": "bradesco",
+   "data": "2026-02-26",
+   "cat": "saude",
+   "valor": 30.04,
+   "desc": "Odontocompany · parc. 7 de 10",
+   "fatura": "2026-10",
+   "parcelas": 10,
+   "parcelaAtual": 7
+  },
+  {
+   "id": "brad-out26-04",
+   "cartao": "bradesco",
+   "data": "2026-04-08",
+   "cat": "passeio",
+   "valor": 83.33,
+   "desc": "SITE INTERNET EFVM (trem) · parc. 6 de 6",
+   "fatura": "2026-10",
+   "parcelas": 6,
+   "parcelaAtual": 6
+  },
+  {
+   "id": "brad-out26-05",
+   "cartao": "bradesco",
+   "data": "2026-04-10",
+   "cat": "passeio",
+   "valor": 83.33,
+   "desc": "SITE INTERNET EFVM (trem) · parc. 6 de 6",
+   "fatura": "2026-10",
+   "parcelas": 6,
+   "parcelaAtual": 6
+  },
+  {
+   "id": "brad-out26-06",
+   "cartao": "bradesco",
+   "data": "2026-04-29",
+   "cat": "compras",
+   "valor": 150.3,
+   "desc": "PG PAYT PAYTCC47 · parc. 5 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 5
+  },
+  {
+   "id": "brad-out26-07",
+   "cartao": "bradesco",
+   "data": "2026-05-07",
+   "cat": "compras",
+   "valor": 38.47,
+   "desc": "MERCADOLIVRE CAMILA · parc. 5 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 5
+  },
+  {
+   "id": "brad-out26-08",
+   "cartao": "bradesco",
+   "data": "2026-05-07",
+   "cat": "compras",
+   "valor": 7.46,
+   "desc": "MERCADOLIVRE CAMILA · parc. 5 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 5
+  },
+  {
+   "id": "brad-out26-09",
+   "cartao": "bradesco",
+   "data": "2026-05-07",
+   "cat": "compras",
+   "valor": 13.61,
+   "desc": "MERCADOLIVRE MERCADO · parc. 5 de 5",
+   "fatura": "2026-10",
+   "parcelas": 5,
+   "parcelaAtual": 5
+  },
+  {
+   "id": "brad-out26-10",
+   "cartao": "bradesco",
+   "data": "2026-05-10",
+   "cat": "compras",
+   "valor": 6.78,
+   "desc": "MERCADOLIVRE CAMILA · parc. 5 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 5
+  },
+  {
+   "id": "brad-out26-11",
+   "cartao": "bradesco",
+   "data": "2026-05-31",
+   "cat": "servicos",
+   "valor": 13.2,
+   "desc": "KIWIFY PVD · parc. 3 de 3",
+   "fatura": "2026-10",
+   "parcelas": 3,
+   "parcelaAtual": 3
+  },
+  {
+   "id": "brad-out26-12",
+   "cartao": "bradesco",
+   "data": "2026-06-13",
+   "cat": "servicos",
+   "valor": 41.06,
+   "desc": "PG BRAIP · parc. 4 de 12",
+   "fatura": "2026-10",
+   "parcelas": 12,
+   "parcelaAtual": 4
+  },
+  {
+   "id": "brad-out26-13",
+   "cartao": "bradesco",
+   "data": "2026-09-04",
+   "cat": "servicos",
+   "valor": 9.9,
+   "desc": "MP MELIMAIS (assinatura)",
+   "fatura": "2026-10"
+  },
+  {
+   "id": "brad-out26-14",
+   "cartao": "bradesco",
+   "data": "2026-09-16",
+   "cat": "servicos",
+   "valor": 110.0,
+   "desc": "ANTHROPIC CLAUDE (assinatura)",
+   "fatura": "2026-10"
+  }
+ ]
+}
