@@ -377,7 +377,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-11-5';
+const APP_VERSAO = '2026-10-11-6';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -1071,8 +1071,9 @@ function curto(v) {
 function renderComprometido(c) {
   const lista = comprometidoFuturo([c.id]);
   const total = lista.reduce((s, x) => s + x.v, 0);
-  document.getElementById('cardComprometido').innerHTML = `<h2>📅 Já comprometido com parcelas</h2>` + (lista.length
-    ? lista.map(x => `<div class="linha"><span>${soMes(x.ym).replace(/^./, l => l.toUpperCase())}</span><b>${brl(x.v)}</b></div>`).join('') +
+  document.getElementById('cardComprometido').innerHTML = `<h2>📅 Já comprometido com parcelas</h2><div class="muted" style="margin:-6px 0 4px">Toque no mês para ver cada parcela.</div>` + (lista.length
+    ? lista.map(x => `<details><summary class="linha" style="cursor:pointer"><span>▸ ${soMes(x.ym).replace(/^./, l => l.toUpperCase())}</span><b>${brl(x.v)}</b></summary>
+        <div class="dica" style="margin:0 0 8px">${itensParcelas(x.ym, [c.id])}</div></details>`).join('') +
       `<div class="linha tot"><span>Total que ainda falta</span><span>${brl(total)}</span></div>`
     : `<div class="empty">Nenhuma parcela para os próximos meses no ${esc(c.curto)}.</div>`);
 }
@@ -1084,7 +1085,7 @@ const graficos = {};
 function grafico(chave, titulo, ids) {
   const meses = Array.from({ length: 7 }, (_, i) => mesDeslocado(mesAtual, i - 1));
   const dados = meses.map(ym => ({ ym, ...partesDoMes(ym, ids) }));
-  graficos[chave] = dados;
+  graficos[chave] = { dados, ids };
   const W = 340, H = 190, top = 18, base = 160, esq = 4, larg = (W - esq) / meses.length, barra = larg * 0.62;
   const max = Math.max(1, ...dados.map(d => d.total));
   const y = v => (base - top) * v / max;
@@ -1116,21 +1117,41 @@ function grafico(chave, titulo, ids) {
   const atual = dados[1];
   const tabela = `<details><summary class="muted" style="margin-top:8px">Ver em tabela</summary>
     <table class="tab-dados"><tr><th>Mês</th><th>Compras</th><th>Parcelas</th><th>Total</th></tr>` +
-    dados.map(d => `<tr><td>${abrevMes(d.ym)}</td><td>${brl(d.compras)}</td><td>${brl(d.parcelas)}</td><td><b>${brl(d.total)}</b></td></tr>`).join('') +
+    dados.map((d, i) => `<tr><td>${abrevMes(d.ym)}</td><td>${brl(d.compras)}</td><td>${d.parcelas > 0.004
+      ? `<a href="#" onclick="dicaGrafico('${chave}', ${i}, true);return false">${brl(d.parcelas)}</a>` : brl(d.parcelas)}</td><td><b>${brl(d.total)}</b></td></tr>`).join('') +
     `</table></details>`;
   return `<div class="card viz">
     <h2>${titulo}</h2>
     <div class="legenda"><span><i style="background:var(--s-compras)"></i>Compras do mês</span><span><i style="background:var(--s-parcela)"></i>Parcelas</span></div>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(titulo)}: total por mês, separando compras do mês e parcelas">${grade}${barras}</svg>
-    <div class="dica" id="dica-${chave}">${textoDica(atual)}</div>
+    <div class="dica" id="dica-${chave}">${textoDica(atual)}<div style="margin-top:4px">👆 Toque numa coluna ou no valor das parcelas para ver cada item.</div></div>
     ${tabela}
   </div>`;
 }
 function textoDica(d) {
   return `<b>${soMes(d.ym)}</b>: total <b>${brl(d.total)}</b> · compras do mês ${brl(d.compras)} · parcelas ${brl(d.parcelas)}`;
 }
-function dicaGrafico(chave, i) {
-  document.getElementById('dica-' + chave).innerHTML = textoDica(graficos[chave][i]);
+// Lista das parcelas de um mês: o que foi comprado, em que parcela está e
+// quantas ainda faltam depois dela.
+function itensParcelas(ym, ids) {
+  const itens = [];
+  for (const id of ids) for (const g of gastosDoMes(ym, id)) if (g.parcelas > 1) itens.push(g);
+  itens.sort((a, b) => b.valor - a.valor);
+  if (!itens.length) return '<div style="margin-top:6px">Nenhuma parcela neste mês.</div>';
+  return '<div style="margin-top:8px"><b>Parcelas deste mês:</b></div>' + itens.map(g => {
+    const nome = (g.desc || cat(g.cat).nome).replace(/ · .*/, '').replace(/ \(cartão final \d+\)/, '');
+    const faltam = g.parcelas - g.k;
+    return `<div class="linha" style="padding:5px 0;border-bottom:1px solid var(--line)">
+      <span>${ids.length > 1 ? cartao(cartaoDe(g)).icone + ' ' : ''}${esc(nome)}<br>
+        <span class="muted">parcela ${g.k} de ${g.parcelas} · ${faltam ? 'faltam mais ' + faltam + ' (' + brl(faltam * g.valor) + ')' : 'última parcela ✅'}</span></span>
+      <b>${brl(g.valor)}</b></div>`;
+  }).join('');
+}
+function dicaGrafico(chave, i, rolar) {
+  const { dados, ids } = graficos[chave];
+  const el = document.getElementById('dica-' + chave);
+  el.innerHTML = textoDica(dados[i]) + itensParcelas(dados[i].ym, ids);
+  if (rolar) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 function renderInicio() {
   const ids = CARTOES.map(c => c.id);
