@@ -104,6 +104,21 @@ input[type=checkbox] { width: auto; }
   padding: 10px 12px; border-radius: 999px; font-size: 15px;
 }
 .chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.seletor {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; font-size: 17px; font-weight: 600; text-align: left;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text);
+}
+.seletor .seta { color: var(--muted); font-size: 14px; }
+.listaCat { border: 1px solid var(--line); border-radius: 12px; margin-top: 6px; overflow: hidden; }
+.listaCat button {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 14px;
+  font-size: 16px; text-align: left; border: 0; border-bottom: 1px solid var(--line);
+  background: var(--card); color: var(--text);
+}
+.listaCat button:last-child { border-bottom: 0; }
+.listaCat button.on { background: var(--bg); font-weight: 700; }
+.listaCat button .ok { margin-left: auto; color: var(--ok); }
 .item {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 0; border-bottom: 1px solid var(--line);
@@ -181,7 +196,8 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
     <div class="card">
       <h2 id="tituloForm">Novo gasto</h2>
       <label>Categoria</label>
-      <div class="chips" id="chipsCat"></div>
+      <button type="button" class="seletor" id="btnCat" onclick="abrirCats()"></button>
+      <div class="listaCat" id="chipsCat" style="display:none"></div>
       <div class="row">
         <div>
           <label id="lblValor">Valor (R$)</label>
@@ -212,7 +228,7 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
       <input id="gData" type="date" onchange="previaParcelas()">
       <label>Observação (opcional)</label>
       <input id="gDesc" placeholder="Ex.: Atacadão, compra do mês">
-      <button class="btn" onclick="salvarGasto()">Anotar gasto</button>
+      <button class="btn" id="btnAnotar" onclick="salvarGasto()">Anotar gasto</button>
     </div>
 
     <div class="card">
@@ -338,7 +354,7 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-11-1';
+const APP_VERSAO = '2026-10-11-2';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -615,7 +631,16 @@ function apagarGasto(id) {
   apaga('g:' + id);
   gravar(); render();
 }
-function escolherCat(id) { catSel = id; renderChips(); }
+function escolherCat(id) {
+  catSel = id;
+  document.getElementById('chipsCat').style.display = 'none';
+  renderChips();
+}
+function abrirCats() {
+  const el = document.getElementById('chipsCat');
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+  renderChips();
+}
 
 // ---------- salário ----------
 function salvarRecebido() {
@@ -846,9 +871,13 @@ function renderNav() {
     `<button class="${a.id === abaAtual ? 'on' : ''}" style="--cor:${a.cor}" onclick="aba('${a.id}')"><b>${a.icone}</b>${a.nome}</button>`
   ).join('');
 }
+// Categoria: um botão com a escolhida; ao tocar, abre a lista (uma por linha).
 function renderChips() {
+  const aberto = document.getElementById('chipsCat').style.display !== 'none';
+  const c = cat(catSel);
+  document.getElementById('btnCat').innerHTML = `<span>${esc(c.icone)} ${esc(c.nome)}</span><span class="seta">${aberto ? 'fechar ▲' : 'trocar ▼'}</span>`;
   document.getElementById('chipsCat').innerHTML = db.categorias.map(c =>
-    `<button class="chip ${c.id === catSel ? 'on' : ''}" onclick="escolherCat('${c.id}')">${esc(c.icone)} ${esc(c.nome)}</button>`
+    `<button type="button" class="${c.id === catSel ? 'on' : ''}" onclick="escolherCat('${c.id}')"><span>${esc(c.icone)}</span> ${esc(c.nome)}${c.id === catSel ? '<span class="ok">✓</span>' : ''}</button>`
   ).join('');
 }
 function renderCartao() {
@@ -863,6 +892,7 @@ function renderCartao() {
     <div class="n">${brl(total)}</div>
     <div class="p">${gs.length} ${gs.length === 1 ? 'gasto' : 'gastos'}${futuro > 0 ? ' · parcelas que ainda faltam depois deste mês: ' + brl(futuro) : ''}</div>`;
   document.getElementById('tituloForm').textContent = 'Novo gasto no ' + c.nome;
+  document.getElementById('btnAnotar').style.background = c.cor;
   document.getElementById('tituloLista').textContent = 'Gastos de ' + soMes(mesAtual) + ' no ' + c.curto;
   renderChips();
   previaParcelas();
