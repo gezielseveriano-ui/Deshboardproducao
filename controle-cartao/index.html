@@ -168,6 +168,22 @@ nav button b { display: block; font-size: 20px; font-weight: normal; }
 nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 var(--cor, var(--brand)); }
 .tab { display: none; }
 .tab.on { display: block; }
+/* gráficos do dashboard */
+.viz { --s-compras: #2a78d6; --s-parcela: #eb6834; --grade: #e5e7eb; }
+@media (prefers-color-scheme: dark) { .viz { --s-compras: #3987e5; --s-parcela: #d95926; --grade: #2c313b; } }
+.viz svg { width: 100%; height: auto; display: block; overflow: visible; }
+.viz .eixo { font-size: 11px; fill: var(--muted); }
+.viz .eixo.atual { fill: var(--text); font-weight: 800; }
+.viz .rot { font-size: 11px; fill: var(--text); font-weight: 700; }
+.viz .alvo { fill: transparent; cursor: pointer; }
+.viz .sel { fill: var(--text); opacity: .06; }
+.legenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 2px 0 8px; }
+.legenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.dica { min-height: 38px; font-size: 13px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 8px 10px; margin-top: 6px; }
+.dica b { color: var(--text); }
+table.tab-dados { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+table.tab-dados th, table.tab-dados td { text-align: right; padding: 5px 4px; border-bottom: 1px solid var(--line); }
+table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: left; }
 .toast {
   position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
   background: #1d2330; color: #fff; padding: 10px 16px; border-radius: 10px;
@@ -189,9 +205,16 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
 </header>
 
 <main>
+  <!-- ===== INÍCIO (dashboard) ===== -->
+  <section class="tab" id="tab-inicio">
+    <div class="card total" id="totalInicio" style="background:#1d2330"></div>
+    <div id="graficosInicio"></div>
+  </section>
+
   <!-- ===== CARTÃO (Inter, Bradesco, Mercado Pago) ===== -->
   <section class="tab on" id="tab-cartao">
     <div class="card total" id="totalCartao"></div>
+    <div class="card" id="cardComprometido"></div>
 
     <div class="card">
       <h2 id="tituloForm">Novo gasto</h2>
@@ -354,7 +377,7 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-11-4';
+const APP_VERSAO = '2026-10-11-5';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -365,6 +388,7 @@ const CARTOES = [
 const FECHA_PADRAO = { inter: 3, bradesco: 28, mp: 6 };
 const VENCE_PADRAO = { inter: 10, bradesco: 10, mp: 13 };
 const ABAS = [
+  { id: 'inicio', nome: 'Início', icone: '🏠', cor: '#1d2330' },
   ...CARTOES.map(c => ({ id: c.id, nome: c.curto, icone: c.icone, cor: c.cor })),
   { id: 'salario', nome: 'Salário', icone: '💰', cor: '#15803d' },
   { id: 'ajustes', nome: 'Ajustes', icone: '⚙️', cor: '#6b7280' }
@@ -903,13 +927,13 @@ function renderCartao() {
   const c = cartao(abaAtual);
   const gs = gastosDoMes(mesAtual, c.id).sort((a, b) => b.data.localeCompare(a.data) || b.id.localeCompare(a.id));
   const total = gs.reduce((s, g) => s + g.valor, 0);
-  const futuro = parcelasFuturas(mesAtual, c.id);
   const el = document.getElementById('totalCartao');
   el.style.background = c.cor;
   el.innerHTML = `<div class="l">${esc(c.nome)} · total da fatura de</div>
     <div class="mesgrande">${soMes(mesAtual)}</div>
     <div class="n">${brl(total)}</div>
-    <div class="p">${gs.length} ${gs.length === 1 ? 'gasto' : 'gastos'}${futuro > 0 ? ' · parcelas que ainda faltam depois deste mês: ' + brl(futuro) : ''}</div>`;
+    <div class="p">${gs.length} ${gs.length === 1 ? 'gasto' : 'gastos'} · desse total, <b>${brl(gs.filter(g => g.parcelas > 1).reduce((t, g) => t + g.valor, 0))}</b> são parcelas</div>`;
+  renderComprometido(c);
   document.getElementById('tituloForm').textContent = 'Novo gasto no ' + c.nome;
   document.getElementById('btnAnotar').style.background = c.cor;
   document.getElementById('tituloLista').textContent = 'Gastos de ' + soMes(mesAtual) + ' no ' + c.curto;
@@ -1022,6 +1046,114 @@ function renderDup() {
       <button class="chip" onclick="voltarDuplicado('${r.id}')">Voltar</button>
     </div>`).join('');
 }
+// Separa o total de um mês em compras do mês (à vista) e parcelas.
+function partesDoMes(ym, ids) {
+  let compras = 0, parcelas = 0;
+  for (const id of ids) for (const g of gastosDoMes(ym, id)) {
+    if (g.parcelas > 1) parcelas += g.valor; else compras += g.valor;
+  }
+  return { compras, parcelas, total: compras + parcelas };
+}
+// Meses depois do atual que já têm parcelas lançadas (até 24 meses à frente).
+function comprometidoFuturo(ids) {
+  const out = [];
+  for (let i = 1; i <= 24; i++) {
+    const ym = mesDeslocado(mesAtual, i);
+    const v = partesDoMes(ym, ids).parcelas;
+    if (v > 0.004) out.push({ ym, v });
+  }
+  return out;
+}
+function curto(v) {
+  if (v >= 1000) return (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
+  return Math.round(v).toLocaleString('pt-BR');
+}
+function renderComprometido(c) {
+  const lista = comprometidoFuturo([c.id]);
+  const total = lista.reduce((s, x) => s + x.v, 0);
+  document.getElementById('cardComprometido').innerHTML = `<h2>📅 Já comprometido com parcelas</h2>` + (lista.length
+    ? lista.map(x => `<div class="linha"><span>${soMes(x.ym).replace(/^./, l => l.toUpperCase())}</span><b>${brl(x.v)}</b></div>`).join('') +
+      `<div class="linha tot"><span>Total que ainda falta</span><span>${brl(total)}</span></div>`
+    : `<div class="empty">Nenhuma parcela para os próximos meses no ${esc(c.curto)}.</div>`);
+}
+
+// Gráfico de colunas empilhadas: embaixo as parcelas (laranja), em cima as
+// compras do mês (azul), com o total no topo de cada coluna. Tocar numa
+// coluna mostra os valores na caixinha abaixo do gráfico.
+const graficos = {};
+function grafico(chave, titulo, ids) {
+  const meses = Array.from({ length: 7 }, (_, i) => mesDeslocado(mesAtual, i - 1));
+  const dados = meses.map(ym => ({ ym, ...partesDoMes(ym, ids) }));
+  graficos[chave] = dados;
+  const W = 340, H = 190, top = 18, base = 160, esq = 4, larg = (W - esq) / meses.length, barra = larg * 0.62;
+  const max = Math.max(1, ...dados.map(d => d.total));
+  const y = v => (base - top) * v / max;
+  const r = 4, gap = 2;
+  const caminho = (x, y0, w, h, arred) => {
+    if (h <= 0) return '';
+    if (!arred) return `<rect x="${x}" y="${y0}" width="${w}" height="${h}"`;
+    const rr = Math.min(r, h, w / 2);
+    return `<path d="M${x},${y0 + h} V${y0 + rr} Q${x},${y0} ${x + rr},${y0} H${x + w - rr} Q${x + w},${y0} ${x + w},${y0 + rr} V${y0 + h} Z"`;
+  };
+  let barras = '';
+  dados.forEach((d, i) => {
+    const x = esq + i * larg + (larg - barra) / 2;
+    const hp = y(d.parcelas), hc = y(d.compras);
+    const temC = d.compras > 0.004, temP = d.parcelas > 0.004;
+    if (temP) barras += caminho(x, base - hp, barra, hp, !temC) + ` style="fill:var(--s-parcela)"/>`;
+    if (temC) {
+      const y0 = base - hp - (temP ? gap : 0) - hc;
+      barras += caminho(x, y0, barra, hc, true) + ` style="fill:var(--s-compras)"/>`;
+    }
+    const topo = base - hp - hc - (temP && temC ? gap : 0);
+    if (d.total > 0.004) barras += `<text class="rot" x="${x + barra / 2}" y="${topo - 5}" text-anchor="middle">${curto(d.total)}</text>`;
+    const mesTxt = abrevMes(d.ym).split('/')[0];
+    barras += `<text class="eixo ${d.ym === mesAtual ? 'atual' : ''}" x="${x + barra / 2}" y="${base + 16}" text-anchor="middle">${mesTxt}</text>`;
+    barras += `<rect class="alvo" x="${esq + i * larg}" y="0" width="${larg}" height="${H}" onclick="dicaGrafico('${chave}', ${i})"><title>${soMes(d.ym)}: ${brl(d.total)}</title></rect>`;
+  });
+  const grade = [0.5, 1].map(f => `<line x1="0" x2="${W}" y1="${base - (base - top) * f}" y2="${base - (base - top) * f}" stroke="var(--grade)" stroke-width="1"/>`).join('') +
+    `<line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="var(--grade)" stroke-width="1.5"/>`;
+  const atual = dados[1];
+  const tabela = `<details><summary class="muted" style="margin-top:8px">Ver em tabela</summary>
+    <table class="tab-dados"><tr><th>Mês</th><th>Compras</th><th>Parcelas</th><th>Total</th></tr>` +
+    dados.map(d => `<tr><td>${abrevMes(d.ym)}</td><td>${brl(d.compras)}</td><td>${brl(d.parcelas)}</td><td><b>${brl(d.total)}</b></td></tr>`).join('') +
+    `</table></details>`;
+  return `<div class="card viz">
+    <h2>${titulo}</h2>
+    <div class="legenda"><span><i style="background:var(--s-compras)"></i>Compras do mês</span><span><i style="background:var(--s-parcela)"></i>Parcelas</span></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(titulo)}: total por mês, separando compras do mês e parcelas">${grade}${barras}</svg>
+    <div class="dica" id="dica-${chave}">${textoDica(atual)}</div>
+    ${tabela}
+  </div>`;
+}
+function textoDica(d) {
+  return `<b>${soMes(d.ym)}</b>: total <b>${brl(d.total)}</b> · compras do mês ${brl(d.compras)} · parcelas ${brl(d.parcelas)}`;
+}
+function dicaGrafico(chave, i) {
+  document.getElementById('dica-' + chave).innerHTML = textoDica(graficos[chave][i]);
+}
+function renderInicio() {
+  const ids = CARTOES.map(c => c.id);
+  const m = partesDoMes(mesAtual, ids);
+  const futuro = comprometidoFuturo(ids);
+  const prox = futuro.slice(0, 3).map(x => abrevMes(x.ym) + ' ' + brl(x.v)).join(' · ');
+  document.getElementById('totalInicio').innerHTML = `<div class="l">Total dos 3 cartões · fatura de</div>
+    <div class="mesgrande">${soMes(mesAtual)}</div>
+    <div class="n">${brl(m.total)}</div>
+    <div class="p">${brl(m.compras)} em compras do mês · ${brl(m.parcelas)} em parcelas</div>
+    ${prox ? `<div class="p" style="margin-top:6px">Já comprometido: ${prox}</div>` : ''}`;
+  document.getElementById('graficosInicio').innerHTML =
+    grafico('todos', '🏠 Todos os cartões', ids) +
+    CARTOES.map(c => grafico(c.id, c.icone + ' ' + c.nome, [c.id])).join('') +
+    `<div class="card"><h2>📅 Já comprometido com parcelas (todos os cartões)</h2>` +
+    (futuro.length ? futuro.map(x => {
+      const porCartao = CARTOES.map(c => [c, partesDoMes(x.ym, [c.id]).parcelas]).filter(([, v]) => v > 0.004)
+        .map(([c, v]) => c.icone + ' ' + brl(v)).join('  ');
+      return `<div class="linha"><span>${soMes(x.ym).replace(/^./, l => l.toUpperCase())}<br><span class="muted">${porCartao}</span></span><b>${brl(x.v)}</b></div>`;
+    }).join('') + `<div class="linha tot"><span>Total que ainda falta</span><span>${brl(futuro.reduce((s, x) => s + x.v, 0))}</span></div>`
+    : '<div class="empty">Nenhuma parcela para os próximos meses.</div>') + `</div>`;
+}
+
 function render() {
   const a = ABAS.find(x => x.id === abaAtual);
   document.getElementById('topo').style.background = a.cor;
@@ -1030,6 +1162,7 @@ function render() {
   document.getElementById('mesNome').textContent = soMes(mesAtual);
   renderNav();
   if (CARTOES.some(c => c.id === abaAtual)) renderCartao();
+  else if (abaAtual === 'inicio') renderInicio();
   else if (abaAtual === 'salario') renderSalario();
   else renderAjustes();
   renderSync();
@@ -1336,7 +1469,7 @@ document.getElementById('gParc').innerHTML = '<option value="1">À vista</option
   Array.from({ length: 23 }, (_, i) => `<option value="${i + 2}">${i + 2}x</option>`).join('');
 if (migrarParcelas() | ajustarFixas()) gravar(true);
 lerConvite();
-aba('inter');
+aba('inicio');
 (async () => {
   atualizarApp();
   await sincronizar();
