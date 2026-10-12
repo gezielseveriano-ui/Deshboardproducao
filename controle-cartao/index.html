@@ -378,7 +378,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-11-7';
+const APP_VERSAO = '2026-10-12-1';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -401,7 +401,8 @@ const FIXAS_PADRAO = [
   { id: 'internet', nome: 'Internet', previsto: 100 },
   { id: 'van', nome: 'Van escolar', previsto: 0 },
   { id: 'celular', nome: 'Crédito do celular', previsto: 0 },
-  { id: 'mei', nome: 'MEI', previsto: 0 }
+  { id: 'mei', nome: 'MEI', previsto: 0 },
+  { id: 'midia', nome: 'Gastos extras Midiã', previsto: 0 }
 ];
 
 const PADRAO = {
@@ -853,8 +854,9 @@ function ajustarFixas() {
       apaga('f:' + f.id); mudou = true;
     }
   }
+  const norm = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   for (const p of FIXAS_PADRAO) {
-    if (db.fixas.some(f => f.id === p.id) || (db.apagados || {})['f:' + p.id]) continue;
+    if (db.fixas.some(f => f.id === p.id || norm(f.nome) === norm(p.nome)) || (db.apagados || {})['f:' + p.id]) continue;
     db.fixas.push({ ...p }); marca('f:' + p.id); mudou = true;
   }
   return mudou;
