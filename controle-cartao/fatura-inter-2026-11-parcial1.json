@@ -1,0 +1,104 @@
+{
+ "nome": "Inter – compras de 09/10 a 12/10 (fatura de novembro)",
+ "categorias": [
+  {
+   "id": "livros",
+   "nome": "Livraria / Papelaria",
+   "icone": "📚"
+  },
+  {
+   "id": "mercado",
+   "nome": "Supermercado",
+   "icone": "🛒"
+  },
+  {
+   "id": "passeio",
+   "nome": "Passeios",
+   "icone": "🎡"
+  },
+  {
+   "id": "combustivel",
+   "nome": "Combustível",
+   "icone": "⛽"
+  },
+  {
+   "id": "restaurante",
+   "nome": "Restaurante / Lanche",
+   "icone": "🍔"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-nov26b-01",
+   "cartao": "inter",
+   "data": "2026-10-12",
+   "cat": "livros",
+   "valor": 84.0,
+   "desc": "ARMANDO NACIONAIS E IM (livraria)",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26b-02",
+   "cartao": "inter",
+   "data": "2026-10-11",
+   "cat": "mercado",
+   "valor": 33.57,
+   "desc": "SUPERMERCADO BARAO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26b-03",
+   "cartao": "inter",
+   "data": "2026-10-10",
+   "cat": "mercado",
+   "valor": 14.77,
+   "desc": "PAO DA LAPA",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26b-04",
+   "cartao": "inter",
+   "data": "2026-10-10",
+   "cat": "passeio",
+   "valor": 44.2,
+   "desc": "INGRESSOSA GOIANIA (ingressos)",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26b-05",
+   "cartao": "inter",
+   "data": "2026-10-10",
+   "cat": "mercado",
+   "valor": 10.56,
+   "desc": "PAO DA LAPA",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26b-06",
+   "cartao": "inter",
+   "data": "2026-10-10",
+   "cat": "combustivel",
+   "valor": 100.0,
+   "desc": "AUTO POSTO BEIJA FLOR VESPASIANO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26b-07",
+   "cartao": "inter",
+   "data": "2026-10-09",
+   "cat": "mercado",
+   "valor": 1442.86,
+   "desc": "MART MINAS VESPASIANO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26b-08",
+   "cartao": "inter",
+   "data": "2026-10-09",
+   "cat": "restaurante",
+   "valor": 62.0,
+   "desc": "JIM COM 29480512 SAO JOSE DA LAPA",
+   "fatura": "2026-11"
+  }
+ ]
+}
