@@ -378,7 +378,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-12-1';
+const APP_VERSAO = '2026-10-13-1';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -428,7 +428,8 @@ const PADRAO = {
 
 let db = carregar();
 let abaAtual = 'inter';
-let mesAtual = mesFatura(hojeISO(), 'inter');
+// O app abre no mês em que estamos.
+let mesAtual = hojeISO().slice(0, 7);
 let catSel = db.categorias[0] && db.categorias[0].id;
 
 function carregar() {
@@ -525,6 +526,35 @@ function mesFatura(data, cartaoId) {
   if (venc && venc <= corte) mes = mesDeslocado(mes, 1);
   return mes;
 }
+// Nas abas dos cartões o mês do topo é o mês dos GASTOS; eles são pagos na
+// fatura do mês seguinte (ex.: gastos de outubro → fatura que vence em
+// novembro). Cartão sem fechamento configurado conta tudo no mesmo mês.
+function faturaDosGastos(ym, cartaoId) { return corteDe(cartaoId) ? mesDeslocado(ym, 1) : ym; }
+function gastosDaFatura(fat, cartaoId) { return corteDe(cartaoId) ? mesDeslocado(fat, -1) : fat; }
+function dm(ym, dia) {
+  const [a, m] = ym.split('-').map(Number);
+  const ult = new Date(a, m, 0).getDate();
+  return String(Math.min(dia, ult)).padStart(2, '0') + '/' + String(m).padStart(2, '0');
+}
+// Período de compras que entra na fatura que vence em "fat" e o dia do vencimento.
+function infoFatura(fat, cartaoId) {
+  const corte = corteDe(cartaoId), venc = vencDe(cartaoId);
+  if (!corte) return { vence: venc ? dm(fat, venc) : '', de: '', ate: '' };
+  const fecha = venc && venc <= corte ? mesDeslocado(fat, -1) : fat;
+  const iniMes = mesDeslocado(fecha, -1);
+  return { vence: venc ? dm(fat, venc) : '', de: dm(iniMes, corte), ate: corte > 1 ? dm(fecha, corte - 1) : dm(iniMes, 31) };
+}
+// Data sugerida no formulário: hoje, se hoje cai nos gastos da tela; senão o
+// primeiro dia de compras daquela fatura.
+function dataSugerida(cartaoId) {
+  const fat = faturaDosGastos(mesAtual, cartaoId), hoje = hojeISO();
+  if (mesFatura(hoje, cartaoId) === fat) return hoje;
+  const corte = corteDe(cartaoId);
+  if (!corte) return mesAtual + '-01';
+  const venc = vencDe(cartaoId);
+  const fecha = venc && venc <= corte ? mesDeslocado(fat, -1) : fat;
+  return mesDeslocado(fecha, -1) + '-' + String(corte).padStart(2, '0');
+}
 // Lançamentos antigos (sem "cartao") são todos do Inter.
 function cartaoDe(g) { return g.cartao || 'inter'; }
 function mesBase(g) { return g.fatura || mesFatura(g.data, cartaoDe(g)); }
@@ -591,19 +621,13 @@ function aba(nome) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   const sec = CARTOES.some(c => c.id === nome) ? 'cartao' : nome;
   document.getElementById('tab-' + sec).classList.add('on');
-  if (sec === 'cartao') {
-    const hoje = hojeISO();
-    document.getElementById('gData').value = mesFatura(hoje, nome) === mesAtual ? hoje : mesAtual + '-01';
-  }
+  if (sec === 'cartao') document.getElementById('gData').value = dataSugerida(nome);
   window.scrollTo(0, 0);
   render();
 }
 function mudaMes(d) {
   mesAtual = mesDeslocado(mesAtual, d);
-  if (CARTOES.some(c => c.id === abaAtual)) {
-    const hoje = hojeISO();
-    document.getElementById('gData').value = mesFatura(hoje, abaAtual) === mesAtual ? hoje : mesAtual + '-01';
-  }
+  if (CARTOES.some(c => c.id === abaAtual)) document.getElementById('gData').value = dataSugerida(abaAtual);
   render();
 }
 
@@ -620,14 +644,15 @@ function previaParcelas() {
   const n = Number(document.getElementById('gParc').value) || 1;
   const v = numero(document.getElementById('gValor').value);
   const el = document.getElementById('gPrevia');
-  document.getElementById('lblParcAtual').textContent = 'Parcela que cai em ' + abrevMes(mesAtual);
+  const fatTela = faturaDosGastos(mesAtual, abaAtual);
+  document.getElementById('lblParcAtual').textContent = 'Parcela paga em ' + abrevMes(fatTela);
   if (n <= 1 || !(v > 0)) { el.textContent = ''; return; }
   const porParcela = document.getElementById('gTipoValor').value === 'parcela';
   const parc = porParcela ? v : Math.round(v / n * 100) / 100;
   const k = Number(document.getElementById('gParcAtual').value) || 1;
-  const ini = k > 1 ? mesAtual : mesFatura(document.getElementById('gData').value || hojeISO(), abaAtual);
+  const ini = k > 1 ? fatTela : mesFatura(document.getElementById('gData').value || hojeISO(), abaAtual);
   const fim = mesDeslocado(ini, n - k);
-  el.innerHTML = '➡️ <b>' + n + 'x de ' + brl(parc) + '</b> · parcela ' + k + ' em ' + abrevMes(ini) + ', última em ' + abrevMes(fim) +
+  el.innerHTML = '➡️ <b>' + n + 'x de ' + brl(parc) + '</b> · parcela ' + k + ' paga em ' + abrevMes(ini) + ', última em ' + abrevMes(fim) +
     (k > 1 ? ' · faltam ' + (n - k) + ' depois desta' : '');
 }
 function salvarGasto() {
@@ -645,8 +670,8 @@ function salvarGasto() {
     const k = Number(document.getElementById('gParcAtual').value) || 1;
     g.valor = porParcela ? valor : Math.round(valor / n * 100) / 100;
     g.parcelas = n; g.parcelaAtual = k;
-    // Compra antiga já no meio das parcelas: a parcela informada cai no mês que está na tela.
-    if (k > 1) g.fatura = mesAtual;
+    // Compra antiga já no meio das parcelas: a parcela informada é paga na fatura da tela.
+    if (k > 1) g.fatura = faturaDosGastos(mesAtual, cartaoId);
   }
   db.gastos.push(g);
   marca('g:' + id);
@@ -655,11 +680,12 @@ function salvarGasto() {
   document.getElementById('gDesc').value = '';
   document.getElementById('gParc').value = '1';
   mudouParcelas();
-  const mf = mesBase(g);
-  const mudouMes = mf !== mesAtual;
-  mesAtual = parcelaNoMes(g, mesAtual) ? mesAtual : mf;
-  toast(cat(catSel).icone + ' ' + (n > 1 ? n + 'x de ' + brl(g.valor) : brl(valor)) + ' anotado' +
-    (mudouMes && mesAtual === mf ? ' na fatura de ' + soMes(mf) : '') + '!');
+  const fatTela = faturaDosGastos(mesAtual, cartaoId);
+  const mf = parcelaNoMes(g, fatTela) ? fatTela : mesBase(g);
+  mesAtual = gastosDaFatura(mf, cartaoId);
+  const inf = infoFatura(mf, cartaoId);
+  toast(cat(catSel).icone + ' ' + (n > 1 ? n + 'x de ' + brl(g.valor) : brl(valor)) + ' · gasto de ' + soMes(mesAtual) +
+    ' · pagamento em ' + soMes(mf) + (inf.vence ? ' (vence ' + inf.vence + ')' : ''));
   render();
 }
 function apagarGasto(id) {
@@ -928,18 +954,20 @@ function renderChips() {
 }
 function renderCartao() {
   const c = cartao(abaAtual);
-  const gs = gastosDoMes(mesAtual, c.id).sort((a, b) => b.data.localeCompare(a.data) || b.id.localeCompare(a.id));
+  const fat = faturaDosGastos(mesAtual, c.id), inf = infoFatura(fat, c.id);
+  const gs = gastosDoMes(fat, c.id).sort((a, b) => b.data.localeCompare(a.data) || b.id.localeCompare(a.id));
   const total = gs.reduce((s, g) => s + g.valor, 0);
   const el = document.getElementById('totalCartao');
   el.style.background = c.cor;
-  el.innerHTML = `<div class="l">${esc(c.nome)} · total da fatura de</div>
+  el.innerHTML = `<div class="l">${esc(c.nome)} · gastos de</div>
     <div class="mesgrande">${soMes(mesAtual)}</div>
     <div class="n">${brl(total)}</div>
+    <div class="p" style="background:rgba(0,0,0,.18);border-radius:8px;padding:6px 8px;margin:6px 0">💳 Pagamento em <b>${soMes(fat)}</b>${inf.vence ? ' · vence ' + inf.vence : ''}${inf.de ? '<br>compras de ' + inf.de + ' a ' + inf.ate : ''}</div>
     <div class="p">${gs.length} ${gs.length === 1 ? 'gasto' : 'gastos'} · desse total, <b>${brl(gs.filter(g => g.parcelas > 1).reduce((t, g) => t + g.valor, 0))}</b> são parcelas</div>`;
   renderComprometido(c);
   document.getElementById('tituloForm').textContent = 'Novo gasto no ' + c.nome;
   document.getElementById('btnAnotar').style.background = c.cor;
-  document.getElementById('tituloLista').textContent = 'Gastos de ' + soMes(mesAtual) + ' no ' + c.curto;
+  document.getElementById('tituloLista').textContent = 'Gastos de ' + soMes(mesAtual) + ' (pagos em ' + soMes(fat).split(' ')[0] + ')';
   renderChips();
   previaParcelas();
   document.getElementById('listaGastos').innerHTML = gs.length ? gs.map(g => {
@@ -952,7 +980,7 @@ function renderCartao() {
       <div class="v">${brl(g.valor)}</div>
       <button class="x" onclick="apagarGasto('${g.id}')" aria-label="Apagar">✕</button>
     </div>`;
-  }).join('') : `<div class="empty">Nenhum gasto no ${esc(c.curto)} em ${soMes(mesAtual)}.</div>`;
+  }).join('') : `<div class="empty">Nenhum gasto de ${soMes(mesAtual)} no ${esc(c.curto)}.</div>`;
 }
 function renderSalario() {
   const r = resumoSalario(mesAtual);
@@ -979,7 +1007,7 @@ function renderSalario() {
       <div class="ic">${c.icone}</div>
       <div class="info"><div class="t">${esc(c.nome)}</div>
         <div style="margin:2px 0">${status}</div>
-        <div class="s">Fatura no app: ${brl(fatura)}</div></div>
+        <div class="s">Fatura que vence ${infoFatura(mesAtual, c.id).vence || 'neste mês'}: ${brl(fatura)}<br>(gastos de ${soMes(gastosDaFatura(mesAtual, c.id)).split(' ')[0]})</div></div>
       <div class="v">${pago != null ? brl(pago) : ''}</div>
       ${pago == null
         ? `<button class="chip" onclick="pagarCartao('${c.id}')">Paguei</button>`
@@ -1058,10 +1086,10 @@ function partesDoMes(ym, ids) {
   return { compras, parcelas, total: compras + parcelas };
 }
 // Meses depois do atual que já têm parcelas lançadas (até 24 meses à frente).
-function comprometidoFuturo(ids) {
+function comprometidoFuturo(ids, base) {
   const out = [];
   for (let i = 1; i <= 24; i++) {
-    const ym = mesDeslocado(mesAtual, i);
+    const ym = mesDeslocado(base || mesAtual, i);
     const v = partesDoMes(ym, ids).parcelas;
     if (v > 0.004) out.push({ ym, v });
   }
@@ -1074,7 +1102,7 @@ function curto(v) {
 // Quadro "Já comprometido": fechado mostra só o total; tocando, abre os meses.
 let comprometidoAberto = false;
 function renderComprometido(c) {
-  const lista = comprometidoFuturo([c.id]);
+  const lista = comprometidoFuturo([c.id], faturaDosGastos(mesAtual, c.id));
   const total = lista.reduce((s, x) => s + x.v, 0);
   const el = document.getElementById('cardComprometido');
   if (!lista.length) {
@@ -1083,7 +1111,7 @@ function renderComprometido(c) {
   }
   el.innerHTML = `<details ${comprometidoAberto ? 'open' : ''} ontoggle="comprometidoAberto = this.open">
     <summary class="linha" style="cursor:pointer;padding:0;list-style:none">
-      <span><b>📅 Já comprometido com parcelas</b><br><span class="muted">${comprometidoAberto ? 'toque para fechar ▲' : 'toque para ver mês a mês ▼'}</span></span>
+      <span><b>📅 Parcelas já comprometidas</b><br><span class="muted">${comprometidoAberto ? 'toque para fechar ▲' : 'toque para ver em que mês cada uma é paga ▼'}</span></span>
       <b style="font-size:18px">${brl(total)}</b>
     </summary>
     <div class="muted" style="margin:10px 0 4px">Toque no mês para ver cada parcela.</div>
@@ -1140,6 +1168,7 @@ function grafico(chave, titulo, ids) {
     `</table></details>`;
   return `<div class="card viz">
     <h2>${titulo}</h2>
+    <div class="muted" style="margin:-6px 0 6px">Cada coluna é o mês em que a fatura é paga.</div>
     <div class="legenda"><span><i style="background:var(--s-compras)"></i>Compras do mês</span><span><i style="background:var(--s-parcela)"></i>Parcelas</span></div>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(titulo)}: total por mês, separando compras do mês e parcelas">${grade}${barras}</svg>
     <div class="dica" id="dica-${chave}">${textoDica(atual)}<div style="margin-top:4px">👆 Toque numa coluna ou no valor das parcelas para ver cada item.</div></div>
@@ -1176,10 +1205,10 @@ function renderInicio() {
   const m = partesDoMes(mesAtual, ids);
   const futuro = comprometidoFuturo(ids);
   const prox = futuro.slice(0, 3).map(x => abrevMes(x.ym) + ' ' + brl(x.v)).join(' · ');
-  document.getElementById('totalInicio').innerHTML = `<div class="l">Total dos 3 cartões · fatura de</div>
+  document.getElementById('totalInicio').innerHTML = `<div class="l">Faturas dos 3 cartões que vencem em</div>
     <div class="mesgrande">${soMes(mesAtual)}</div>
     <div class="n">${brl(m.total)}</div>
-    <div class="p">${brl(m.compras)} em compras do mês · ${brl(m.parcelas)} em parcelas</div>
+    <div class="p">gastos de ${soMes(mesDeslocado(mesAtual, -1))}: ${brl(m.compras)} em compras · ${brl(m.parcelas)} em parcelas</div>
     ${prox ? `<div class="p" style="margin-top:6px">Já comprometido: ${prox}</div>` : ''}`;
   document.getElementById('graficosInicio').innerHTML =
     grafico('todos', '🏠 Todos os cartões', ids) +
