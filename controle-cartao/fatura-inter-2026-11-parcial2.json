@@ -1,0 +1,48 @@
+{
+ "nome": "Inter – compras de 07/10 e 08/10 (fatura de novembro)",
+ "categorias": [
+  {
+   "id": "servicos",
+   "nome": "Serviços",
+   "icone": "🛠️"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-nov26c-01",
+   "cartao": "inter",
+   "data": "2026-10-08",
+   "cat": "servicos",
+   "valor": 7.95,
+   "desc": "IFOOD CLUB",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26c-02",
+   "cartao": "inter",
+   "data": "2026-10-08",
+   "cat": "mercado",
+   "valor": 13.27,
+   "desc": "PAO DA LAPA",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26c-03",
+   "cartao": "inter",
+   "data": "2026-10-07",
+   "cat": "mercado",
+   "valor": 57.94,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26c-04",
+   "cartao": "inter",
+   "data": "2026-10-07",
+   "cat": "combustivel",
+   "valor": 100.0,
+   "desc": "POSTO LAPA DOURADA",
+   "fatura": "2026-11"
+  }
+ ]
+}
