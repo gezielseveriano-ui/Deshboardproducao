@@ -1,0 +1,23 @@
+{
+ "nome": "Inter – Pix no crédito parcelado 2x de R$ 193,35 (13/10)",
+ "categorias": [
+  {
+   "id": "outros",
+   "nome": "Outros",
+   "icone": "📦"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-nov26d-01",
+   "cartao": "inter",
+   "data": "2026-10-13",
+   "cat": "outros",
+   "valor": 193.35,
+   "parcelas": 2,
+   "parcelaAtual": 1,
+   "fatura": "2026-11",
+   "desc": "PIX CRED PARC (Pix no crédito parcelado)"
+  }
+ ]
+}
