@@ -378,7 +378,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-14-2';
+const APP_VERSAO = '2026-10-14-3';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -1122,7 +1122,9 @@ function curto(v) {
 // Quadro "Já comprometido": fechado mostra só o total; tocando, abre os meses.
 let comprometidoAberto = false;
 function renderComprometido(c) {
-  const lista = comprometidoFuturo([c.id], faturaDosGastos(mesAtual, c.id));
+  // Começa pela fatura da tela (ex.: novembro) e segue pelos meses seguintes.
+  const fatTela = faturaDosGastos(mesAtual, c.id);
+  const lista = comprometidoFuturo([c.id], mesDeslocado(fatTela, -1));
   const total = lista.reduce((s, x) => s + x.v, 0);
   const el = document.getElementById('cardComprometido');
   if (!lista.length) {
@@ -1135,9 +1137,9 @@ function renderComprometido(c) {
       <b style="font-size:18px">${brl(total)}</b>
     </summary>
     <div class="muted" style="margin:10px 0 4px">Toque no mês para ver cada parcela.</div>
-    ${lista.map(x => `<details><summary class="linha" style="cursor:pointer"><span>▸ ${soMes(x.ym).replace(/^./, l => l.toUpperCase())}</span><b>${brl(x.v)}</b></summary>
+    ${lista.map(x => `<details><summary class="linha" style="cursor:pointer"><span>▸ ${soMes(x.ym).replace(/^./, l => l.toUpperCase())}${x.ym === fatTela ? ' <span class="tag parc">fatura desta tela</span>' : ''}</span><b>${brl(x.v)}</b></summary>
         <div class="dica" style="margin:0 0 8px">${itensParcelas(x.ym, [c.id])}</div></details>`).join('')}
-    <div class="linha tot"><span>Total que ainda falta</span><span>${brl(total)}</span></div>
+    <div class="linha tot"><span>Total de parcelas a pagar<br><span class="muted" style="font-weight:400">de ${soMes(fatTela).split(' ')[0]} em diante</span></span><span>${brl(total)}</span></div>
   </details>`;
   el.querySelector('details').addEventListener('toggle', e => {
     e.target.querySelector('summary .muted').textContent = e.target.open ? 'toque para fechar ▲' : 'toque para ver mês a mês ▼';
