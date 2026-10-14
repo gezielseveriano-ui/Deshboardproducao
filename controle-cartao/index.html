@@ -178,6 +178,23 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
 .viz .rot { font-size: 11px; fill: var(--text); font-weight: 700; }
 .viz .alvo { fill: transparent; cursor: pointer; }
 .viz .sel { fill: var(--text); opacity: .06; }
+.pizza { --p1:#2a78d6; --p2:#eb6834; --p3:#1baf7a; --p4:#eda100; --p5:#e87ba4; --p6:#008300; --p7:#6250d6; --p8:#9ca3af; }
+@media (prefers-color-scheme: dark) { .pizza { --p1:#3987e5; --p2:#d95926; --p3:#199e70; --p4:#c98500; --p5:#d55181; --p6:#008300; --p7:#9085e9; --p8:#6b7280; } }
+.pizza .roda { display: flex; justify-content: center; margin: 4px 0 10px; }
+.pizza .roda svg { width: 220px; max-width: 70%; height: auto; }
+.pizza .fatia { cursor: pointer; stroke: var(--card); stroke-width: 2; }
+.pizza .fatia.apagada { opacity: .35; }
+.pizza .centro1 { font-size: 11px; fill: var(--muted); }
+.pizza .centro2 { font-size: 17px; font-weight: 800; fill: var(--text); }
+.pizza .loja { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.pizza .loja:last-child { border-bottom: 0; }
+.pizza .loja i { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 12px; }
+.pizza .loja .nm { flex: 1; min-width: 0; }
+.pizza .loja .pc { color: var(--muted); font-size: 13px; width: 42px; text-align: right; }
+.pizza .loja.sel { background: var(--bg); border-radius: 8px; }
+.periodo { display: flex; gap: 8px; margin-bottom: 12px; }
+.periodo button { flex: 1; padding: 10px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 14px; }
+.periodo button.on { background: #7c3aed; border-color: #7c3aed; color: #fff; font-weight: 700; }
 .legenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 2px 0 8px; }
 .legenda i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .dica { min-height: 38px; font-size: 13px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 8px 10px; margin-top: 6px; }
@@ -210,6 +227,12 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
   <section class="tab" id="tab-inicio">
     <div class="card total" id="totalInicio" style="background:#1d2330"></div>
     <div id="graficosInicio"></div>
+  </section>
+
+  <!-- ===== LOJAS (pizza: onde mais gasto) ===== -->
+  <section class="tab" id="tab-lojas">
+    <div class="periodo" id="periodoLojas"></div>
+    <div id="pizzas"></div>
   </section>
 
   <!-- ===== CARTÃO (Inter, Bradesco, Mercado Pago) ===== -->
@@ -378,7 +401,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-14-3';
+const APP_VERSAO = '2026-10-14-4';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -391,6 +414,7 @@ const VENCE_PADRAO = { inter: 10, bradesco: 10, mp: 13 };
 const ABAS = [
   { id: 'inicio', nome: 'Início', icone: '🏠', cor: '#1d2330' },
   ...CARTOES.map(c => ({ id: c.id, nome: c.curto, icone: c.icone, cor: c.cor })),
+  { id: 'lojas', nome: 'Lojas', icone: '🍕', cor: '#7c3aed' },
   { id: 'salario', nome: 'Salário', icone: '💰', cor: '#15803d' },
   { id: 'ajustes', nome: 'Ajustes', icone: '⚙️', cor: '#6b7280' }
 ];
@@ -1244,6 +1268,114 @@ function renderInicio() {
     : '<div class="empty">Nenhuma parcela para os próximos meses.</div>') + `</div>`;
 }
 
+// ---------- onde mais gasto (pizza por loja) ----------
+// Junta os lançamentos pela loja: todas as Shopee viram "Shopee", todos os
+// Mercado Livre viram "Mercado Livre", todos os postos viram "Postos" etc.
+// Lançamento à mão sem observação fica pelo nome da categoria.
+const LOJAS = [
+  [/SHOPEE/, 'Shopee'], [/MERCADO ?LIVRE|MELIMAIS/, 'Mercado Livre'], [/PIX CRED/, 'Pix no crédito'],
+  [/AQUABEAT/, 'Aquabeat'], [/MART MINAS/, 'Mart Minas'], [/SUPERMERCADOS? BH/, 'Supermercados BH'],
+  [/SUPERMERCADO BARAO/, 'Supermercado Barão'], [/PAO DA LAPA|PADARIA/, 'Pão da Lapa / padaria'],
+  [/POSTO/, 'Postos de combustível'], [/RAIA|DROGARIA|DRROGARIA|MAISAUDE/, 'Farmácias'],
+  [/IFOOD|FACEBURGUER|JIM\.? ?COM/, 'Lanches / delivery'], [/GOOGLE/, 'Google'], [/ANTHROPIC|CLAUDE/, 'Claude (assinatura)'],
+  [/ODONTO/, 'Odontocompany'], [/IOF|JUROS/, 'Juros e IOF'], [/MERCEARIA|HORTIFRUTI|SABORDACASA/, 'Mercearia / hortifruti'],
+  [/EFVM/, 'Trem (EFVM)'], [/ALWAYSFIT/, 'Alwaysfit'], [/PAYT|BRAIP|KIWIFY|PERFECT ?PAY/, 'Compras digitais (Payt, Braip, Kiwify…)'],
+  [/LIVRARIA|ARMANDO NACIONAIS/, 'Livraria'], [/INGRESSO/, 'Ingressos']
+];
+function lojaDe(g) {
+  const d = (g.desc || '').split(' · ')[0].toUpperCase();
+  for (const [re, nome] of LOJAS) if (re.test(d)) return nome;
+  if (!d.trim()) return cat(g.cat).nome;
+  const limpo = (g.desc || '').split(' · ')[0].replace(/\(.*?\)/g, '').replace(/^(MP|PG)\s*\*?\s*/i, '').trim();
+  return limpo.split(/\s+/).slice(0, 3).join(' ').toLowerCase().replace(/(^|\s)\S/g, l => l.toUpperCase());
+}
+let periodoLojas = 'mes';
+const PERIODOS = [['mes', 'Este mês'], ['3m', 'Últimos 3 meses'], ['tudo', 'Tudo']];
+// Faturas (por cartão) que entram no período escolhido, a partir do mês da tela.
+function faturasDoPeriodo(cartaoId) {
+  const fat = faturaDosGastos(mesAtual, cartaoId);
+  if (periodoLojas === 'mes') return [fat];
+  if (periodoLojas === '3m') return [mesDeslocado(fat, -2), mesDeslocado(fat, -1), fat];
+  const meses = db.gastos.filter(g => cartaoDe(g) === cartaoId).map(mesBase);
+  if (!meses.length) return [fat];
+  const ini = meses.reduce((a, b) => a < b ? a : b);
+  const out = [];
+  for (let ym = ini; ym <= fat; ym = mesDeslocado(ym, 1)) out.push(ym);
+  return out;
+}
+function porLoja(ids) {
+  const m = {};
+  for (const id of ids) for (const fat of faturasDoPeriodo(id)) for (const g of gastosDoMes(fat, id)) {
+    const l = lojaDe(g);
+    m[l] = (m[l] || 0) + g.valor;
+  }
+  const lista = Object.entries(m).filter(([, v]) => v > 0.004).sort((a, b) => b[1] - a[1]);
+  // Até 7 fatias com cor; o resto vira "Outras lojas" (cinza), sempre por último.
+  let outras = [];
+  if (lista.length > 8) {
+    outras = lista.splice(7);
+    lista.push(['Outras lojas', outras.reduce((s, [, v]) => s + v, 0)]);
+  }
+  lista.outras = outras;
+  return lista;
+}
+const pizzas = {};
+function pizza(chave, titulo, ids) {
+  const lista = porLoja(ids);
+  pizzas[chave] = lista;
+  const total = lista.reduce((s, [, v]) => s + v, 0);
+  if (!total) return `<div class="card pizza"><h2>${titulo}</h2><div class="empty">Sem gastos neste período.</div></div>`;
+  const cor = i => lista[i][0] === 'Outras lojas' ? 'var(--p8)' : `var(--p${i + 1})`;
+  const R = 100, r = 58, cx = 110, cy = 110;
+  let ang = -Math.PI / 2, fatias = '';
+  lista.forEach(([nome, v], i) => {
+    const a = v / total * Math.PI * 2;
+    const p = (rr, t) => [cx + rr * Math.cos(t), cy + rr * Math.sin(t)];
+    if (lista.length === 1) {
+      fatias += `<circle class="fatia" cx="${cx}" cy="${cy}" r="${(R + r) / 2}" fill="none" style="stroke:${cor(i)};stroke-width:${R - r}" data-i="0" onclick="selLoja('${chave}',0)"><title>${esc(nome)}</title></circle>`;
+    } else {
+      const [x1, y1] = p(R, ang), [x2, y2] = p(R, ang + a), [x3, y3] = p(r, ang + a), [x4, y4] = p(r, ang);
+      const grande = a > Math.PI ? 1 : 0;
+      fatias += `<path class="fatia" data-i="${i}" style="fill:${cor(i)}" onclick="selLoja('${chave}',${i})"
+        d="M${x1},${y1} A${R},${R} 0 ${grande} 1 ${x2},${y2} L${x3},${y3} A${r},${r} 0 ${grande} 0 ${x4},${y4} Z"><title>${esc(nome)}: ${brl(v)}</title></path>`;
+    }
+    ang += a;
+  });
+  const linhas = lista.map(([nome, v], i) => `<div class="loja" data-i="${i}" onclick="selLoja('${chave}',${i})">
+      <i style="background:${cor(i)}"></i><span class="nm">${i + 1}. ${esc(nome)}</span><b>${brl(v)}</b><span class="pc">${(v / total * 100).toFixed(0)}%</span></div>`).join('');
+  const maisLojas = lista.outras.length ? `<details style="margin-top:6px"><summary class="muted">Ver as ${lista.outras.length} lojas dentro de "Outras lojas"</summary>
+    ${lista.outras.map(([nome, v]) => `<div class="linha" style="padding:4px 0;font-size:14px"><span>${esc(nome)}</span><span>${brl(v)} <span class="muted">${(v / total * 100).toFixed(0)}%</span></span></div>`).join('')}</details>` : '';
+  return `<div class="card pizza" id="pz-${chave}">
+    <h2>${titulo}</h2>
+    <div class="roda"><svg viewBox="0 0 220 220" role="img" aria-label="${esc(titulo)}: gastos por loja">${fatias}
+      <text class="centro1" x="110" y="104" text-anchor="middle" id="pzl-${chave}">Total</text>
+      <text class="centro2" x="110" y="126" text-anchor="middle" id="pzv-${chave}">${brl(total)}</text></svg></div>
+    <div class="muted" style="margin-bottom:4px">Onde mais gastou (toque para destacar):</div>
+    ${linhas}
+    ${maisLojas}
+  </div>`;
+}
+function selLoja(chave, i) {
+  const el = document.getElementById('pz-' + chave);
+  const ja = el.dataset.sel === String(i);
+  el.dataset.sel = ja ? '' : i;
+  el.querySelectorAll('.fatia').forEach(f => f.classList.toggle('apagada', !ja && f.dataset.i !== String(i)));
+  el.querySelectorAll('.loja').forEach(f => f.classList.toggle('sel', !ja && f.dataset.i === String(i)));
+  const lista = pizzas[chave], total = lista.reduce((s, [, v]) => s + v, 0);
+  document.getElementById('pzl-' + chave).textContent = ja ? 'Total' : lista[i][0].slice(0, 22);
+  document.getElementById('pzv-' + chave).textContent = ja ? brl(total) : brl(lista[i][1]) + ' · ' + (lista[i][1] / total * 100).toFixed(0) + '%';
+}
+function mudaPeriodo(p) { periodoLojas = p; renderLojas(); }
+function renderLojas() {
+  document.getElementById('periodoLojas').innerHTML = PERIODOS.map(([id, nome]) =>
+    `<button class="${id === periodoLojas ? 'on' : ''}" onclick="mudaPeriodo('${id}')">${nome}</button>`).join('');
+  const sub = periodoLojas === 'mes' ? 'gastos de ' + soMes(mesAtual) : periodoLojas === '3m' ? 'gastos dos 3 meses até ' + soMes(mesAtual) : 'todos os gastos lançados até ' + soMes(mesAtual);
+  document.getElementById('pizzas').innerHTML =
+    `<div class="muted" style="margin:-4px 0 10px">🍕 ${sub}</div>` +
+    pizza('todos', '🏠 Todos os cartões', CARTOES.map(c => c.id)) +
+    CARTOES.map(c => pizza(c.id, c.icone + ' ' + c.nome, [c.id])).join('');
+}
+
 function render() {
   const a = ABAS.find(x => x.id === abaAtual);
   document.getElementById('topo').style.background = a.cor;
@@ -1253,6 +1385,7 @@ function render() {
   renderNav();
   if (CARTOES.some(c => c.id === abaAtual)) renderCartao();
   else if (abaAtual === 'inicio') renderInicio();
+  else if (abaAtual === 'lojas') renderLojas();
   else if (abaAtual === 'salario') renderSalario();
   else renderAjustes();
   renderSync();
