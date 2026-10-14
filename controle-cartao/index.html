@@ -378,7 +378,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-14-1';
+const APP_VERSAO = '2026-10-14-2';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -983,7 +983,7 @@ function renderCartao() {
     <div class="n">${brl(total)}</div>
     <div class="p" style="background:rgba(0,0,0,.18);border-radius:8px;padding:6px 8px;margin:6px 0">💳 Pagamento em <b>${soMes(fat)}</b>${inf.vence ? ' · vence ' + inf.vence : ''}${inf.de ? '<br>compras de ' + inf.de + ' a ' + inf.ate : ''}</div>
     ${gs.some(g => !importado(g)) ? `<div class="p">✍️ lançados à mão: ${gs.filter(g => !importado(g)).length} (${brl(gs.filter(g => !importado(g)).reduce((t, g) => t + g.valor, 0))}) · da fatura/print: ${gs.filter(importado).length}</div>` : ''}
-    <div class="p">${gs.length} ${gs.length === 1 ? 'gasto' : 'gastos'} · desse total, <b>${brl(gs.filter(g => g.parcelas > 1).reduce((t, g) => t + g.valor, 0))}</b> são parcelas</div>`;
+    <div class="p">${gs.length} ${gs.length === 1 ? 'gasto' : 'gastos'} · <b>${brl(gs.filter(g => g.parcelas > 1).reduce((t, g) => t + g.valor, 0))}</b> são parcelas que vencem em <b>${soMes(fat).split(' ')[0]}</b></div>`;
   renderComprometido(c);
   document.getElementById('tituloForm').textContent = 'Novo gasto no ' + c.nome;
   document.getElementById('btnAnotar').style.background = c.cor;
