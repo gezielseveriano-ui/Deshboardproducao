@@ -163,9 +163,9 @@ nav {
 }
 nav button {
   flex: 1; border: 0; background: transparent; color: var(--muted);
-  padding: 8px 0 10px; font-size: 11px; min-width: 0;
+  padding: 8px 0 10px; font-size: 10px; min-width: 0; letter-spacing: -.2px;
 }
-nav button b { display: block; font-size: 20px; font-weight: normal; }
+nav button b { display: block; font-size: 19px; font-weight: normal; }
 nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 var(--cor, var(--brand)); }
 .tab { display: none; }
 .tab.on { display: block; }
@@ -192,6 +192,15 @@ nav button.on { color: var(--text); font-weight: 800; box-shadow: inset 0 3px 0 
 .pizza .loja .nm { flex: 1; min-width: 0; }
 .pizza .loja .pc { color: var(--muted); font-size: 13px; width: 42px; text-align: right; }
 .pizza .loja.sel { background: var(--bg); border-radius: 8px; }
+.prev { --s-var: #2a78d6; --s-fixa: #eb6834; }
+@media (prefers-color-scheme: dark) { .prev { --s-var: #3987e5; --s-fixa: #d95926; } }
+.prev .lin { padding: 7px 0; border-bottom: 1px solid var(--line); }
+.prev .lin:last-child { border-bottom: 0; }
+.prev .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; }
+.prev .top b { white-space: nowrap; }
+.prev .trilho { height: 12px; background: var(--bg); border-radius: 0 4px 4px 0; margin-top: 5px; }
+.prev .barra { height: 12px; border-radius: 0 4px 4px 0; min-width: 2px; }
+.prev .obs { font-size: 12px; color: var(--muted); margin-top: 3px; }
 .periodo { display: flex; gap: 8px; margin-bottom: 12px; }
 .periodo button { flex: 1; padding: 10px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 14px; }
 .periodo button.on { background: #7c3aed; border-color: #7c3aed; color: #fff; font-weight: 700; }
@@ -233,6 +242,12 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
   <section class="tab" id="tab-lojas">
     <div class="periodo" id="periodoLojas"></div>
     <div id="pizzas"></div>
+  </section>
+
+  <!-- ===== CUSTOS PREVISTOS (só para ver) ===== -->
+  <section class="tab" id="tab-previstos">
+    <div class="card total" id="totalPrevisto" style="background:#0f766e"></div>
+    <div id="graficoPrevisto"></div>
   </section>
 
   <!-- ===== CARTÃO (Inter, Bradesco, Mercado Pago) ===== -->
@@ -401,7 +416,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-14-4';
+const APP_VERSAO = '2026-10-14-5';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -413,8 +428,9 @@ const FECHA_PADRAO = { inter: 3, bradesco: 28, mp: 6 };
 const VENCE_PADRAO = { inter: 10, bradesco: 10, mp: 13 };
 const ABAS = [
   { id: 'inicio', nome: 'Início', icone: '🏠', cor: '#1d2330' },
-  ...CARTOES.map(c => ({ id: c.id, nome: c.curto, icone: c.icone, cor: c.cor })),
+  ...CARTOES.map(c => ({ id: c.id, nome: c.id === 'mp' ? 'M. Pago' : c.curto, icone: c.icone, cor: c.cor })),
   { id: 'lojas', nome: 'Lojas', icone: '🍕', cor: '#7c3aed' },
+  { id: 'previstos', nome: 'Previstos', icone: '📋', cor: '#0f766e' },
   { id: 'salario', nome: 'Salário', icone: '💰', cor: '#15803d' },
   { id: 'ajustes', nome: 'Ajustes', icone: '⚙️', cor: '#6b7280' }
 ];
@@ -429,6 +445,14 @@ const FIXAS_PADRAO = [
   { id: 'midia', nome: 'Gastos extras Midiã', previsto: 0 }
 ];
 
+// Categorias para separar melhor os custos previstos daqui para frente.
+const CATS_NOVAS = [
+  { id: 'padaria', nome: 'Padaria', icone: '🥖' },
+  { id: 'sacolao', nome: 'Sacolão / hortifruti', icone: '🥬' },
+  { id: 'higiene', nome: 'Higiene pessoal', icone: '🧴' },
+  { id: 'limpeza', nome: 'Limpeza da casa', icone: '🧽' },
+  { id: 'veiculo', nome: 'Manutenção do veículo', icone: '🔧' }
+];
 const PADRAO = {
   salario: 6000,
   categorias: [
@@ -905,6 +929,13 @@ function ajustarFixas() {
     }
   }
   const norm = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  // Celular: previsão de R$ 30 por mês (combinado), se ainda estiver sem valor.
+  const cel = db.fixas.find(f => f.id === 'celular');
+  if (cel && !cel.previsto && !(db.mod || {})['f:celular_prev']) { cel.previsto = 30; marca('f:celular'); marca('f:celular_prev'); mudou = true; }
+  for (const c of CATS_NOVAS) {
+    if (db.categorias.some(x => x.id === c.id) || (db.apagados || {})['c:' + c.id]) continue;
+    db.categorias.push({ ...c }); marca('c:' + c.id); mudou = true;
+  }
   for (const p of FIXAS_PADRAO) {
     if (db.fixas.some(f => f.id === p.id || norm(f.nome) === norm(p.nome)) || (db.apagados || {})['f:' + p.id]) continue;
     db.fixas.push({ ...p }); marca('f:' + p.id); mudou = true;
@@ -1376,6 +1407,110 @@ function renderLojas() {
     CARTOES.map(c => pizza(c.id, c.icone + ' ' + c.nome, [c.id])).join('');
 }
 
+// ---------- custos previstos ----------
+// Grupos de custo do dia a dia, montados a partir das lojas e categorias dos
+// gastos no cartão. A previsão é a média dos últimos meses de gastos já
+// fechados (até 3) e muda sozinha conforme os meses passam.
+const GRUPOS_PREV = [
+  { id: 'alim', nome: '🛒 Alimentação (supermercado e atacado)' },
+  { id: 'padaria', nome: '🥖 Padaria' },
+  { id: 'sacolao', nome: '🥬 Sacolão / hortifruti' },
+  { id: 'higiene', nome: '🧴 Higiene pessoal' },
+  { id: 'limpeza', nome: '🧽 Limpeza da casa' },
+  { id: 'comb', nome: '⛽ Combustível' },
+  { id: 'veiculo', nome: '🔧 Manutenção do veículo' },
+  { id: 'farmacia', nome: '💊 Farmácia e saúde' },
+  { id: 'lanche', nome: '🍔 Restaurante, lanches e delivery' },
+  { id: 'assin', nome: '📺 Assinaturas (Google, Claude, Meli+…)' },
+  { id: 'pix', nome: '💸 Pix no crédito' },
+  { id: 'online', nome: '🛍️ Compras online e parceladas' },
+  { id: 'lazer', nome: '🎡 Passeios e lazer' },
+  { id: 'juros', nome: '💸 Juros e IOF' },
+  { id: 'outros', nome: '📦 Outros gastos no cartão' }
+];
+function grupoPrev(g) {
+  const d = (g.desc || '').toUpperCase(), c = g.cat;
+  if (/PAO DA LAPA|PADARIA/.test(d) || c === 'padaria') return 'padaria';
+  if (/HORTIFRUTI|SACOLAO|SACOLÃO|VERDURA/.test(d) || c === 'sacolao') return 'sacolao';
+  if (c === 'higiene') return 'higiene';
+  if (c === 'limpeza') return 'limpeza';
+  if (c === 'veiculo' || /MECANIC|OFICINA|PNEU|AUTO ?PECA|LAVA ?JATO/.test(d)) return 'veiculo';
+  if (c === 'combustivel' || /POSTO/.test(d)) return 'comb';
+  if (/IOF|JUROS/.test(d) || c === 'juros') return 'juros';
+  if (/PIX CRED/.test(d)) return 'pix';
+  if (/GOOGLE|ANTHROPIC|CLAUDE|MELIMAIS/.test(d)) return 'assin';
+  if (c === 'mercado' || /MART MINAS|SUPERMERCADO|MERCEARIA|SABORDACASA|ATACAD/.test(d)) return 'alim';
+  if (c === 'farmacia' || c === 'saude' || /RAIA|DROGARIA|DRROGARIA|ODONTO|MAISAUDE/.test(d)) return 'farmacia';
+  if (c === 'restaurante' || /IFOOD|FACEBURGUER|JIM\.? ?COM/.test(d)) return 'lanche';
+  if (c === 'passeio' || /INGRESSO|EFVM/.test(d)) return 'lazer';
+  if (c === 'compras' || /SHOPEE|MERCADO ?LIVRE|PAYT|BRAIP|KIWIFY|PERFECT/.test(d)) return 'online';
+  return 'outros';
+}
+// Soma por grupo dos gastos de um mês (mês dos gastos, pagos na fatura seguinte).
+function gruposDoMes(ym) {
+  const m = {};
+  for (const c of CARTOES) for (const g of gastosDoMes(faturaDosGastos(ym, c.id), c.id)) {
+    const k = grupoPrev(g); m[k] = (m[k] || 0) + g.valor;
+  }
+  return m;
+}
+// Meses de gastos já fechados com lançamentos (até os 3 mais recentes).
+function mesesBasePrev() {
+  const atual = hojeISO().slice(0, 7), out = [];
+  for (let i = 1; i <= 12 && out.length < 3; i++) {
+    const ym = mesDeslocado(atual, -i);
+    if (Object.keys(gruposDoMes(ym)).length) out.push(ym);
+  }
+  return out;
+}
+function fixaPrevista(f) {
+  if (f.previsto) return { v: f.previsto, como: 'valor previsto' };
+  const pagos = Object.values(db.pagamentos || {}).map(pg => pg[f.id]).filter(v => v != null);
+  if (pagos.length) return { v: pagos.reduce((a, b) => a + b, 0) / pagos.length, como: 'média do que foi pago' };
+  return { v: 0, como: 'sem valor ainda (coloque o previsto na aba Salário)' };
+}
+function renderPrevistos() {
+  const base = mesesBasePrev(), atual = hojeISO().slice(0, 7);
+  const agora = gruposDoMes(atual);
+  const soma = {};
+  base.forEach(ym => { for (const [k, v] of Object.entries(gruposDoMes(ym))) soma[k] = (soma[k] || 0) + v; });
+  const n = base.length || 1;
+  const linhas = GRUPOS_PREV.map(gp => ({ nome: gp.nome, v: (soma[gp.id] || 0) / n, agora: agora[gp.id] || 0, tipo: 'var', id: gp.id }));
+  // Contas fixas (pagas fora do cartão).
+  for (const f of db.fixas) {
+    const p = fixaPrevista(f);
+    linhas.push({ nome: '📌 ' + f.nome, v: p.v, tipo: 'fixa', como: p.como, agora: ((db.pagamentos || {})[atual] || {})[f.id] });
+  }
+  const totalVar = linhas.filter(l => l.tipo === 'var').reduce((s, l) => s + l.v, 0);
+  const totalFixa = linhas.filter(l => l.tipo === 'fixa').reduce((s, l) => s + l.v, 0);
+  const total = totalVar + totalFixa;
+  const sal = (db.salarios || {})[atual] != null ? db.salarios[atual] : (db.salario || 0);
+  const nomesBase = base.slice().reverse().map(ym => soMes(ym).split(' ')[0]).join(', ');
+  document.getElementById('totalPrevisto').innerHTML = `<div class="l">Custo previsto por mês</div>
+    <div class="n">${brl(total)}</div>
+    <div class="p">gastos no cartão ${brl(totalVar)} · contas fixas ${brl(totalFixa)}</div>
+    <div class="p" style="margin-top:6px">${sal ? 'Salário ' + brl(sal) + ' → ' + (sal - total >= 0 ? 'sobra prevista ' + brl(sal - total) : '<b>falta ' + brl(total - sal) + '</b>') : ''}</div>`;
+  const max = Math.max(1, ...linhas.map(l => l.v));
+  const ordem = linhas.slice().sort((a, b) => b.v - a.v);
+  const barra = l => {
+    const obs = l.tipo === 'fixa' ? l.como + (l.agora != null ? ' · pago neste mês: ' + brl(l.agora) : '')
+      : l.v < 0.005 && (l.id === 'higiene' || l.id === 'limpeza') ? 'sem dados separados ainda: hoje vem junto nas compras do supermercado'
+      : l.v < 0.005 ? 'sem gastos no histórico ainda'
+      : soMes(atual).split(' ')[0] + ' até agora: ' + brl(l.agora);
+    return `<div class="lin">
+      <div class="top"><span>${esc(l.nome)}</span><b>${l.v > 0.004 ? brl(l.v) : '—'}</b></div>
+      <div class="trilho"><div class="barra" style="width:${l.v / max * 100}%;background:var(${l.tipo === 'fixa' ? '--s-fixa' : '--s-var'})"></div></div>
+      <div class="obs">${obs}</div></div>`;
+  };
+  document.getElementById('graficoPrevisto').innerHTML = `<div class="card prev">
+      <h2>📋 Previsão por mês</h2>
+      <div class="muted" style="margin:-6px 0 8px">Baseada nos gastos de ${nomesBase || 'nenhum mês fechado ainda'}${base.length > 1 ? ' (média)' : ''}. Muda sozinha conforme os meses fecham.</div>
+      <div class="legenda"><span><i style="background:var(--s-var)"></i>Gastos no cartão</span><span><i style="background:var(--s-fixa)"></i>Contas fixas</span></div>
+      ${ordem.map(barra).join('')}
+      <div class="linha tot"><span>Total previsto por mês</span><span>${brl(total)}</span></div>
+    </div>`;
+}
+
 function render() {
   const a = ABAS.find(x => x.id === abaAtual);
   document.getElementById('topo').style.background = a.cor;
@@ -1386,6 +1521,7 @@ function render() {
   if (CARTOES.some(c => c.id === abaAtual)) renderCartao();
   else if (abaAtual === 'inicio') renderInicio();
   else if (abaAtual === 'lojas') renderLojas();
+  else if (abaAtual === 'previstos') renderPrevistos();
   else if (abaAtual === 'salario') renderSalario();
   else renderAjustes();
   renderSync();
