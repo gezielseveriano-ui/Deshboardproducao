@@ -234,7 +234,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 <main>
   <!-- ===== INÍCIO (dashboard) ===== -->
   <section class="tab" id="tab-inicio">
-    <div class="card total" id="totalInicio" style="background:#1d2330"></div>
+    <div class="card total" id="totalInicio" style="background:#4f7cac"></div>
     <div id="graficosInicio"></div>
   </section>
 
@@ -416,7 +416,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-14-6';
+const APP_VERSAO = '2026-10-14-7';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -427,7 +427,7 @@ const CARTOES = [
 const FECHA_PADRAO = { inter: 3, bradesco: 28, mp: 6 };
 const VENCE_PADRAO = { inter: 10, bradesco: 10, mp: 13 };
 const ABAS = [
-  { id: 'inicio', nome: 'Início', icone: '🏠', cor: '#1d2330' },
+  { id: 'inicio', nome: 'Início', icone: '🏠', cor: '#4f7cac' },
   ...CARTOES.map(c => ({ id: c.id, nome: c.id === 'mp' ? 'M. Pago' : c.curto, icone: c.icone, cor: c.cor })),
   { id: 'lojas', nome: 'Lojas', icone: '🍕', cor: '#7c3aed' },
   { id: 'previstos', nome: 'Previstos', icone: '📋', cor: '#0f766e' },
