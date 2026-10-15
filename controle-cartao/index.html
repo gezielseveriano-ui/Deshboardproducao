@@ -416,7 +416,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-14-7';
+const APP_VERSAO = '2026-10-15-1';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -1517,7 +1517,7 @@ function renderPrevistos() {
       <div class="obs">${obs}${l.tipo === 'var' && (l.v > 0.004 || l.agora > 0.004) ? ' · <b>toque para ver os itens ▾</b>' : ''}</div>`;
     if (l.tipo !== 'var' || !(l.v > 0.004 || l.agora > 0.004)) return `<div class="lin">${corpo}</div>`;
     return `<details class="lin"><summary style="list-style:none;cursor:pointer">${corpo}</summary>
-      ${[...base.slice().reverse(), atual].map(ym => itensDoGrupo(l.id, ym, ym === atual)).join('')}</details>`;
+      ${[atual, ...base].map(ym => itensDoGrupo(l.id, ym, ym === atual)).join('')}</details>`;
   };
   document.getElementById('graficoPrevisto').innerHTML = `<div class="card prev">
       <h2>📋 Previsão por mês</h2>
