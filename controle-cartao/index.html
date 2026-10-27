@@ -416,7 +416,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-10-15-1';
+const APP_VERSAO = '2026-10-27-1';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -907,6 +907,10 @@ function importar(ev) {
 function migrarParcelas() {
   let mudou = false;
   for (const g of db.gastos) {
+    // Pix de 13/10: o print mostrava R$ 193,35 sem juros; na fatura são R$ 219,79.
+    if (g.id === 'inter-nov26d-01' && Math.abs(g.valor - 193.35) < 0.005) {
+      g.valor = 219.79; g.desc = 'PIX CRED PARCELADO (valor da fatura, com juros)'; marca('g:' + g.id); mudou = true;
+    }
     // A primeira importação (prints de 08/10) era a fatura que vence em novembro.
     if (!g.fatura && g.id.startsWith('inter-2026-10-')) { g.fatura = '2026-11'; marca('g:' + g.id); mudou = true; }
     if (g.parcelas || !g.desc) continue;
@@ -948,7 +952,7 @@ function ajustarFixas() {
 // próxima numa fatura vizinha, se a data foi digitada perto do fechamento).
 // Só considera lançamentos feitos antes da importação das faturas (CORTE_DUP),
 // para nunca mexer em gastos novos.
-const CORTE_DUP = { inter: 1791944853401, bradesco: 1791741886000, mp: 1791743729176 };
+const CORTE_DUP = { inter: 1793112948282, bradesco: 1791741886000, mp: 1791743729176 };
 const importado = g => g.id.startsWith('inter-') || g.id.startsWith('brad-') || g.id.startsWith('mp-');
 function removerDuplicados() {
   const importados = db.gastos.filter(importado);

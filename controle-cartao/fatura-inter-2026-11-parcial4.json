@@ -1,0 +1,46 @@
+{
+ "nome": "Inter – Pix parcelado 2x R$ 85,72 e IOF (fatura de novembro)",
+ "categorias": [
+  {
+   "id": "juros",
+   "nome": "Juros e IOF",
+   "icone": "💸"
+  },
+  {
+   "id": "outros",
+   "nome": "Outros",
+   "icone": "📦"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-nov26e-01",
+   "cartao": "inter",
+   "data": "2026-10-13",
+   "cat": "outros",
+   "valor": 85.72,
+   "parcelas": 2,
+   "parcelaAtual": 1,
+   "fatura": "2026-11",
+   "desc": "PIX CRED PARCELADO (data aproximada)"
+  },
+  {
+   "id": "inter-nov26e-02",
+   "cartao": "inter",
+   "data": "2026-10-13",
+   "cat": "juros",
+   "valor": 2.85,
+   "fatura": "2026-11",
+   "desc": "IOF CREDITO PARCELADO"
+  },
+  {
+   "id": "inter-nov26e-03",
+   "cartao": "inter",
+   "data": "2026-10-13",
+   "cat": "juros",
+   "valor": 1.1,
+   "fatura": "2026-11",
+   "desc": "IOF CREDITO PARCELADO"
+  }
+ ]
+}
