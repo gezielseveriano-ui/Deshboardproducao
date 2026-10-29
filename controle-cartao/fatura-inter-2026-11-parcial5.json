@@ -1,0 +1,324 @@
+{
+ "nome": "Inter – compras de 14/10 a 29/10 (fatura de novembro)",
+ "categorias": [
+  {
+   "id": "farmacia",
+   "nome": "Farmácia",
+   "icone": "💊"
+  },
+  {
+   "id": "mercado",
+   "nome": "Supermercado",
+   "icone": "🛒"
+  },
+  {
+   "id": "compras",
+   "nome": "Compras online",
+   "icone": "🛍️"
+  },
+  {
+   "id": "juros",
+   "nome": "Juros e IOF",
+   "icone": "💸"
+  },
+  {
+   "id": "outros",
+   "nome": "Outros",
+   "icone": "📦"
+  },
+  {
+   "id": "sacolao",
+   "nome": "Sacolão / hortifruti",
+   "icone": "🥬"
+  },
+  {
+   "id": "padaria",
+   "nome": "Padaria",
+   "icone": "🥖"
+  },
+  {
+   "id": "combustivel",
+   "nome": "Combustível",
+   "icone": "⛽"
+  },
+  {
+   "id": "servicos",
+   "nome": "Serviços",
+   "icone": "🛠️"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-nov26f-01",
+   "cartao": "inter",
+   "data": "2026-10-29",
+   "cat": "farmacia",
+   "valor": 145.99,
+   "desc": "RAIA3627 (Droga Raia)",
+   "fatura": "2026-11",
+   "parcelas": 2,
+   "parcelaAtual": 1
+  },
+  {
+   "id": "inter-nov26f-02",
+   "cartao": "inter",
+   "data": "2026-10-29",
+   "cat": "mercado",
+   "valor": 6.92,
+   "desc": "MERCEARIA DO TONINHO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-03",
+   "cartao": "inter",
+   "data": "2026-10-28",
+   "cat": "compras",
+   "valor": 35.0,
+   "desc": "MP LUGIOUTLET",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-04",
+   "cartao": "inter",
+   "data": "2026-10-25",
+   "cat": "juros",
+   "valor": 0.38,
+   "desc": "IOF ADICIONAL DB PF",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-05",
+   "cartao": "inter",
+   "data": "2026-10-25",
+   "cat": "juros",
+   "valor": 0.14,
+   "desc": "IOF DIARIO DB PF",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-06",
+   "cartao": "inter",
+   "data": "2026-10-25",
+   "cat": "juros",
+   "valor": 0.08,
+   "desc": "IOF ADICIONAL DB PF",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-07",
+   "cartao": "inter",
+   "data": "2026-10-25",
+   "cat": "juros",
+   "valor": 0.03,
+   "desc": "IOF DIARIO DB PF",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-08",
+   "cartao": "inter",
+   "data": "2026-10-25",
+   "cat": "outros",
+   "valor": 20.0,
+   "desc": "PIX CRED A VISTA",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-09",
+   "cartao": "inter",
+   "data": "2026-10-25",
+   "cat": "mercado",
+   "valor": 129.74,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-10",
+   "cartao": "inter",
+   "data": "2026-10-25",
+   "cat": "juros",
+   "valor": 1.57,
+   "desc": "JUROS PIX CREDITO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-11",
+   "cartao": "inter",
+   "data": "2026-10-25",
+   "cat": "sacolao",
+   "valor": 92.35,
+   "desc": "HORTIFRUTI FAMILIA SIL",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-12",
+   "cartao": "inter",
+   "data": "2026-10-25",
+   "cat": "padaria",
+   "valor": 29.15,
+   "desc": "PAO DA LAPA",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-13",
+   "cartao": "inter",
+   "data": "2026-10-24",
+   "cat": "outros",
+   "valor": 100.0,
+   "desc": "PIX CRED A VISTA",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-14",
+   "cartao": "inter",
+   "data": "2026-10-24",
+   "cat": "mercado",
+   "valor": 8.7,
+   "desc": "WAGNER GOMES DE LIMA (Santa Luzia)",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-15",
+   "cartao": "inter",
+   "data": "2026-10-24",
+   "cat": "juros",
+   "valor": 8.37,
+   "desc": "JUROS PIX CREDITO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-16",
+   "cartao": "inter",
+   "data": "2026-10-22",
+   "cat": "mercado",
+   "valor": 15.0,
+   "desc": "MERCEARIA DO TONINHO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-17",
+   "cartao": "inter",
+   "data": "2026-10-21",
+   "cat": "outros",
+   "valor": 6.0,
+   "desc": "PIX CRED A VISTA",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-18",
+   "cartao": "inter",
+   "data": "2026-10-21",
+   "cat": "juros",
+   "valor": 0.02,
+   "desc": "IOF ADICIONAL DB PF",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-19",
+   "cartao": "inter",
+   "data": "2026-10-21",
+   "cat": "juros",
+   "valor": 0.59,
+   "desc": "JUROS PIX CREDITO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-20",
+   "cartao": "inter",
+   "data": "2026-10-19",
+   "cat": "combustivel",
+   "valor": 100.0,
+   "desc": "POSTO ENERGIA VESPASIANO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-21",
+   "cartao": "inter",
+   "data": "2026-10-19",
+   "cat": "servicos",
+   "valor": 14.99,
+   "desc": "GOOGLE (assinatura)",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-22",
+   "cartao": "inter",
+   "data": "2026-10-18",
+   "cat": "farmacia",
+   "valor": 22.99,
+   "desc": "DROGARIA SAO JOSE BP",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-23",
+   "cartao": "inter",
+   "data": "2026-10-17",
+   "cat": "juros",
+   "valor": 0.34,
+   "desc": "IOF DIARIO DB PF",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-24",
+   "cartao": "inter",
+   "data": "2026-10-17",
+   "cat": "outros",
+   "valor": 10.0,
+   "desc": "JIM COM WILSON OTAVI",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-25",
+   "cartao": "inter",
+   "data": "2026-10-17",
+   "cat": "padaria",
+   "valor": 9.04,
+   "desc": "PADARIA E CONFEITARIA",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-26",
+   "cartao": "inter",
+   "data": "2026-10-17",
+   "cat": "juros",
+   "valor": 0.63,
+   "desc": "IOF ADICIONAL DB PF",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-27",
+   "cartao": "inter",
+   "data": "2026-10-16",
+   "cat": "juros",
+   "valor": 20.28,
+   "desc": "JUROS PGTO BOLETO",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-28",
+   "cartao": "inter",
+   "data": "2026-10-16",
+   "cat": "outros",
+   "valor": 164.62,
+   "desc": "PGTO BOLETO A VISTA (boleto pago no crédito)",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-29",
+   "cartao": "inter",
+   "data": "2026-10-15",
+   "cat": "outros",
+   "valor": 25.0,
+   "desc": "REC CEL VISTA (recarga de celular)",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26f-30",
+   "cartao": "inter",
+   "data": "2026-10-14",
+   "cat": "farmacia",
+   "valor": 27.5,
+   "desc": "MP MAISAUDE",
+   "fatura": "2026-11"
+  }
+ ]
+}
