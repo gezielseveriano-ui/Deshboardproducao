@@ -1,0 +1,35 @@
+{
+ "nome": "Inter – compras de 29/10 a 31/10 (fatura de novembro)",
+ "categorias": [
+  {
+   "id": "roupas",
+   "nome": "Roupas",
+   "icone": "👕"
+  },
+  {
+   "id": "mercado",
+   "nome": "Supermercado",
+   "icone": "🛒"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-nov26g-01",
+   "cartao": "inter",
+   "data": "2026-10-31",
+   "cat": "mercado",
+   "valor": 84.33,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26g-02",
+   "cartao": "inter",
+   "data": "2026-10-29",
+   "cat": "roupas",
+   "valor": 22.68,
+   "desc": "SHOPEE LEOMEIASSP (Guarulhos)",
+   "fatura": "2026-11"
+  }
+ ]
+}
