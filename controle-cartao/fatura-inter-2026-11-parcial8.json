@@ -1,0 +1,21 @@
+{
+ "nome": "Inter – IOF diário (fecha a fatura de novembro em R$ 4.365,59)",
+ "categorias": [
+  {
+   "id": "juros",
+   "nome": "Juros e IOF",
+   "icone": "💸"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-nov26i-01",
+   "cartao": "inter",
+   "data": "2026-11-02",
+   "cat": "juros",
+   "valor": 0.03,
+   "fatura": "2026-11",
+   "desc": "IOF DIARIO DB PF (valor conferido pelo pagamento)"
+  }
+ ]
+}
