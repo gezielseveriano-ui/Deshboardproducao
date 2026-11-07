@@ -1,0 +1,49 @@
+{
+ "nome": "Inter – compras de 03/11 a 07/11 (fatura de dezembro)",
+ "categorias": [
+  {
+   "id": "restaurante",
+   "nome": "Restaurante / Lanche",
+   "icone": "🍔"
+  },
+  {
+   "id": "mercado",
+   "nome": "Supermercado",
+   "icone": "🛒"
+  },
+  {
+   "id": "combustivel",
+   "nome": "Combustível",
+   "icone": "⛽"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-dez26a-01",
+   "cartao": "inter",
+   "data": "2026-11-07",
+   "cat": "restaurante",
+   "valor": 66.0,
+   "desc": "REST MIRANDA",
+   "fatura": "2026-12"
+  },
+  {
+   "id": "inter-dez26a-02",
+   "cartao": "inter",
+   "data": "2026-11-07",
+   "cat": "mercado",
+   "valor": 1510.1,
+   "desc": "MART MINAS (compra do mês)",
+   "fatura": "2026-12"
+  },
+  {
+   "id": "inter-dez26a-03",
+   "cartao": "inter",
+   "data": "2026-11-03",
+   "cat": "combustivel",
+   "valor": 100.0,
+   "desc": "POSTO LAPA DOURADA",
+   "fatura": "2026-12"
+  }
+ ]
+}
