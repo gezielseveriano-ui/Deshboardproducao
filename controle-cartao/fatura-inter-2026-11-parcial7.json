@@ -1,0 +1,88 @@
+{
+ "nome": "Inter – compras de 01/11 e 02/11 (fatura de novembro)",
+ "categorias": [
+  {
+   "id": "roupas",
+   "nome": "Roupas",
+   "icone": "👕"
+  },
+  {
+   "id": "servicos",
+   "nome": "Serviços",
+   "icone": "🛠️"
+  },
+  {
+   "id": "compras",
+   "nome": "Compras online",
+   "icone": "🛍️"
+  },
+  {
+   "id": "mercado",
+   "nome": "Supermercado",
+   "icone": "🛒"
+  },
+  {
+   "id": "juros",
+   "nome": "Juros e IOF",
+   "icone": "💸"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "inter-nov26h-01",
+   "cartao": "inter",
+   "data": "2026-11-01",
+   "cat": "roupas",
+   "valor": 48.91,
+   "desc": "SHEIN LEIXIA XU (data aproximada)",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26h-02",
+   "cartao": "inter",
+   "data": "2026-11-02",
+   "cat": "servicos",
+   "valor": 5.66,
+   "desc": "ELEVENLABS IO (compra internacional)",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26h-03",
+   "cartao": "inter",
+   "data": "2026-11-02",
+   "cat": "compras",
+   "valor": 26.46,
+   "desc": "SHOPEE FogueteUtilida",
+   "fatura": "2026-11",
+   "parcelas": 2,
+   "parcelaAtual": 1
+  },
+  {
+   "id": "inter-nov26h-04",
+   "cartao": "inter",
+   "data": "2026-11-02",
+   "cat": "mercado",
+   "valor": 18.46,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26h-05",
+   "cartao": "inter",
+   "data": "2026-11-02",
+   "cat": "mercado",
+   "valor": 61.67,
+   "desc": "SUPERMERCADOS BH",
+   "fatura": "2026-11"
+  },
+  {
+   "id": "inter-nov26h-06",
+   "cartao": "inter",
+   "data": "2026-11-02",
+   "cat": "juros",
+   "valor": 0.2,
+   "desc": "IOF INTERNACIONAL (ElevenLabs)",
+   "fatura": "2026-11"
+  }
+ ]
+}
