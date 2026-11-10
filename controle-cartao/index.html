@@ -416,7 +416,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-11-07-3';
+const APP_VERSAO = '2026-11-10-1';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -906,6 +906,12 @@ function importar(ev) {
 // transforma em compra parcelada para contar as parcelas que faltam.
 function migrarParcelas() {
   let mudou = false;
+  // Fatura do Bradesco que venceu em 10/11/2026: paga (R$ 608,52).
+  if (!(db.mod || {})['pc:2026-11:bradesco'] && !(db.apagados || {})['pc:2026-11:bradesco']) {
+    db.pagCartao = db.pagCartao || {};
+    db.pagCartao['2026-11'] = { ...(db.pagCartao['2026-11'] || {}), bradesco: 608.52 };
+    marca('pc:2026-11:bradesco'); mudou = true;
+  }
   // Fatura do Inter que venceu em 10/11/2026: paga em 07/11 (comprovante R$ 4.365,59).
   if (!(db.mod || {})['pc:2026-11:inter'] && !(db.apagados || {})['pc:2026-11:inter']) {
     db.pagCartao = db.pagCartao || {};
@@ -958,7 +964,7 @@ function ajustarFixas() {
 // próxima numa fatura vizinha, se a data foi digitada perto do fechamento).
 // Só considera lançamentos feitos antes da importação das faturas (CORTE_DUP),
 // para nunca mexer em gastos novos.
-const CORTE_DUP = { inter: 1794084160150, bradesco: 1791741886000, mp: 1791743729176 };
+const CORTE_DUP = { inter: 1794084160150, bradesco: 1794356464757, mp: 1791743729176 };
 const importado = g => g.id.startsWith('inter-') || g.id.startsWith('brad-') || g.id.startsWith('mp-');
 function removerDuplicados() {
   const importados = db.gastos.filter(importado);
