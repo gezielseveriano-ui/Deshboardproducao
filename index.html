@@ -591,19 +591,23 @@ function parsePct(v){
   }
   return 0;
 }
-/* Percentual médio de avanço, ponderado pelo peso de cada etapa (ver AVANCO_ETAPAS).
+/* Percentual médio de avanço, ponderado pelo peso de cada etapa (ver AVANCO_ETAPAS)
+   e, entre os itens, ponderado pelo peso total (kg) de cada item — um item de
+   2.000kg pesa mais na média do que um de 10kg, igual todo o resto do sistema
+   (Fabricado %, Expedido %, tabelas de setor) já é calculado em cima do peso.
    Etapa vazia = 0% naquela etapa (não ignora, entra no cálculo). */
 function calcAvanco(items){
-  let soma=0,total=0;
+  let somaPonderada=0,somaPeso=0;
   items.forEach(it=>{
     if(!it.stages||!it.stages.length) return;
     let avancoItem=0;
     it.stages.forEach((v,i)=>{ avancoItem+=(v||0)*AVANCO_ETAPAS[i].peso/100; });
-    soma+=avancoItem;
-    total+=1;
+    const peso=it.pesoTotal||0;
+    somaPonderada+=avancoItem*peso;
+    somaPeso+=peso;
   });
-  if(!total) return null;
-  return soma/total; // 0-100
+  if(!somaPeso) return null;
+  return somaPonderada/somaPeso; // 0-100
 }
 /* Agrega Carga Programada / Expedido / Pend. Expedição / Avanço para um conjunto de itens de um setor */
 function setorAgg(items){
