@@ -1,0 +1,30 @@
+{
+ "nome": "Mercado Pago – itens novos da fatura que vence em 13/11/2026 (R$ 360,82)",
+ "categorias": [
+  {
+   "id": "servicos",
+   "nome": "Serviços",
+   "icone": "🛠️"
+  }
+ ],
+ "gastos": [
+  {
+   "id": "mp-nov26a-01",
+   "cartao": "mp",
+   "data": "2026-10-08",
+   "cat": "servicos",
+   "valor": 14.99,
+   "fatura": "2026-11",
+   "desc": "GOOGLE (MP*GOOGLEBRASIL)"
+  },
+  {
+   "id": "mp-nov26a-02",
+   "cartao": "mp",
+   "data": "2026-10-11",
+   "cat": "servicos",
+   "valor": 9.99,
+   "fatura": "2026-11",
+   "desc": "GOOGLE (MP*GOOGLEBRASIL)"
+  }
+ ]
+}
