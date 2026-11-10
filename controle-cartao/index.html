@@ -416,7 +416,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-11-10-3';
+const APP_VERSAO = '2026-11-10-4';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -452,6 +452,11 @@ const CATS_NOVAS = [
   { id: 'higiene', nome: 'Higiene pessoal', icone: '🧴' },
   { id: 'limpeza', nome: 'Limpeza da casa', icone: '🧽' },
   { id: 'veiculo', nome: 'Manutenção do veículo', icone: '🔧' }
+];
+// Contas a pagar fora do cartão que valem só num período (de/ate = mês inicial e final).
+// Entram uma vez; quem apagar não vê voltar.
+const FIXAS_AVULSAS = [
+  { id: 'emp-mp-2026-11', nome: 'Empréstimo Mercado Pago', previsto: 241, de: '2026-11', ate: '2026-11' }
 ];
 const PADRAO = {
   salario: 6000,
@@ -639,7 +644,7 @@ function parcelasFuturas(ym, cartaoId) {
 }
 function fixasDoMes(ym) {
   const pg = db.pagamentos[ym] || {};
-  return db.fixas.map(f => ({ ...f, pago: pg[f.id] }));
+  return db.fixas.filter(f => (!f.de || ym >= f.de) && (!f.ate || ym <= f.ate)).map(f => ({ ...f, pago: pg[f.id] }));
 }
 function resumoSalario(ym) {
   const recebido = (db.salarios || {})[ym];
@@ -959,6 +964,10 @@ function ajustarFixas() {
     if (db.categorias.some(x => x.id === c.id) || (db.apagados || {})['c:' + c.id]) continue;
     db.categorias.push({ ...c }); marca('c:' + c.id); mudou = true;
   }
+  for (const p of FIXAS_AVULSAS) {
+    if (db.fixas.some(f => f.id === p.id) || (db.apagados || {})['f:' + p.id]) continue;
+    db.fixas.push({ ...p }); marca('f:' + p.id); mudou = true;
+  }
   for (const p of FIXAS_PADRAO) {
     if (db.fixas.some(f => f.id === p.id || norm(f.nome) === norm(p.nome)) || (db.apagados || {})['f:' + p.id]) continue;
     db.fixas.push({ ...p }); marca('f:' + p.id); mudou = true;
@@ -1127,7 +1136,7 @@ function renderSalario() {
       <div class="info">
         <div class="t">${esc(f.nome)}</div>
         <div style="margin:2px 0">${tag}</div>
-        <div class="s">Previsto ${f.previsto ? brl(f.previsto) : '—'} · <a href="#" onclick="editarPrevisto('${f.id}');return false">mudar</a></div>
+        <div class="s">Previsto ${f.previsto ? brl(f.previsto) : '—'}${f.ate ? ' · só em ' + soMes(f.ate).split(' ')[0] : ''} · <a href="#" onclick="editarPrevisto('${f.id}');return false">mudar</a></div>
       </div>
       <div class="v">${f.pago != null ? brl(f.pago) : ''}</div>
       ${f.pago == null
@@ -1516,6 +1525,7 @@ function renderPrevistos() {
   const linhas = GRUPOS_PREV.map(gp => ({ nome: gp.nome, v: (soma[gp.id] || 0) / n, agora: agora[gp.id] || 0, tipo: 'var', id: gp.id }));
   // Contas fixas (pagas fora do cartão).
   for (const f of db.fixas) {
+    if (f.ate) continue;
     const p = fixaPrevista(f);
     linhas.push({ nome: '📌 ' + f.nome, v: p.v, tipo: 'fixa', como: p.como, agora: ((db.pagamentos || {})[atual] || {})[f.id] });
   }
