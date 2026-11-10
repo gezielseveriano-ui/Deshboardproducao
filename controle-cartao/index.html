@@ -416,7 +416,7 @@ table.tab-dados th:first-child, table.tab-dados td:first-child { text-align: lef
 
 <script>
 const CHAVE = 'controle-cartao-v1';
-const APP_VERSAO = '2026-11-10-5';
+const APP_VERSAO = '2026-11-10-6';
 
 const CARTOES = [
   { id: 'inter', nome: 'Cartão Inter', curto: 'Inter', cor: '#ff7a00', icone: '🟠' },
@@ -1456,7 +1456,7 @@ const GRUPOS_PREV = [
   { id: 'veiculo', nome: '🔧 Manutenção do veículo' },
   { id: 'farmacia', nome: '💊 Farmácia e saúde' },
   { id: 'lanche', nome: '🍔 Restaurante, lanches e delivery' },
-  { id: 'assin', nome: '📺 Assinaturas (Google, Claude, Meli+…)' },
+  { id: 'assin', nome: '📺 Assinaturas (Claude, Google, Meli+, iFood Club…)' },
   { id: 'pix', nome: '💸 Pix no crédito' },
   { id: 'online', nome: '🛍️ Compras online e parceladas' },
   { id: 'lazer', nome: '🎡 Passeios e lazer' },
@@ -1473,7 +1473,7 @@ function grupoPrev(g) {
   if (c === 'combustivel' || /POSTO/.test(d)) return 'comb';
   if (/^(IOF|JUROS)/.test(d) || c === 'juros') return 'juros';
   if (/PIX CRED/.test(d)) return 'pix';
-  if (/GOOGLE|ANTHROPIC|CLAUDE|MELIMAIS/.test(d)) return 'assin';
+  if (/GOOGLE|ANTHROPIC|CLAUDE|MELIMAIS|ELEVENLABS|IFOOD CLUB/.test(d)) return 'assin';
   if (c === 'mercado' || /MART MINAS|SUPERMERCADO|MERCEARIA|SABORDACASA|ATACAD/.test(d)) return 'alim';
   if (c === 'farmacia' || c === 'saude' || /RAIA|DROGARIA|DRROGARIA|ODONTO|MAISAUDE/.test(d)) return 'farmacia';
   if (c === 'restaurante' || /IFOOD|FACEBURGUER|JIM\.? ?COM/.test(d)) return 'lanche';
